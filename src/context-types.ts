@@ -200,12 +200,41 @@ export interface ConversationService {
   }
 }
 
+// ── connection（dsh-client-connection；sessions RPC 直达面）──────────────────
+
+/** 会话的当前模型选择（`session.models` 的 current 字段）。 */
+export interface ModelSelection {
+  provider: string
+  model: string
+  reasoningEffort?: string
+}
+
+export interface SessionModelsResult {
+  current: ModelSelection
+  routable: boolean
+  groups: readonly unknown[]
+}
+
+export interface RpcEnvelope<T> {
+  result: { ok: true; value: T } | { ok: false; error: { message?: string } }
+}
+
+export interface ConnectionSessionsApi {
+  models(payload: { sessionId: SessionId }): Promise<RpcEnvelope<SessionModelsResult>>
+  selectModel(payload: { sessionId: SessionId; provider: string; model: string; reasoningEffort?: string }): Promise<RpcEnvelope<{ selected: ModelSelection }>>
+}
+
+export interface ConnectionService {
+  api: { sessions: ConnectionSessionsApi }
+}
+
 // ── Context ──────────────────────────────────────────────────────────────────
 
 export interface Context extends CordisContext {
   betterSidebar: BetterSidebarService
   sessions: SessionsService
   workspaces: WorkspacesService
+  connection: ConnectionService
 }
 
 // ── sidechat 扩展（WI-01）───────────────────────────────────────────────────

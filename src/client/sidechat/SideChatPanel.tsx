@@ -65,6 +65,23 @@ export function SideChatPanel(props: TabComponentProps) {
         } catch (error) {
           console.warn('[dsh-side-chat] 归档侧边会话失败（会话列表可能短暂可见）:', error)
         }
+        // 模型跟随主会话：fork 继承 agent preset 但不继承模型选择——读主会话
+        // 当前模型（session.models.current）并 selectModel 到子会话（best-effort，
+        // 失败则子会话用宿主默认模型，面板标签如实回退）。
+        try {
+          const parentModels = await ctx.connection.api.sessions.models({ sessionId: scope.sessionId })
+          if (parentModels.result.ok) {
+            const current = parentModels.result.value.current
+            await ctx.connection.api.sessions.selectModel({
+              sessionId: forked,
+              provider: current.provider,
+              model: current.model,
+              ...(current.reasoningEffort !== undefined ? { reasoningEffort: current.reasoningEffort } : {}),
+            })
+          }
+        } catch (error) {
+          console.warn('[dsh-side-chat] 同步主会话模型失败（子会话用默认模型）:', error)
+        }
         if (cancelled) return
         // 合并写入：桥接可能已先写入 pendingDraft，不能覆盖丢草稿。
         const current = parseSideChatMeta(readTab(ctx, tab.id)?.meta)
@@ -112,6 +129,19 @@ export function SideChatPanel(props: TabComponentProps) {
 
   // ── composer（input 机器优先，降级本地草稿 + session.prompt） ──
   const composer = useComposer(ctx, session, childId)
+
+  // ── 模型标签：读子会话当前模型（fork 时已同步主会话选择；读取失败保持默认文案） ──
+  const [modelName, setModelName] = useState<string | null>(null)
+  useEffect(() => {
+    if (childId === undefined || session === undefined) return
+    let cancelled = false
+    void ctx.connection.api.sessions.models({ sessionId: childId })
+      .then((res) => {
+        if (!cancelled && res.result.ok) setModelName(res.result.value.current.model)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [ctx, childId, session])
 
   // ── 桥接草稿移交：meta.pendingDraft → composer 草稿，应用后清除 ──
   const pendingDraft = meta.pendingDraft
@@ -165,7 +195,7 @@ export function SideChatPanel(props: TabComponentProps) {
           : <MessageList messages={messages} />}
         {openFailed && <div className={css.errorRow}>会话历史加载失败，可关闭后重新打开此标签页。</div>}
       </div>
-      <ComposerBar ctx={ctx} session={session} composer={composer} running={running} visible={visible} />
+      <ComposerBar ctx={ctx} session={session} composer={composer} running={running} visible={visible} modelName={modelName} />
     </div>
   )
 }
@@ -244,13 +274,14 @@ function MessageRow({ message }: { message: ChatMessage }) {
   }
 }
 
-/** 底部 composer：自绘输入框；模型固定「跟随主会话」（fork 继承父会话模型选择）。 */
+/** 底部 composer：自绘输入框；模型标签显示子会话真实当前模型（fork 时同步主会话选择）。 */
 function ComposerBar(props: {
   ctx: Context
   session: SessionFace | undefined
   composer: Composer
   running: boolean
   visible: boolean
+  modelName: string | null
 }) {
   const { session, composer, running, visible } = props
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -277,7 +308,7 @@ function ComposerBar(props: {
         }}
       />
       <div className={css.composerFoot}>
-        <span className={css.modelLabel}>模型：跟随主会话</span>
+        <span className={css.modelLabel}>模型：{props.modelName ?? '跟随主会话'}</span>
         {running
           ? (
             <button
