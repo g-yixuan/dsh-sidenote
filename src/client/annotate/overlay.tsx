@@ -12,7 +12,7 @@
  * so the selection survives until the click commits) and failure-safe (an
  * error boundary around the tree; layout math is wrapped in anchor.ts).
  */
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Component } from 'react'
 import type { ReactNode } from 'react'
 import { IconCheckOutline16, IconTrashOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -81,16 +81,16 @@ export function AnnotateOverlay(props: OverlayProps): ReactNode {
 
 function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNode {
   const selectionState = useSyncExternalStore(
-    (cb: () => void) => controller.subscribe(cb),
+    useCallback((cb: () => void) => controller.subscribe(cb), [controller]),
     () => controller.getSnapshot(),
   )
   // Store version (bumped per mutation) and session list drive re-renders.
   useSyncExternalStore(
-    (cb: () => void) => store.subscribe(cb),
+    useCallback((cb: () => void) => store.subscribe(cb), [store]),
     () => store.getSnapshot(),
   )
   const sessionList = useSyncExternalStore(
-    (cb: () => void) => ctx.sessions.list.subscribe(cb),
+    useCallback((cb: () => void) => ctx.sessions.list.subscribe(cb), [ctx]),
     () => ctx.sessions.list.getSnapshot(),
   )
   const currentSessionId = sessionList.current ?? ''
@@ -165,13 +165,14 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
     window.getSelection()?.removeAllRanges()
   }
 
-  const commitSideDraft = (note: string): void => {
-    if (sideDraft === null) return
-    sideChatBridge.current?.askInSideChat(
+  const commitSideDraft = (note: string): boolean => {
+    if (sideDraft === null) return false
+    const ok = sideChatBridge.current?.askInSideChat(
       sideDraft.snapshot.sessionId,
       buildSideChatQuote(sideDraft.snapshot.text, note),
-    )
-    setSideDraft(null)
+    ) === true
+    if (ok) setSideDraft(null)
+    return ok
   }
 
   const reopenEditor = (annotation: Annotation, point: { x: number; y: number }): void => {
@@ -236,14 +237,16 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
   )
 }
 
-/** 「在侧边聊天中提问」的注解编辑器（新建态同构：输入框 + ✓，允许空注解）。 */
+/** 「在侧边聊天中提问」的注解编辑器（新建态同构：输入框 + ✓，允许空注解）。
+ *  bridge 失败时不关编辑器、给出内联错误——用户写好的注解不丢。 */
 function SideChatNoteEditor(props: {
   x: number
   y: number
-  onSave: (note: string) => void
+  onSave: (note: string) => boolean
   onCancel: () => void
 }): ReactNode {
   const [note, setNote] = useState('')
+  const [failed, setFailed] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -272,7 +275,10 @@ function SideChatNoteEditor(props: {
   const width = 320
   const left = Math.max(8, Math.min(window.innerWidth - width - 8, props.x + 16))
   const top = Math.max(8, Math.min(window.innerHeight - 120, props.y - 20))
-  const save = (): void => { props.onSave(note) }
+  const save = (): void => {
+    // 失败保持打开并提示（草稿不丢）；成功由父组件关闭。
+    setFailed(!props.onSave(note))
+  }
 
   return (
     <div ref={rootRef} className={css.editorNew} style={{ left, top, width }}>
@@ -282,7 +288,7 @@ function SideChatNoteEditor(props: {
         placeholder="给侧边聊天写个注解（可空）…"
         aria-label="侧边聊天注解"
         autoFocus
-        onChange={(event) => { setNote(event.target.value) }}
+        onChange={(event) => { setNote(event.target.value); setFailed(false) }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
             event.preventDefault()
@@ -299,6 +305,7 @@ function SideChatNoteEditor(props: {
       >
         <IconCheckOutline16 size={14} />
       </button>
+      {failed && <div className={css.editorError}>打开侧边聊天失败，请重试</div>}
     </div>
   )
 }

@@ -32,8 +32,8 @@ function findAnchorElement(anchorKey: string): HTMLElement | null {
 
 /**
  * Rebuild a range covering the `occurrence`-th appearance of `text` inside
- * `root`'s text nodes. Falls back to the first occurrence when the ordinal
- * is out of range (the message text shifted since creation).
+ * `root`'s text nodes. Falls back to the LAST occurrence when the ordinal is
+ * out of range（消息内容变短时，最后一次出现更可能是原选区）.
  */
 function rangeOfOccurrence(root: HTMLElement, text: string, occurrence: number): Range | null {
   if (text === '') return null

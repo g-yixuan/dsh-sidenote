@@ -28,7 +28,7 @@ export interface SelectionSnapshot {
   /** 0-based ordinal of this selection among identical texts in the anchor. */
   readonly occurrence: number
   /** Bounding box for toolbar placement. */
-  readonly rect: { readonly left: number; readonly top: number; readonly width: number; readonly bottom: number }
+  readonly rect: { readonly left: number; readonly top: number; readonly width: number }
   /** A live clone of the selection range (badge anchor until re-render). */
   readonly range: Range
   readonly sessionId: string
@@ -122,7 +122,7 @@ export function captureSelection(currentSessionId: string): SelectionSnapshot | 
     anchorText,
     anchorKey: anchor?.dataset.chatAnchorKey,
     occurrence: anchor === null ? 0 : occurrenceOf(anchor, range, anchorText),
-    rect: { left: rect.left, top: rect.top, width: rect.width, bottom: rect.bottom },
+    rect: { left: rect.left, top: rect.top, width: rect.width },
     range: range.cloneRange(),
     sessionId: currentSessionId,
   }

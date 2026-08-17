@@ -19,7 +19,7 @@ import { IconNewChatOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context } from '../../context-types.ts'
 import { sideChatBridge } from '../bridge.ts'
 import { SideChatPanel } from './SideChatPanel.tsx'
-import { SIDE_TAB_TYPE, canForkFrom, countSideTabs, mintSideTabId, sideTabTitle } from './model.ts'
+import { SIDE_TAB_TYPE, canForkFrom, collectSideTabs, mintSideTabId, sideTabTitle } from './model.ts'
 import { openOrFocusSideChat } from './open.ts'
 import { registerSideCommand } from './slash.ts'
 
@@ -32,7 +32,7 @@ export function registerSideChat(ctx: Context): void {
       order: 60,
       available: (availableCtx, scope) => canForkFrom(availableCtx, scope.sessionId),
       createTab: (state) => ({
-        tab: { id: mintSideTabId(), type: SIDE_TAB_TYPE, title: sideTabTitle(countSideTabs(state)) },
+        tab: { id: mintSideTabId(), type: SIDE_TAB_TYPE, title: sideTabTitle(collectSideTabs(state).map(tab => tab.title)) },
       }),
       component: (props) => <SideChatPanel {...props} />,
     }),

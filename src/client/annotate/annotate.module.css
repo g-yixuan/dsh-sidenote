@@ -289,3 +289,13 @@
   background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.08));
   color: var(--dsw-alias-state-error-primary, #d53f3f);
 }
+
+/* bridge 失败的内联错误（编辑器保持打开，注解不丢）。 */
+.editorError {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 12px;
+  color: #e5484d;
+  font-size: 12px;
+  white-space: nowrap;
+}

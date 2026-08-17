@@ -58,6 +58,14 @@ export function SideChatPanel(props: TabComponentProps) {
     void (async () => {
       try {
         const forked = await ctx.sessions.fork({ sessionId: scope.sessionId })
+        // meta 先行：fork resolve 后立即登记 childId（会话切换导致组件卸载
+        // 时 updateTab 找不到 tab 也只是 no-op，绝不丢登记——否则该 Tab 永远
+        // 停在 forking 且下次挂载会重复 fork 出孤儿会话）。归档与模型同步
+        // 都是 best-effort 后手。
+        const current = parseSideChatMeta(readTab(ctx, tab.id)?.meta)
+        ctx.betterSidebar.updateTab(tab.id, {
+          meta: { ...current, childId: forked, parentSessionId: scope.sessionId },
+        })
         // 隐藏出会话列表（durable KV，刷新/重启后仍生效）。归档失败不阻断
         // 面板（会话已 fork 出来），只告警 —— 无 unarchive API，失败残留可见。
         try {
@@ -82,12 +90,6 @@ export function SideChatPanel(props: TabComponentProps) {
         } catch (error) {
           console.warn('[dsh-side-chat] 同步主会话模型失败（子会话用默认模型）:', error)
         }
-        if (cancelled) return
-        // 合并写入：桥接可能已先写入 pendingDraft，不能覆盖丢草稿。
-        const current = parseSideChatMeta(readTab(ctx, tab.id)?.meta)
-        ctx.betterSidebar.updateTab(tab.id, {
-          meta: { ...current, childId: forked, parentSessionId: scope.sessionId },
-        })
       } catch (error) {
         if (!cancelled) setForkError(error instanceof Error ? error.message : String(error))
       }
@@ -97,7 +99,7 @@ export function SideChatPanel(props: TabComponentProps) {
 
   // ── 列表订阅：phase（就绪与否）+ byId（在列与否）驱动「会话已不存在」判定 ──
   const listSnap = useSyncExternalStore(
-    (notify: () => void) => ctx.sessions.list.subscribe(notify),
+    useCallback((notify: () => void) => ctx.sessions.list.subscribe(notify), [ctx]),
     () => ctx.sessions.list.getSnapshot(),
   )
   const listed = childId !== undefined && listSnap.byId?.[childId] !== undefined
@@ -155,8 +157,9 @@ export function SideChatPanel(props: TabComponentProps) {
   }, [pendingDraft, phase, ctx, tab.id])
 
   // 新消息到底自动滚动（窄栏面板，不做「接近底部才跟」的判定）。
+  // tailKey 并入 reasoning 长度：纯思考流式增长（text 为空）也要跟滚。
   const bodyRef = useRef<HTMLDivElement>(null)
-  const tailKey = messages.length === 0 ? '' : `${messages[messages.length - 1]!.key}:${messages[messages.length - 1]!.text.length}`
+  const tailKey = messages.length === 0 ? '' : `${messages[messages.length - 1]!.key}:${messages[messages.length - 1]!.text.length}:${messages[messages.length - 1]!.reasoning?.length ?? 0}`
   useEffect(() => {
     const el = bodyRef.current
     if (el !== null && visible) el.scrollTop = el.scrollHeight

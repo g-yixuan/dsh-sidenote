@@ -7,7 +7,7 @@
  * non-empty → empty) to flip the annotations to 'sent' — the chip then
  * disappears while the badges stay on the message flow.
  */
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { IconCloseOutline16, IconListPenOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InputZone } from '../../context-types.ts'
@@ -27,22 +27,40 @@ export function createAnnotationChip(store: AnnotationStore) {
   function AnnotationChip(props: ChipProps): ReactNode {
     const sessionId = props.session.sessionId
     useSyncExternalStore(
-      (cb: () => void) => store.subscribe(cb),
+      useCallback((cb: () => void) => store.subscribe(cb), [store]),
       () => store.getSnapshot(),
     )
     const [expanded, setExpanded] = useState(false)
 
-    // 发送沿检测：草稿由非空变空（submit/入队都会清空草稿）→ 存活注释转为已发送。
-    // owner share 是 point-in-time 快照、由骨架负责重渲染——禁止订阅，只在 effect 里比边沿。
-    // 会话切换不重置草稿沿：仅当两次渲染属于同一会话时才比较。
-    const previous = useRef({ sessionId, draft: props.input.draft })
+    // 发送沿检测：草稿非空→空 且 伴随机器信号（提交相位/队列增长/running 启
+    // 动）——纯「草稿清空」不算发送（用户手动全选删除满足前者，但没有机器信
+    // 号，注释不应被误归档为已发送）。
+    // owner share 是 point-in-time 快照、由骨架负责重渲染——禁止订阅，只在
+    // effect 里比边沿。会话切换不重置：仅当两次渲染属于同一会话时才比较。
+    const previous = useRef({
+      sessionId,
+      draft: props.input.draft,
+      phase: props.input.phase,
+      queueLen: props.input.queue?.length ?? 0,
+      running: props.session.running,
+    })
     useEffect(() => {
       const prev = previous.current
-      previous.current = { sessionId, draft: props.input.draft }
-      if (prev.sessionId !== sessionId) return
-      if (store.countActive(sessionId) > 0 && isSendEdge(prev.draft, props.input.draft)) {
-        store.markSessionSent(sessionId)
+      previous.current = {
+        sessionId,
+        draft: props.input.draft,
+        phase: props.input.phase,
+        queueLen: props.input.queue?.length ?? 0,
+        running: props.session.running,
       }
+      if (prev.sessionId !== sessionId) return
+      if (store.countActive(sessionId) === 0) return
+      if (!isSendEdge(prev.draft, props.input.draft)) return
+      const machineSignal = prev.phase !== 'plain'
+        || (props.input.queue?.length ?? 0) > prev.queueLen
+        || (props.session.running && !prev.running)
+      if (!machineSignal) return
+      store.markSessionSent(sessionId)
     })
 
     const active = store.listActive(sessionId)

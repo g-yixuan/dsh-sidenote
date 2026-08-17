@@ -45,11 +45,11 @@ export function syncSessionDraft(ctx: Context, store: AnnotationStore, sessionId
     const lastHead = managedHeads.get(sessionId) ?? ''
     const draft = input.state.getSnapshot().draft
     const next = nextManagedDraft(draft, lastHead, block)
-    if (next.draft === draft) {
-      managedHeads.set(sessionId, next.head)
-      return
-    }
-    managedHeads.set(sessionId, next.head)
+    // block 为空（注释全部 sent/移除）时不覆写 managedHeads：submit 失败
+    // rollback 会把含旧前缀的草稿恢复回来，保留 lastHead 才能让下一次 sync
+    // 正常剥离它，否则新注释的前缀会叠在旧前缀之上（双重引用块）。
+    if (block !== '') managedHeads.set(sessionId, next.head)
+    if (next.draft === draft) return
     input.setDraft(next.draft)
   } catch (error) {
     console.warn('[dsh-side-chat] draft sync failed:', error)

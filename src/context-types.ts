@@ -312,6 +312,7 @@ export interface SlotsService {
 export interface InputStateSnapshot {
   readonly draft: string
   readonly phase: string
+  readonly queue?: readonly unknown[]
 }
 
 /** Session input snapshot as exposed on `InputZone.input`. */

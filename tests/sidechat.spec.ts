@@ -25,14 +25,17 @@ import {
 
 describe('sideTabTitle', () => {
   it('首个叫「侧边」', () => {
-    expect(sideTabTitle(0)).toBe('侧边')
+    expect(sideTabTitle([])).toBe('侧边')
   })
-  it('并存时新 Tab 编号「侧边 N」（N = 当前并存数 + 1）', () => {
-    expect(sideTabTitle(1)).toBe('侧边 2')
-    expect(sideTabTitle(4)).toBe('侧边 5')
+  it('并存时新 Tab 编号「侧边 N」（N = 既有最大编号 + 1）', () => {
+    expect(sideTabTitle(['侧边'])).toBe('侧边 2')
+    expect(sideTabTitle(['侧边', '侧边 2'])).toBe('侧边 3')
   })
-  it('负数输入按首个处理（防御）', () => {
-    expect(sideTabTitle(-1)).toBe('侧边')
+  it('关闭后再开不重名（「侧边」关闭后，既有「侧边 2」→ 新铸「侧边 3」）', () => {
+    expect(sideTabTitle(['侧边 2'])).toBe('侧边 3')
+  })
+  it('无关标题不参与编号', () => {
+    expect(sideTabTitle(['Explorer', '终端 3'])).toBe('侧边')
   })
 })
 

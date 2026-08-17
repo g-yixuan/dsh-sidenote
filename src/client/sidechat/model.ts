@@ -25,11 +25,17 @@ export function mintSideTabId(): string {
 }
 
 /**
- * 标题编号：首个「侧边」；并存时新 Tab「侧边 N」（N = 当前并存数 + 1）。
- * @param existing - 创建时刻同会话侧边聊天 Tab 的并存数。
+ * 标题编号：首个「侧边」；并存时新 Tab「侧边 N」（N = 既有最大编号 + 1，
+ * 从标题解析）——关掉「侧边」再新建不会重名复用「侧边 2」。
+ * @param existingTitles - 创建时刻同会话侧边聊天 Tab 的标题集。
  */
-export function sideTabTitle(existing: number): string {
-  return existing <= 0 ? BASE_TAB_TITLE : `${BASE_TAB_TITLE} ${existing + 1}`
+export function sideTabTitle(existingTitles: readonly string[]): string {
+  let max = 0
+  for (const title of existingTitles) {
+    const match = /^侧边(?: (\d+))?$/.exec(title)
+    if (match !== null) max = Math.max(max, match[1] === undefined ? 1 : Number(match[1]))
+  }
+  return max <= 0 ? BASE_TAB_TITLE : `${BASE_TAB_TITLE} ${max + 1}`
 }
 
 // ── Tab meta（注册表首选寄存处；随布局持久化） ───────────────────────────────
