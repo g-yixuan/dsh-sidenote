@@ -1,0 +1,94 @@
+- button "New session"
+- button "Collapse sidebar":
+  - img
+- button "New session":
+  - img
+  - text: New Session
+- text: Workspaces
+- button "Search sessions":
+  - img
+- textbox "Search sessions..."
+- button "View options":
+  - img
+- button "Add workspace":
+  - img
+- tree "Sessions":
+  - treeitem "workspace" [expanded]:
+    - img
+    - text: workspace
+  - treeitem "E2E 蓝鲸种子会话 1min" [selected]
+- button "Settings":
+  - img
+  - text: Settings
+- banner:
+  - navigation "Session hierarchy":
+    - button "E2E 蓝鲸种子会话" [disabled]
+  - img
+  - text: Standard mode
+  - button "Session log":
+    - text: Session log
+    - img
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
+- text: E2E 种子：请记住「蓝鲸预算」这个词。 23:06
+- button "Copy":
+  - img
+- paragraph: 好的，已记住「蓝鲸预算」。这是 E2E 伪造会话的助手回复，用于验证侧边聊天 fork 后历史可见。
+- text: js
+- button "Copy"
+- code: console.log("blue-whale")
+- button "Copy":
+  - img
+- button "Good response":
+  - img
+- button "Bad response":
+  - img
+- button "Branch into a new conversation":
+  - img
+- text: 23:06 Ran for 0s
+- textbox "Message the agent"
+- button "Commands":
+  - img
+- 'button "Access mode, current: Workspace Write"': Workspace Write
+- button "Select model, current DeepSeek-V4-Flash, reasoning effort High":
+  - text: DeepSeek-V4-Flash High
+  - img
+- button "Send message" [disabled]
+- text: 1 turns · 1 steps LLM 0s Details
+- button "Close details"
+- text: Click a tool row in the message flow to view its details
+- button "Expand bottom panel":
+  - img
+- button "Collapse sidebar":
+  - img
+- img
+- text: Explorer
+- button "Close":
+  - img
+- button "New tab":
+  - img
+- text: workspace
+- button "Refresh":
+  - img
+- img
+- text: workspace
+- menu:
+  - menuitem "Explorer":
+    - img
+    - text: Explorer
+  - menuitem "Source Control":
+    - img
+    - text: Source Control
+  - menuitem "Tasks":
+    - img
+    - text: Tasks
+  - menuitem "Terminal":
+    - img
+    - text: Terminal
+  - menuitem "Browser":
+    - img
+    - text: Browser
+  - menuitem "侧边聊天":
+    - img
+    - text: 侧边聊天

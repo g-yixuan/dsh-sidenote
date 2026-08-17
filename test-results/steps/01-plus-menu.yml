@@ -1,0 +1,63 @@
+- button "Open sidebar"
+- button "New session":
+  - img
+- button "Add workspace":
+  - img
+- button "Search sessions":
+  - img
+- button:
+  - img
+- text: Into the Unknown Preview
+- button "Choose workspace":
+  - img
+  - text: workspace
+  - img
+- button "Standard mode":
+  - img
+  - text: Standard mode
+  - img
+- textbox "Describe what you want to build"
+- button "Commands":
+  - img
+- 'button "Access mode, current: Workspace Write"': Workspace Write
+- button "Select model, current DeepSeek-V4-Flash, reasoning effort High":
+  - text: DeepSeek-V4-Flash High
+  - img
+- button "Send message" [disabled]
+- text: Details
+- button "Close details"
+- text: Click a tool row in the message flow to view its details
+- button "Expand bottom panel":
+  - img
+- button "Collapse sidebar":
+  - img
+- img
+- text: Explorer
+- button "Close":
+  - img
+- button "New tab":
+  - img
+- text: workspace
+- button "Refresh":
+  - img
+- img
+- text: workspace
+- menu:
+  - menuitem "Explorer":
+    - img
+    - text: Explorer
+  - menuitem "Source Control":
+    - img
+    - text: Source Control
+  - menuitem "Tasks":
+    - img
+    - text: Tasks
+  - menuitem "Terminal":
+    - img
+    - text: Terminal
+  - menuitem "Browser":
+    - img
+    - text: Browser
+  - menuitem "侧边聊天" [disabled]:
+    - img
+    - text: 侧边聊天

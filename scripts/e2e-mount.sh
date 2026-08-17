@@ -139,6 +139,11 @@ done
 [ -n "$URL" ] || { echo "=== 120s 内未等到 dsh web 就绪，日志尾部 ===" >&2; tail -40 "$WEB_LOG" >&2 || true; exit 1; }
 say "dsh web 就绪：${URL}（pid ${SERVER_PID}）"
 
+# 步骤 4b：注册 scratch 工作区（伪造会话的 cwd 挂在它下面才会进 GUI 列表）
+curl -s "$URL/api/workspace.create" -X POST -H 'content-type: application/json' \
+  -d "{\"type\":\"client-request\",\"rpcId\":\"e2e-workspace\",\"method\":\"workspace.create\",\"payload\":{\"path\":\"$WORKSPACE_DIR\"}}" \
+  | grep -q '"ok":true' && say "工作区已注册: $WORKSPACE_DIR" || warn "workspace.create 未确认（继续，测试内会再试）"
+
 # 步骤 5：Playwright 无头渲染 lane
 say "运行 Playwright 无头渲染 lane..."
 DSH_E2E_URL="$URL" DSH_E2E_WORKSPACE="$WORKSPACE_DIR" DSH_E2E_SEED_SESSION="$SEED_SESSION_ID" \

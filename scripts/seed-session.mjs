@@ -13,7 +13,7 @@
  * `session.fork` accepts it.
  */
 
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { constants, zstdCompressSync } from 'node:zlib'
 
@@ -46,10 +46,11 @@ function projectKey(p) {
 const t0 = Date.now() - 60_000
 const lines = [
   { type: 'session', version: 0, id: sessionId, createdAt: t0, cwd, delegationDepth: 0, agentPreset: 'standard' },
-  { type: 'turn/start', seq: 1, time: t0 + 1, data: { turn: 1 } },
-  { type: 'step/start', seq: 2, time: t0 + 2, data: { turn: 1, step: 1 } },
+  { type: 'turn/start', seq: 0, time: t0 + 1, data: { turn: 1 } },
+  { type: 'session/title', seq: 1, time: t0 + 2, data: { title: 'E2E 蓝鲸种子会话', messageSeqs: [3], source: { kind: 'fallback' } } },
+  { type: 'step/start', seq: 2, time: t0 + 3, data: { turn: 1, step: 1 } },
   {
-    type: 'user/message', seq: 3, time: t0 + 3,
+    type: 'user/message', seq: 3, time: t0 + 4,
     data: {
       content: [{ type: 'text', text: 'E2E 种子：请记住「蓝鲸预算」这个词。' }],
       source: { kind: 'user', rpcId: 'e2e-seed', clientTimeZone: 'Asia/Shanghai' },
@@ -58,19 +59,20 @@ const lines = [
     surfaceOp: 'append',
   },
   {
-    type: 'assistant/message', seq: 4, time: t0 + 4,
+    type: 'assistant/message', seq: 4, time: t0 + 5,
     data: {
       turn: 1, step: 1,
       message: {
         role: 'assistant',
+        id: 'e2e-assistant-1',
         content: [{ type: 'text', text: '好的，已记住「蓝鲸预算」。这是 E2E 伪造会话的助手回复，用于验证侧边聊天 fork 后历史可见。\n\n```js\nconsole.log("blue-whale")\n```' }],
         source: { kind: 'model', provider: 'e2e', model: 'e2e' },
       },
     },
     surfaceOp: 'append',
   },
-  { type: 'step/end', seq: 5, time: t0 + 5, data: { turn: 1, step: 1 } },
-  { type: 'turn/end', seq: 6, time: t0 + 6, data: { turn: 1, reason: { kind: 'completed' } } },
+  { type: 'step/end', seq: 5, time: t0 + 6, data: { turn: 1, step: 1 } },
+  { type: 'turn/end', seq: 6, time: t0 + 7, data: { turn: 1, reason: { kind: 'completed' } } },
 ]
 
 const dir = join(dshHome, 'sessions', projectKey(cwd), sessionId)
@@ -82,4 +84,24 @@ const CHECKSUM = { params: { [constants.ZSTD_c_checksumFlag]: 1 } }
 const headerFrame = zstdCompressSync(Buffer.from(JSON.stringify(lines[0]) + '\n', 'utf8'), CHECKSUM)
 const eventsFrame = zstdCompressSync(Buffer.from(lines.slice(1).map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8'), CHECKSUM)
 writeFileSync(join(dir, 'session.jsonl.zstd'), Buffer.concat([headerFrame, eventsFrame]))
+
+// The GUI session list reads titles from the projection cache
+// (~/.dsh/storages/session_projcache.json), not from the log — a never-loaded
+// cold session would fall back to its cwd basename. Seed the two rows the
+// list needs (title + sessionListMetadata).
+const storagesDir = join(dshHome, 'storages')
+mkdirSync(storagesDir, { recursive: true })
+const projcachePath = join(storagesDir, 'session_projcache.json')
+let projcache = { unit: { name: 'session_projcache', version: 3 }, global: null, tables: { sessions: {} } }
+try {
+  projcache = JSON.parse(readFileSync(projcachePath, 'utf8'))
+} catch { /* fresh scratch home */ }
+projcache.tables.sessions[sessionId] = {
+  identity: { createdAt: t0, cwd },
+  rows: {
+    title: { ver: 1, seq: 6, val: 'E2E 蓝鲸种子会话' },
+    sessionListMetadata: { ver: 1, seq: 6, val: { blank: false, lastPromptAt: t0 + 4 } },
+  },
+}
+writeFileSync(projcachePath, JSON.stringify(projcache))
 console.log(sessionId)

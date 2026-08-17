@@ -11,7 +11,7 @@ import type { Context } from '../context-types.ts'
 import { registerSideChat } from './sidechat/index.tsx'
 import { registerAnnotations } from './annotate/index.tsx'
 
-export const inject = ['betterSidebar', 'sessions', 'workspaces']
+export const inject = ['betterSidebar', 'sessions', 'workspaces', 'slots']
 
 export function apply(ctx: Context): void {
   registerSideChat(ctx)
