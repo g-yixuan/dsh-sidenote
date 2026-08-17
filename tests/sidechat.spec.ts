@@ -298,7 +298,6 @@ describe('transcriptOf', () => {
 describe('SidebarState 镜像', () => {
   it('镜像类型携带 splits/bottomSplits 树', () => {
     const state: SidebarState = {
-      tabs: [],
       splits: { kind: 'leaf', id: 'p:1', tabs: [], active: null },
       bottomSplits: { kind: 'leaf', id: 'p:2', tabs: [], active: null },
     }

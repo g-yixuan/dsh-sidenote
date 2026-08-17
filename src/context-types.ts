@@ -41,10 +41,32 @@ export interface SidebarTab {
   meta?: unknown
 }
 
+/**
+ * 侧栏状态 = splits/bottomSplits 两棵 split/leaf 树（权威：dsh-better-sidebar
+ * src/client/state.ts）：leaf 持有 tabs；split 递归分栏。
+ */
+export interface SidebarLeafNode {
+  kind: 'leaf'
+  id: string
+  tabs: SidebarTab[]
+  active: string | null
+}
+
+export interface SidebarSplitNode {
+  kind: 'split'
+  id: string
+  dir: 'row' | 'col'
+  sizes: number[]
+  children: SidebarTreeNode[]
+}
+
+export type SidebarTreeNode = SidebarLeafNode | SidebarSplitNode
+
 export interface SidebarState {
-  tabs: readonly SidebarTab[]
-  activeTabId?: string
-  [key: string]: unknown
+  /** 右侧面板的 split 树。 */
+  splits: SidebarTreeNode
+  /** 底部面板的 split 树。 */
+  bottomSplits: SidebarTreeNode
 }
 
 export interface SidebarSnapshot {
@@ -190,36 +212,6 @@ export interface Context extends CordisContext {
 // 下列声明经接口合并补进上方镜像；权威来源逐节标注。
 
 /**
- * better-sidebar 侧栏状态的 split 树（权威：dsh-better-sidebar
- * src/client/state.ts）：leaf 持有 tabs；split 递归分栏。
- * 真实 SidebarState 没有扁平 tabs 字段（上方镜像的 tabs 仅服务旧形状假设，
- * sidechat 一律走树遍历）。
- */
-export interface SidebarLeafNode {
-  kind: 'leaf'
-  id: string
-  tabs: SidebarTab[]
-  active: string | null
-}
-
-export interface SidebarSplitNode {
-  kind: 'split'
-  id: string
-  dir: 'row' | 'col'
-  sizes: number[]
-  children: SidebarTreeNode[]
-}
-
-export type SidebarTreeNode = SidebarLeafNode | SidebarSplitNode
-
-export interface SidebarState {
-  /** 右侧面板的 split 树。 */
-  splits: SidebarTreeNode
-  /** 底部面板的 split 树。 */
-  bottomSplits: SidebarTreeNode
-}
-
-/**
  * 会话列表快照补全（权威：dsh-client-runtime
  * lib/types/client/sessions/service.d.ts 的 SessionListState）：
  * phase 标「首次成功拉取」就绪边；byId 含已归档行（归档过滤在
@@ -243,12 +235,9 @@ export interface ConversationSnapshot {
 
 /**
  * input 草稿机的 state store（权威：dsh-client-ui-conversation
- * input/contract.d.ts 的 SessionInput.state: SnapshotStore<InputState>，
- * 这里只镜像 draft 字段）。
+ * input/contract.d.ts 的 SessionInput.state）——完整声明见下方 annotate 扩展节
+ * （接口合并；draft 字段两侧都依赖）。
  */
-export interface SessionInput {
-  state: ObservableSnapshot<{ draft: string }>
-}
 
 export interface Context {
   /**
@@ -258,4 +247,85 @@ export interface Context {
    * 提供 `effect(execute, label?)`。）
    */
   get(name: string): unknown
+}
+
+// ── annotate 扩展 ────────────────────────────────────────────────────────────
+// Mirrors consumed by src/client/annotate/** (Workitem 02). Authorities:
+// - slots service: `@deepseek-ai/dsh-client-runtime` lib/types/client/slots.d.ts
+//   (SlotRegistry; register/inject) + `@deepseek-ai/dsh-client-ui-slots` index.d.ts
+// - input.dock owner share: `@deepseek-ai/dsh-client-ui-conversation`
+//   lib/types/client/contract/slots.d.ts (`conversation.input.dock` → InputZone)
+// - SessionInput: `.../lib/types/client/input/contract.d.ts`
+
+/** Registration options subset passed to `ctx.slots.register` (same shape better-sidebar mirrors). */
+export interface SlotRegisterOptions {
+  name: string
+  key?: string
+  id?: string
+  order?: number
+  label?: string | (() => string)
+  select?: (owner: unknown) => unknown
+  priority?: number
+  locale?: string
+  registrant?: string
+  inject?: (...args: any[]) => Record<string, unknown>
+  children?: Record<string, unknown>
+}
+
+/** The client slots service face (register returns the disposer). */
+export interface SlotsService {
+  register(options: SlotRegisterOptions, component: unknown): () => void
+  /** Run a callback for each declaration lifetime of a slot (no-op while undeclared). */
+  inject(key: string, callback: () => (() => void) | void): () => void
+}
+
+/** Published composer input state (subset of the real InputState). */
+export interface InputStateSnapshot {
+  readonly draft: string
+  readonly phase: string
+}
+
+/** Session input snapshot as exposed on `InputZone.input`. */
+export interface ConversationSnapshotLite {
+  sessionId: SessionId
+  running: boolean
+}
+
+/** Owner share of the `conversation.input.dock` slot (point-in-time snapshots). */
+export interface InputZone {
+  readonly session: ConversationSnapshotLite
+  readonly input: InputStateSnapshot
+}
+
+/**
+ * U+FFFC reference-chip insert (spike result: NOT used — serialization of the
+ * chip routes through the source owner's ReferenceCodec, which is
+ * package-internal to ui-input-trigger with no plugin-facing registry; an
+ * unowned source would mark the occurrence invalid and fail submit. Mirrored
+ * here only to document the probe target).
+ */
+export interface ReferenceInsert {
+  readonly source: string
+  readonly ref: string
+  readonly label: string
+  readonly clipboardText: string
+}
+
+export interface TokenSpan {
+  readonly start: number
+  readonly end: number
+  readonly draftRev: number
+}
+
+export interface Context {
+  /** The slot registry (provided by dsh-client-runtime, mounted before this plugin). */
+  slots: SlotsService
+}
+
+/** SessionInput completion for annotate: the live state store + the (unused) chip insert face. */
+export interface SessionInput {
+  /** Input state store (draft reads + subscribe for the send-edge watch). */
+  readonly state: ObservableSnapshot<InputStateSnapshot>
+  /** Spike-only mirror; see {@link ReferenceInsert}. Not called by annotate. */
+  insertReference(ref: ReferenceInsert, span: TokenSpan): boolean
 }
