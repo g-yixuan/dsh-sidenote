@@ -6,14 +6,16 @@
  * Usage:
  *   node scripts/seed-session.mjs <DSH_HOME> <workspace-cwd> [sessionId]
  *
- * Writes <DSH_HOME>/sessions/<projectKey(cwd)>/<sessionId>/session.jsonl
- * (plaintext — the reader accepts both .jsonl and .jsonl.zstd suffixes).
+ * Writes <DSH_HOME>/sessions/<projectKey(cwd)>/<sessionId>/session.jsonl.zstd
+ * (single-frame zstd — the backend rejects plaintext when configured for
+ * compression; the reader does multi-frame decode, so one frame is fine).
  * The fabricated session has one completed turn (user + assistant), so
  * `session.fork` accepts it.
  */
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { constants, zstdCompressSync } from 'node:zlib'
 
 const [, , dshHome, cwd, sessionId = `session-${crypto.randomUUID()}`] = process.argv
 if (!dshHome || !cwd) {
@@ -73,5 +75,11 @@ const lines = [
 
 const dir = join(dshHome, 'sessions', projectKey(cwd), sessionId)
 mkdirSync(dir, { recursive: true })
-writeFileSync(join(dir, 'session.jsonl'), lines.map((l) => JSON.stringify(l)).join('\n') + '\n')
+// Frame contract (dsh-session-persistence-jsonl): frame 1 = exactly the header
+// line (one trailing \n, nothing else); following frames = event batches.
+// Frames are checksummed like the real writer (ZSTD_c_checksumFlag).
+const CHECKSUM = { params: { [constants.ZSTD_c_checksumFlag]: 1 } }
+const headerFrame = zstdCompressSync(Buffer.from(JSON.stringify(lines[0]) + '\n', 'utf8'), CHECKSUM)
+const eventsFrame = zstdCompressSync(Buffer.from(lines.slice(1).map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8'), CHECKSUM)
+writeFileSync(join(dir, 'session.jsonl.zstd'), Buffer.concat([headerFrame, eventsFrame]))
 console.log(sessionId)
