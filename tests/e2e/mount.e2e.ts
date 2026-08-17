@@ -139,28 +139,15 @@ test('fork journey: 种子会话 → 侧边聊天 fork → 历史渲染 → 刷�
     '侧边聊天面板未渲染 fork 出的历史',
   ).toBeVisible({ timeout: 60_000 })
 
-  // 等布局持久化落定（200ms 防抖 + 余量），并验证 localStorage 可写。
-  await page.evaluate(() => { localStorage.setItem('dsh-side-chat:probe', '1') })
+  // 等布局持久化落定（better-sidebar 的 200ms 防抖写盘 + 余量）。
   await page.waitForTimeout(2_000)
-  const keysNow = await page.evaluate(() => Object.keys(localStorage))
-  console.log('[e2e] localStorage keys after side chat open:', JSON.stringify(keysNow))
 
   // 子会话不进左侧会话列表：列表里「E2E 蓝鲸种子会话」唯一，且无新增行。
   // （严格结构断言留给真实页面验收；这里以「侧边」Tab 存在 + 无新会话标题为准。）
 
   // 刷新：布局持久化恢复 Tab，历史重绑。
-  const beforeReload = await page.evaluate(() => {
-    const keys = Object.keys(localStorage).filter((k) => k.startsWith('dsh-sidebar'))
-    return keys.map((k) => `${k} => ${(localStorage.getItem(k) ?? '').slice(0, 300)}`)
-  })
-  console.log('[e2e] sidebar storage BEFORE reload:', JSON.stringify(beforeReload, null, 1))
   await page.reload({ waitUntil: 'domcontentloaded' })
   await dismissOnboarding(page)
-  const afterReload = await page.evaluate(() => {
-    const keys = Object.keys(localStorage).filter((k) => k.startsWith('dsh-sidebar'))
-    return keys.map((k) => `${k} => ${(localStorage.getItem(k) ?? '').slice(0, 300)}`)
-  })
-  console.log('[e2e] sidebar storage AFTER reload:', JSON.stringify(afterReload, null, 1))
   await expect(
     sidebar.getByText(/蓝鲸预算/).first(),
     '刷新后侧边聊天的 fork 历史未恢复',
@@ -168,5 +155,134 @@ test('fork journey: 种子会话 → 侧边聊天 fork → 历史渲染 → 刷�
   await dumpStep(page, '05-after-reload')
 
   expect(pageErrors, 'pageerrors during fork journey').toEqual([])
+  expect(consoleErrors.filter((t) => PLUGIN_CONSOLE.test(t)), 'plugin console errors').toEqual([])
+})
+
+/** Open the seeded session (left nav → session row). */
+async function openSeedSession(page: Page): Promise<void> {
+  const openSidebar = page.getByRole('button', { name: 'Open sidebar' }).first()
+  if ((await openSidebar.count()) > 0) {
+    await openSidebar.click()
+    await page.waitForTimeout(800)
+  }
+  let seedRow = page.getByText('E2E 蓝鲸种子会话').first()
+  if ((await seedRow.count()) === 0) {
+    seedRow = page.locator('[role="treeitem"]:not([aria-expanded])', { hasText: /workspace/ }).first()
+  }
+  await expect(seedRow, '伪造会话未出现在会话列表').toBeVisible({ timeout: 30_000 })
+  await seedRow.click()
+  // 等主聊天渲染出种子 assistant 消息（划选靶子）
+  await expect(page.getByText(/好的，已记住「蓝鲸预算」/).first()).toBeVisible({ timeout: 30_000 })
+}
+
+/** 在第一条 assistant 消息的「蓝鲸预算」上注入一个真实 DOM 选区。 */
+async function injectSelection(page: Page): Promise<void> {
+  const ok = await page.evaluate(() => {
+    const messages = document.querySelectorAll('[data-chat-flow-kind="assistant-step"]')
+    for (const el of messages) {
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+      for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+        const text = node.textContent ?? ''
+        const at = text.indexOf('蓝鲸预算')
+        if (at === -1) continue
+        const range = document.createRange()
+        range.setStart(node, at)
+        range.setEnd(node, at + 4)
+        const sel = window.getSelection()
+        sel?.removeAllRanges()
+        sel?.addRange(range)
+        document.dispatchEvent(new Event('selectionchange'))
+        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+        return true
+      }
+    }
+    return false
+  })
+  expect(ok, '未能在 assistant 消息上注入选区（DOM 契约漂移？）').toBe(true)
+}
+
+test('annotate journey: 划选 → 浮层 → 注解编辑器 → 角标 → chip → 草稿前缀', async ({ page }) => {
+  test.skip(!process.env.DSH_E2E_SEED_SESSION, 'no seeded session id')
+  const pageErrors: string[] = []
+  const consoleErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(String(error)))
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text())
+  })
+
+  await openSeedSession(page)
+  await injectSelection(page)
+
+  // 浮层工具条：两个去向按钮。
+  const overlay = page.locator('[data-dsh-side-chat]')
+  await expect(overlay.getByText('添加到对话'), '划选浮层未弹出').toBeVisible({ timeout: 10_000 })
+  await expect(overlay.getByText('在侧边聊天中提问')).toBeVisible()
+  await dumpStep(page, '06-selection-popover')
+
+  // 「添加到对话」→ 注解编辑器（新建态：输入框 + ✓）。
+  await overlay.getByText('添加到对话').click()
+  const noteInput = overlay.locator('input, textarea').first()
+  await expect(noteInput, '注解编辑器未打开').toBeVisible({ timeout: 10_000 })
+  await noteInput.fill('E2E 注解：关注这个词')
+  await dumpStep(page, '07-annotation-editor')
+
+  // 保存（新建态确认钮：aria-label 确认注解）→ 角标 1 锚定 + chip「1 条注释」。
+  await overlay.locator('button[aria-label="确认注解"]').first().click()
+  await expect(overlay.getByText('1', { exact: true }).first(), '编号角标 1 未出现').toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText('1 条注释').first(), 'composer chip 未出现').toBeVisible({ timeout: 10_000 })
+  await dumpStep(page, '08-chip')
+
+  // 发送携带：主输入框草稿应含引用块（受管前缀）。主 composer 可能是
+  // textarea 或 contenteditable，两种读法都试。
+  const composer = page.getByRole('textbox', { name: /Message the agent|输入消息|随心输入/ }).first()
+  const draft = await composer.evaluate((el) => (
+    el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.value : (el.textContent ?? '')
+  ))
+  expect(draft, '草稿缺少引用块前缀').toContain('蓝鲸预算')
+  expect(draft).toContain('E2E 注解')
+
+  expect(pageErrors, 'pageerrors during annotate journey').toEqual([])
+  expect(consoleErrors.filter((t) => PLUGIN_CONSOLE.test(t)), 'plugin console errors').toEqual([])
+})
+
+test('linkage journey: 划选 → 在侧边聊天中提问 → 编辑器 → 侧边聊天带引用草稿', async ({ page }) => {
+  test.skip(!process.env.DSH_E2E_SEED_SESSION, 'no seeded session id')
+  const pageErrors: string[] = []
+  const consoleErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(String(error)))
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text())
+  })
+
+  await openSeedSession(page)
+  await injectSelection(page)
+
+  // 「在侧边聊天中提问」→ 先弹注解编辑器（WI-03 裁定：与「添加到对话」一致）。
+  const overlay = page.locator('[data-dsh-side-chat]')
+  await overlay.getByText('在侧边聊天中提问').click()
+  const noteInput = overlay.locator('input[aria-label="侧边聊天注解"]')
+  await expect(noteInput, '侧边提问未弹注解编辑器').toBeVisible({ timeout: 10_000 })
+  await noteInput.fill('E2E 联动注解')
+  await overlay.locator('button[aria-label="确认并提问"]').click()
+
+  // 侧边聊天 Tab 打开（fork 主会话），composer 草稿带「引用 + 注解」。
+  const sidebar = page.locator('[data-dsh-better-sidebar]')
+  await expect(
+    sidebar.getByText(/蓝鲸预算/).first(),
+    '侧边聊天未打开或未渲染 fork 历史',
+  ).toBeVisible({ timeout: 60_000 })
+  const sideComposer = sidebar.getByRole('textbox').first()
+  const sideDraft = await sideComposer.evaluate((el) => (
+    el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.value : (el.textContent ?? '')
+  ))
+  expect(sideDraft, '侧边聊天草稿缺少引用').toContain('蓝鲸预算')
+  expect(sideDraft).toContain('E2E 联动注解')
+  await dumpStep(page, '09-linkage')
+
+  // 互斥：主对话不产生注释（无角标、无 chip）。
+  await expect(overlay.getByText('1', { exact: true })).toHaveCount(0)
+  await expect(page.getByText(/条注释/)).toHaveCount(0)
+
+  expect(pageErrors, 'pageerrors during linkage journey').toEqual([])
   expect(consoleErrors.filter((t) => PLUGIN_CONSOLE.test(t)), 'plugin console errors').toEqual([])
 })

@@ -32,6 +32,15 @@ interface EditorState {
   readonly y: number
 }
 
+/** 「在侧边聊天中提问」的注解收集态：先弹编辑器（与「添加到对话」一致，
+ *  允许空注解），保存后才经 bridge 注入侧边聊天草稿——不产生主对话注释
+ *  （无高亮/角标/chip，两个去向互斥）。 */
+interface SideDraftState {
+  readonly snapshot: SelectionSnapshot
+  readonly x: number
+  readonly y: number
+}
+
 interface OverlayProps {
   readonly ctx: Context
   readonly store: AnnotationStore
@@ -86,6 +95,7 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
   )
   const currentSessionId = sessionList.current ?? ''
   const [editor, setEditor] = useState<EditorState | null>(null)
+  const [sideDraft, setSideDraft] = useState<SideDraftState | null>(null)
   // Bumped by scroll/resize/DOM mutation so badge/highlight geometry follows.
   const [, setGeometryTick] = useState(0)
   const rangeCache = useRef(new Map<number, Range>())
@@ -135,9 +145,21 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
   }
 
   const askInSideChat = (snapshot: SelectionSnapshot): void => {
-    sideChatBridge.current?.askInSideChat(snapshot.sessionId, buildSideChatQuote(snapshot.text))
+    // WI-03 联动：先弹注解编辑器收集注解（可空），保存后经 bridge 注入侧边
+    // 聊天草稿；本路径不产生主对话注释（无高亮/角标/chip）。
+    const anchor = selectionBadgePoint(snapshot)
+    setSideDraft({ snapshot, x: anchor.x, y: anchor.y })
     controller.clear()
     window.getSelection()?.removeAllRanges()
+  }
+
+  const commitSideDraft = (note: string): void => {
+    if (sideDraft === null) return
+    sideChatBridge.current?.askInSideChat(
+      sideDraft.snapshot.sessionId,
+      buildSideChatQuote(sideDraft.snapshot.text, note),
+    )
+    setSideDraft(null)
   }
 
   const reopenEditor = (annotation: Annotation, point: { x: number; y: number }): void => {
@@ -150,7 +172,7 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
 
   return (
     <>
-      {selection !== null && editor === null && (
+      {selection !== null && editor === null && sideDraft === null && (
         <SelectionToolbar
           snapshot={selection}
           sideChatAvailable={sideChatBridge.current !== null}
@@ -190,7 +212,82 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
           }}
         />
       )}
+      {sideDraft !== null && (
+        <SideChatNoteEditor
+          x={sideDraft.x}
+          y={sideDraft.y}
+          onSave={commitSideDraft}
+          onCancel={() => { setSideDraft(null) }}
+        />
+      )}
     </>
+  )
+}
+
+/** 「在侧边聊天中提问」的注解编辑器（新建态同构：输入框 + ✓，允许空注解）。 */
+function SideChatNoteEditor(props: {
+  x: number
+  y: number
+  onSave: (note: string) => void
+  onCancel: () => void
+}): ReactNode {
+  const [note, setNote] = useState('')
+  const rootRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        props.onCancel()
+      }
+    }
+    const onMouseDown = (event: MouseEvent): void => {
+      const root = rootRef.current
+      if (root === null || !(event.target instanceof Node)) return
+      if (root.contains(event.target)) return
+      if (event.target instanceof Element && event.target.closest('[data-dsh-side-chat]') !== null) return
+      props.onCancel()
+    }
+    document.addEventListener('keydown', onKeyDown, true)
+    document.addEventListener('mousedown', onMouseDown, true)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true)
+      document.removeEventListener('mousedown', onMouseDown, true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const width = 320
+  const left = Math.max(8, Math.min(window.innerWidth - width - 8, props.x + 16))
+  const top = Math.max(8, Math.min(window.innerHeight - 120, props.y - 20))
+  const save = (): void => { props.onSave(note) }
+
+  return (
+    <div ref={rootRef} className={css.editorNew} style={{ left, top, width }}>
+      <input
+        className={css.editorInput}
+        value={note}
+        placeholder="给侧边聊天写个注解（可空）…"
+        aria-label="侧边聊天注解"
+        autoFocus
+        onChange={(event) => { setNote(event.target.value) }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            save()
+          }
+        }}
+      />
+      <button
+        type="button"
+        className={css.confirmButton}
+        title="确认"
+        aria-label="确认并提问"
+        onClick={save}
+      >
+        <IconCheckOutline16 size={14} />
+      </button>
+    </div>
   )
 }
 

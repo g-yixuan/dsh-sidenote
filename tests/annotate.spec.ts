@@ -119,8 +119,9 @@ describe('quote formatting', () => {
     expect(buildQuoteBlock([])).toBe('')
   })
 
-  it('builds the side-chat seed as a bare quote', () => {
-    expect(buildSideChatQuote('划选的\n文本')).toBe('> 划选的\n> 文本')
+  it('builds the side-chat seed as quote + note line（与主对话注释同构）', () => {
+    expect(buildSideChatQuote('划选的\n文本')).toBe('> 划选的\n> 文本\n（无注解）')
+    expect(buildSideChatQuote('划选的文本', '关注这里')).toBe('> 划选的文本\n注解：关注这里')
   })
 })
 

@@ -45,9 +45,9 @@ export function buildQuoteBlock(items: readonly QuoteItem[]): string {
   return items.map(formatQuoteItem).join('\n\n')
 }
 
-/** The 「在侧边聊天中提问」 seed: bare quote, no note machinery. */
-export function buildSideChatQuote(text: string): string {
-  return quoteLines(text)
+/** The 「在侧边聊天中提问」 seed: quote + optional note（与主对话注释同构）. */
+export function buildSideChatQuote(text: string, note = ''): string {
+  return formatQuoteItem({ text, note })
 }
 
 /**

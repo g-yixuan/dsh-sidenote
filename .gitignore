@@ -3,3 +3,5 @@ lib/
 *.tgz
 .DS_Store
 .worktrees/
+test-results/
+playwright-report/
