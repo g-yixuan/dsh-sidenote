@@ -1,0 +1,291 @@
+/* Workitem 02 — 划选注释 overlay styles.
+   z-index 纪律：全部固定 50 — 高于正文与 better-sidebar 面板 (40)，低于 DSH
+   浮层栈 (100+)。颜色除品牌蓝角标外一律消费 DSH 令牌（皮肤跟随），缺省回退。 */
+
+.toolbar {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  z-index: 50;
+  display: flex;
+  align-items: stretch;
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  user-select: none;
+}
+
+.toolbarButton {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 13px;
+  line-height: 20px;
+  padding: 7px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.toolbarButton + .toolbarButton {
+  border-left: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
+}
+
+.toolbarButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+}
+
+.badge {
+  position: fixed;
+  transform: translate(0, -50%);
+  z-index: 50;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 999px;
+  background: #2f88ff;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(47, 136, 255, 0.45);
+  user-select: none;
+}
+
+.badge:hover {
+  background: #1f78f0;
+}
+
+.highlight {
+  position: fixed;
+  z-index: 49;
+  background: rgba(47, 136, 255, 0.22);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.editorNew {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
+  border-radius: 999px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
+}
+
+.editorEdit {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
+  border-radius: 14px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+}
+
+.editorInput {
+  flex: auto;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 13px;
+  line-height: 22px;
+}
+
+.editorTextarea {
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 13px;
+  line-height: 20px;
+  padding: 10px 12px 4px;
+  font-family: inherit;
+}
+
+.editorInput::placeholder,
+.editorTextarea::placeholder {
+  color: var(--dsw-alias-label-caption, #8f959e);
+}
+
+.confirmButton {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 999px;
+  background: #1f2329;
+  color: #ffffff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.confirmButton:hover {
+  background: #000000;
+}
+
+.editorFooter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 8px;
+}
+
+.editorSpacer {
+  flex: auto;
+}
+
+.deleteButton {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #8f959e);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.deleteButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+  color: var(--dsw-alias-state-error-primary, #d53f3f);
+}
+
+.cancelButton,
+.saveButton {
+  border: none;
+  border-radius: 999px;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 4px 14px;
+  cursor: pointer;
+}
+
+.cancelButton {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+  color: var(--dsw-alias-label-primary, #1f2329);
+}
+
+.saveButton {
+  background: #1f2329;
+  color: #ffffff;
+}
+
+.saveButton:hover {
+  background: #000000;
+}
+
+/* ── composer chip (conversation.input.dock) ─────────────────────────────── */
+
+.chipWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.1));
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 12px;
+  line-height: 18px;
+  padding: 2px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chip:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+}
+
+.chipPanel {
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  min-width: 220px;
+  max-width: 420px;
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+}
+
+.chipRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+
+.chipRow:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.04));
+}
+
+.chipNumber {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #2f88ff;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+
+.chipText {
+  flex: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--dsw-alias-label-primary, #1f2329);
+}
+
+.chipNote {
+  color: var(--dsw-alias-label-tertiary, #8f959e);
+}
+
+.chipRemove {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #8f959e);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.chipRemove:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.08));
+  color: var(--dsw-alias-state-error-primary, #d53f3f);
+}

@@ -185,3 +185,84 @@ export interface Context extends CordisContext {
   sessions: SessionsService
   workspaces: WorkspacesService
 }
+
+// ── annotate 扩展 ────────────────────────────────────────────────────────────
+// Mirrors consumed by src/client/annotate/** (Workitem 02). Authorities:
+// - slots service: `@deepseek-ai/dsh-client-runtime` lib/types/client/slots.d.ts
+//   (SlotRegistry; register/inject) + `@deepseek-ai/dsh-client-ui-slots` index.d.ts
+// - input.dock owner share: `@deepseek-ai/dsh-client-ui-conversation`
+//   lib/types/client/contract/slots.d.ts (`conversation.input.dock` → InputZone)
+// - SessionInput: `.../lib/types/client/input/contract.d.ts`
+
+/** Registration options subset passed to `ctx.slots.register` (same shape better-sidebar mirrors). */
+export interface SlotRegisterOptions {
+  name: string
+  key?: string
+  id?: string
+  order?: number
+  label?: string | (() => string)
+  select?: (owner: unknown) => unknown
+  priority?: number
+  locale?: string
+  registrant?: string
+  inject?: (...args: any[]) => Record<string, unknown>
+  children?: Record<string, unknown>
+}
+
+/** The client slots service face (register returns the disposer). */
+export interface SlotsService {
+  register(options: SlotRegisterOptions, component: unknown): () => void
+  /** Run a callback for each declaration lifetime of a slot (no-op while undeclared). */
+  inject(key: string, callback: () => (() => void) | void): () => void
+}
+
+/** Published composer input state (subset of the real InputState). */
+export interface InputStateSnapshot {
+  readonly draft: string
+  readonly phase: string
+}
+
+/** Session input snapshot as exposed on `InputZone.input`. */
+export interface ConversationSnapshotLite {
+  sessionId: SessionId
+  running: boolean
+}
+
+/** Owner share of the `conversation.input.dock` slot (point-in-time snapshots). */
+export interface InputZone {
+  readonly session: ConversationSnapshotLite
+  readonly input: InputStateSnapshot
+}
+
+/**
+ * U+FFFC reference-chip insert (spike result: NOT used — serialization of the
+ * chip routes through the source owner's ReferenceCodec, which is
+ * package-internal to ui-input-trigger with no plugin-facing registry; an
+ * unowned source would mark the occurrence invalid and fail submit. Mirrored
+ * here only to document the probe target).
+ */
+export interface ReferenceInsert {
+  readonly source: string
+  readonly ref: string
+  readonly label: string
+  readonly clipboardText: string
+}
+
+export interface TokenSpan {
+  readonly start: number
+  readonly end: number
+  readonly draftRev: number
+}
+
+export interface Context {
+  /** The slot registry (provided by dsh-client-runtime, mounted before this plugin). */
+  slots: SlotsService
+}
+
+/** SessionInput completion for annotate: the live state store + the (unused) chip insert face. */
+export interface SessionInput {
+  /** Input state store (draft reads + subscribe for the send-edge watch). */
+  readonly state: ObservableSnapshot<InputStateSnapshot>
+  /** Spike-only mirror; see {@link ReferenceInsert}. Not called by annotate. */
+  insertReference(ref: ReferenceInsert, span: TokenSpan): boolean
+}
