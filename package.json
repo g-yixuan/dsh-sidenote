@@ -46,7 +46,9 @@
     "typecheck": "tsc --noEmit",
     "bundle": "tsdown",
     "watch": "tsdown --watch",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:mount": "bash scripts/e2e-mount.sh",
+    "pretest:mount": "pnpm build && pnpm pack"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-client-ui-primitives": "^0.1.0-rc.6",
@@ -71,6 +73,7 @@
     "react-dom": "^18.2.0",
     "tsdown": "^0.22.2",
     "typescript": "^5.6.0",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.8",
+    "@playwright/test": "^1.50.0"
   }
 }
