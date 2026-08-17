@@ -286,3 +286,82 @@ test('linkage journey: 划选 → 在侧边聊天中提问 → 编辑器 → 侧
   expect(pageErrors, 'pageerrors during linkage journey').toEqual([])
   expect(consoleErrors.filter((t) => PLUGIN_CONSOLE.test(t)), 'plugin console errors').toEqual([])
 })
+
+test('multi-instance: 并存编号「侧边 N」+ 关闭互不影响', async ({ page }) => {
+  test.skip(!process.env.DSH_E2E_SEED_SESSION, 'no seeded session id')
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(String(error)))
+
+  await openSeedSession(page)
+  const sidebar = page.locator('[data-dsh-better-sidebar]')
+
+  // 开第一个侧边聊天
+  await openPlusMenu(page)
+  await page.getByRole('menuitem', { name: /侧边聊天/ }).first().click()
+  await expect(sidebar.getByText(/蓝鲸预算/).first()).toBeVisible({ timeout: 60_000 })
+
+  // 开第二个：标题应为「侧边 2」（第一个 Tab 转为非激活，其内容隐藏——
+  // 断言一律过滤 visible，避免命中非激活 Tab 的隐藏 DOM）。
+  await openPlusMenu(page)
+  await page.getByRole('menuitem', { name: /侧边聊天/ }).first().click()
+  await expect(sidebar.getByText('侧边 2', { exact: true }), '第二个侧边聊天未编号为「侧边 2」').toBeVisible({ timeout: 30_000 })
+  await expect(
+    sidebar.getByText(/蓝鲸预算/).filter({ visible: true }).first(),
+    '第二个侧边聊天未渲染 fork 历史',
+  ).toBeVisible({ timeout: 60_000 })
+  await dumpStep(page, '10-two-side-chats')
+
+  // 关闭「侧边 2」：Tab 条上的 Close 按钮（同 tab 容器内）。
+  const tab2 = sidebar.getByText('侧边 2', { exact: true })
+  const close2 = tab2.locator('xpath=..').getByRole('button', { name: /Close|关闭/ }).first()
+  await close2.click()
+  await expect(sidebar.getByText('侧边 2', { exact: true }), '关闭后「侧边 2」仍在').toHaveCount(0)
+  // 第一个侧边聊天不受影响：Tab 条上「侧边」仍在（内容区是否激活取决于
+  // 关闭后的聚焦落点，不断言可见性）。
+  await expect(sidebar.getByText('侧边', { exact: true }).first(), '「侧边」Tab 被误伤').toBeVisible()
+  await dumpStep(page, '11-after-close')
+
+  expect(pageErrors, 'pageerrors during multi-instance').toEqual([])
+})
+
+test('annotation manage: 双注释编号不重排 + 重开编辑 + chip 逐条移除', async ({ page }) => {
+  test.skip(!process.env.DSH_E2E_SEED_SESSION, 'no seeded session id')
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(String(error)))
+
+  await openSeedSession(page)
+  const overlay = page.locator('[data-dsh-side-chat]')
+
+  // 注释 1（带注解「甲」）
+  await injectSelection(page)
+  await overlay.getByText('添加到对话').click()
+  await overlay.locator('input, textarea').first().fill('甲')
+  await overlay.locator('button[aria-label="确认注解"]').click()
+  await expect(overlay.getByRole('button', { name: '1', exact: true }), '角标 1 未出现').toBeVisible({ timeout: 10_000 })
+
+  // 注释 2（空注解）
+  await injectSelection(page)
+  await overlay.getByText('添加到对话').click()
+  await overlay.locator('button[aria-label="确认注解"]').click()
+  await expect(overlay.getByRole('button', { name: '2', exact: true }), '角标 2 未出现').toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText('2 条注释').first(), 'chip 未显示 2 条').toBeVisible({ timeout: 10_000 })
+
+  // 点角标 1 重开编辑器：已有注解「甲」；删除 → 角标 1 消失、角标 2 不重排
+  await overlay.getByRole('button', { name: '1', exact: true }).click()
+  const editArea = overlay.locator('textarea').first()
+  await expect(editArea, '重开态编辑器未出现').toBeVisible({ timeout: 10_000 })
+  await expect(editArea).toHaveValue('甲')
+  await overlay.locator('button[aria-label="删除注释"]').click()
+  await expect(overlay.getByRole('button', { name: '1', exact: true }), '角标 1 未随删除消失').toHaveCount(0)
+  await expect(overlay.getByRole('button', { name: '2', exact: true }), '角标 2 被误重排/误删').toBeVisible()
+  await expect(page.getByText('1 条注释').first(), 'chip 未减为 1 条').toBeVisible({ timeout: 10_000 })
+
+  // chip 展开 → 逐条移除剩余注释 → chip 消失、角标清空
+  await page.getByText('1 条注释').first().click()
+  await page.locator('button[aria-label="移除注释 2"]').click()
+  await expect(page.getByText(/条注释/), 'chip 未随清空消失').toHaveCount(0)
+  await expect(overlay.getByRole('button', { name: '2', exact: true }), '角标 2 未随 chip 移除消失').toHaveCount(0)
+  await dumpStep(page, '12-annotations-cleared')
+
+  expect(pageErrors, 'pageerrors during annotation manage').toEqual([])
+})

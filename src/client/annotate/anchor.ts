@@ -133,3 +133,26 @@ export function highlightRectsOf(range: Range): readonly { left: number; top: nu
     return []
   }
 }
+
+/** 角标碰撞半径（px）：同点位的角标必须错开才可点击。 */
+export const BADGE_COLLISION_RADIUS = 18
+/** 碰撞时向下错开的步长（px，大于角标直径）。 */
+export const BADGE_SPREAD_STEP = 24
+
+/**
+ * 角标落点错开：与已放置角标（|Δx|、|Δy| 均小于碰撞半径）冲突时按
+ * BADGE_SPREAD_STEP 逐级下移——同一选区/相邻行的多个注释角标不再叠罗汉
+ * （叠放时上层角标拦截下层角标的点击）。
+ */
+export function spreadBadgePoint(
+  point: { x: number; y: number },
+  placed: readonly { x: number; y: number }[],
+): { x: number; y: number } {
+  let out = point
+  for (let guard = 0; guard < 50; guard++) {
+    const collides = placed.some(p => Math.abs(p.x - out.x) < BADGE_COLLISION_RADIUS && Math.abs(p.y - out.y) < BADGE_COLLISION_RADIUS)
+    if (!collides) return out
+    out = { x: out.x, y: out.y + BADGE_SPREAD_STEP }
+  }
+  return out
+}

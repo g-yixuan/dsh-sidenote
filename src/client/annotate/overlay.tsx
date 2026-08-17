@@ -18,7 +18,7 @@ import type { ReactNode } from 'react'
 import { IconCheckOutline16, IconTrashOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context } from '../../context-types.ts'
 import { sideChatBridge } from '../bridge.ts'
-import { badgeAnchorOf, highlightRectsOf, resolveRange } from './anchor.ts'
+import { badgeAnchorOf, highlightRectsOf, resolveRange, spreadBadgePoint } from './anchor.ts'
 import { buildSideChatQuote } from './format.ts'
 import type { Annotation, AnnotationStore } from './model.ts'
 import type { SelectionController, SelectionSnapshot } from './selection.ts'
@@ -102,26 +102,38 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
 
   useEffect(() => {
     let raf = 0
-    const bump = (): void => {
+    let debounce = 0
+    const bumpNow = (): void => {
       if (raf !== 0) return
       raf = window.requestAnimationFrame(() => {
         raf = 0
         setGeometryTick(tick => tick + 1)
       })
     }
-    const observer = new MutationObserver(bump)
+    // MutationObserver 挂在整棵 document 上：宿主页面的周期更新（相对时间等）
+    // 会持续触发——按 100ms 尾沿去抖，否则角标层每帧重渲、按钮永远「不稳定」
+    // （真实点击与 Playwright 的稳定性判定都会受影响）。
+    const bumpDebounced = (): void => {
+      if (debounce !== 0) window.clearTimeout(debounce)
+      debounce = window.setTimeout(() => {
+        debounce = 0
+        bumpNow()
+      }, 100)
+    }
+    const observer = new MutationObserver(bumpDebounced)
     try {
       observer.observe(document.body, { childList: true, subtree: true, characterData: true })
     } catch {
       // document.body missing (pre-mount teardown) — badges just stay put.
     }
-    window.addEventListener('resize', bump)
-    document.addEventListener('scroll', bump, true)
+    window.addEventListener('resize', bumpNow)
+    document.addEventListener('scroll', bumpNow, true)
     return () => {
       observer.disconnect()
-      window.removeEventListener('resize', bump)
-      document.removeEventListener('scroll', bump, true)
+      window.removeEventListener('resize', bumpNow)
+      document.removeEventListener('scroll', bumpNow, true)
       if (raf !== 0) window.cancelAnimationFrame(raf)
+      if (debounce !== 0) window.clearTimeout(debounce)
     }
   }, [])
 
@@ -348,6 +360,7 @@ function BadgeLayer(props: {
 }): ReactNode {
   const annotations = props.sessionId === '' ? [] : props.store.list(props.sessionId)
   const badges: ReactNode[] = []
+  const placed: { x: number; y: number }[] = []
   let highlight: ReactNode = null
   for (const annotation of annotations) {
     const range = resolveRange(annotation, props.cache)
@@ -365,7 +378,9 @@ function BadgeLayer(props: {
     }
     const anchor = badgeAnchorOf(range)
     if (anchor === null) continue
-    const point = { x: anchor.right, y: anchor.centerY }
+    // 同一选区/相邻行的多个角标会落在同一点位——错开保证每个都可点击。
+    const point = spreadBadgePoint({ x: anchor.right, y: anchor.centerY }, placed)
+    placed.push(point)
     badges.push(
       <button
         key={annotation.id}

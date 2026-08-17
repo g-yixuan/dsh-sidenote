@@ -17,6 +17,7 @@ import {
   truncateQuote,
 } from '../src/client/annotate/format.ts'
 import { ASSISTANT_KIND, isEligibleSelection } from '../src/client/annotate/selection.ts'
+import { BADGE_SPREAD_STEP, spreadBadgePoint } from '../src/client/annotate/anchor.ts'
 
 function draft(sessionId: string, text: string, note = ''): AnnotationDraft {
   return { sessionId, anchorKey: 'k1', text, anchorText: text, occurrence: 0, note }
@@ -185,5 +186,23 @@ describe('selection eligibility', () => {
     expect(isEligibleSelection({ ...ok, streaming: true })).toBe(false)
     expect(isEligibleSelection({ ...ok, excluded: true })).toBe(false)
     expect(isEligibleSelection({ ...ok, hasSession: false })).toBe(false)
+  })
+})
+
+describe('badge spreading (同点位角标错开)', () => {
+  it('keeps a non-colliding point untouched', () => {
+    expect(spreadBadgePoint({ x: 100, y: 100 }, [])).toEqual({ x: 100, y: 100 })
+    expect(spreadBadgePoint({ x: 100, y: 100 }, [{ x: 300, y: 300 }])).toEqual({ x: 100, y: 100 })
+  })
+  it('spreads colliding badges downward by the step', () => {
+    const first = { x: 100, y: 100 }
+    const second = spreadBadgePoint({ x: 100, y: 100 }, [first])
+    expect(second).toEqual({ x: 100, y: 100 + BADGE_SPREAD_STEP })
+    const third = spreadBadgePoint({ x: 100, y: 100 }, [first, second])
+    expect(third).toEqual({ x: 100, y: 100 + BADGE_SPREAD_STEP * 2 })
+  })
+  it('does not collide with far-away badges', () => {
+    const placed = [{ x: 100, y: 100 }, { x: 100, y: 100 + BADGE_SPREAD_STEP }]
+    expect(spreadBadgePoint({ x: 100, y: 400 }, placed)).toEqual({ x: 100, y: 400 })
   })
 })
