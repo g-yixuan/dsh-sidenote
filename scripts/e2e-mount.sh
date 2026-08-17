@@ -100,9 +100,11 @@ minimumReleaseAgeExclude:
   - dsh-side-chat
 EOF
 
-# 步骤 2：先装硬依赖 better-sidebar（npm 官方版），再装本插件 tarball
-say "安装 dsh-better-sidebar（npm 官方版）..."
-$DSH_CMD plugin --profile web add dsh-better-sidebar
+# 步骤 2：先装硬依赖 better-sidebar（版本钉住：缺省 0.12.3 = 线上 profile 同版；
+# BS_VERSION 覆盖可做前向兼容验证，如 BS_VERSION=0.13.0）
+BS_VERSION="${BS_VERSION:-0.12.3}"
+say "安装 dsh-better-sidebar@${BS_VERSION}..."
+$DSH_CMD plugin --profile web add "dsh-better-sidebar@${BS_VERSION}"
 say "安装本插件 tarball..."
 $DSH_CMD plugin --profile web add "file:$TARBALL"
 

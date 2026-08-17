@@ -50,6 +50,23 @@ export function SideChatPanel(props: TabComponentProps) {
   const [forkError, setForkError] = useState<string | null>(null)
   const forkStarted = useRef(false)
 
+  // 程序化入口（/side、bridge 划选提问）打开 Tab 时面板可能处于折叠态——
+  // 类型型 openTab 不自动展开（better-sidebar 只对 path/url 内容型打开展开），
+  // 用户会看不见刚开的侧边聊天。面板组件在折叠时也挂载（visible=false），
+  // 挂载即幂等展开（store.update 是 SidebarStore 的公开 mutator 面；
+  // feature-check + 吞错）。
+  const { store } = props
+  useEffect(() => {
+    const mutable = store as { update?: (mutate: (state: { panelOpen?: boolean }) => void) => void } | undefined
+    try {
+      mutable?.update?.((state) => {
+        if (state.panelOpen === false) state.panelOpen = true
+      })
+    } catch {
+      // 面板折叠兜底失败不影响功能——用户手动展开即可。
+    }
+  }, [store])
+
   // ── 首开：fork → archive → 登记 meta（注册表写进布局，随其持久化） ──
   useEffect(() => {
     if (childId !== undefined || forkStarted.current) return

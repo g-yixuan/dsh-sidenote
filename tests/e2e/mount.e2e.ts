@@ -66,9 +66,21 @@ async function dismissOnboarding(page: Page): Promise<void> {
 
 /** Open the better-sidebar + menu (sidebar must be expanded). */
 async function openPlusMenu(page: Page): Promise<void> {
+  await ensureSidebarExpanded(page)
   const sidebar = page.locator('[data-dsh-better-sidebar]')
   await expect(sidebar).toBeAttached({ timeout: 90_000 })
   await sidebar.getByRole('button', { name: /New tab|新建|新标签/ }).first().click()
+}
+
+/** better-sidebar 0.13 起面板默认折叠（且按会话记忆）——用前确保展开
+ *  （0.12 或已展开会话上为 no-op）。注意切会话后新会话的布局默认折叠，
+ *  所以必须在「目标会话已激活」之后调用。 */
+async function ensureSidebarExpanded(page: Page): Promise<void> {
+  const expand = page.getByRole('button', { name: /Expand sidebar|展开/ }).first()
+  if ((await expand.count()) > 0) {
+    await expand.click()
+    await page.waitForTimeout(800)
+  }
 }
 
 test.beforeEach(async ({ page }) => {
@@ -364,4 +376,43 @@ test('annotation manage: 双注释编号不重排 + 重开编辑 + chip 逐条�
   await dumpStep(page, '12-annotations-cleared')
 
   expect(pageErrors, 'pageerrors during annotation manage').toEqual([])
+})
+
+test('slash command: /side 出现在命令菜单且能打开侧边聊天', async ({ page }) => {
+  test.skip(!process.env.DSH_E2E_SEED_SESSION, 'no seeded session id')
+  const pageErrors: string[] = []
+  const consoleErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(String(error)))
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text())
+  })
+
+  await openSeedSession(page)
+
+  // 主输入框敲 / 打开命令菜单，找 /side（commandUi popupSelect 贡献）。
+  const composer = page.getByRole('textbox', { name: /Message the agent|输入消息|随心输入/ }).first()
+  await composer.click()
+  await page.keyboard.type('/')
+  await dumpStep(page, '13-slash-menu')
+
+  // 命令条目是 listbox 的 option（role=option，名称含「side」）。
+  const sideEntry = page.getByRole('option', { name: /side/ }).first()
+  await expect(sideEntry, '/side 未出现在命令菜单（commandUi 注册未生效）').toBeVisible({ timeout: 10_000 })
+  await sideEntry.click()
+
+  // popupSelect 形态：选「新建侧边聊天」。
+  const newOption = page.getByText('新建侧边聊天').first()
+  await expect(newOption, 'popupSelect 选项未弹出').toBeVisible({ timeout: 10_000 })
+  await newOption.click()
+
+  // 侧边聊天 Tab 打开并渲染 fork 历史。
+  const sidebar = page.locator('[data-dsh-better-sidebar]')
+  await expect(
+    sidebar.getByText(/蓝鲸预算/).filter({ visible: true }).first(),
+    '/side 未能打开带历史的侧边聊天',
+  ).toBeVisible({ timeout: 60_000 })
+  await dumpStep(page, '14-slash-opened')
+
+  expect(pageErrors, 'pageerrors during slash command').toEqual([])
+  expect(consoleErrors.filter((t) => PLUGIN_CONSOLE.test(t)), 'plugin console errors').toEqual([])
 })
