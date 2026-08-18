@@ -1,3 +1,5 @@
+import { t } from '../locales.ts'
+
 /**
  * Quote-block formatting and the managed-draft math (Workitem 02). Pure and
  * dependency-free for unit testing — the shapes here ARE the contract for
@@ -36,7 +38,7 @@ export interface QuoteItem {
 
 /** One annotation's block: quoted original plus the note line. */
 export function formatQuoteItem(item: QuoteItem): string {
-  const noteLine = item.note.trim() === '' ? '(no note)' : `Note: ${item.note}`
+  const noteLine = item.note.trim() === '' ? t('noNote') : t('noteLine', { note: item.note })
   return `${quoteLines(item.text)}\n${noteLine}`
 }
 

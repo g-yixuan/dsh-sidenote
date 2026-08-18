@@ -13,6 +13,7 @@ import { IconCloseOutline16, IconListPenOutline16 } from '@deepseek-ai/dsh-clien
 import type { InputZone } from '../../context-types.ts'
 import { isSendEdge } from './format.ts'
 import type { AnnotationStore } from './model.ts'
+import { t, useLocaleTick } from '../locales.ts'
 import { AnnotateErrorBoundary } from './overlay.tsx'
 import css from './annotate.module.css'
 
@@ -25,6 +26,7 @@ interface ChipProps {
 /** Create the slot component bound to one store instance. */
 export function createAnnotationChip(store: AnnotationStore) {
   function AnnotationChip(props: ChipProps): ReactNode {
+    useLocaleTick()
     const sessionId = props.session.sessionId
     useSyncExternalStore(
       useCallback((cb: () => void) => store.subscribe(cb), [store]),
@@ -75,7 +77,7 @@ export function createAnnotationChip(store: AnnotationStore) {
           onClick={() => { setExpanded(open => !open) }}
         >
           <IconListPenOutline16 size={12} />
-          <span>{active.length} {active.length === 1 ? 'annotation' : 'annotations'}</span>
+          <span>{t(active.length === 1 ? 'chipOne' : 'chipMany', { n: active.length })}</span>
         </button>
         {expanded && (
           <ul className={css.chipPanel}>
@@ -89,8 +91,8 @@ export function createAnnotationChip(store: AnnotationStore) {
                 <button
                   type="button"
                   className={css.chipRemove}
-                  title="Remove annotation"
-                  aria-label={`Remove annotation ${annotation.number}`}
+                  title={t('removeTitle')}
+                  aria-label={t('removeAria', { n: annotation.number })}
                   onClick={() => { store.remove(annotation.id) }}
                 >
                   <IconCloseOutline16 size={12} />

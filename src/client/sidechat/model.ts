@@ -10,12 +10,12 @@
  *   lib/types/client/sessions/conversation.d.ts）。
  */
 import type { ConversationSnapshot, Context, SidebarTab } from '../../context-types.ts'
+import { t } from '../locales.ts'
 
 /** Tab 类型 id（better-sidebar 注册表键；带包前缀防冲突）。 */
 export const SIDE_TAB_TYPE = 'dsh-side-chat:side'
 
-/** Tab 标题基准（截图5「⊕ 侧边 ×」裁定；英文 UI 为「Side」）。 */
-export const BASE_TAB_TITLE = 'Side'
+
 
 // ── Tab id 与标题 ────────────────────────────────────────────────────────────
 
@@ -30,12 +30,14 @@ export function mintSideTabId(): string {
  * @param existingTitles - 创建时刻同会话侧边聊天 Tab 的标题集。
  */
 export function sideTabTitle(existingTitles: readonly string[]): string {
+  const base = t('tabBaseTitle')
   let max = 0
   for (const title of existingTitles) {
-    const match = /^Side(?: (\d+))?$/.exec(title)
+    // 双语兼容：语言切换后旧标题是另一种语言，两种都认（编号连续性不丢）。
+    const match = /^(?:Side|侧边)(?: (\d+))?$/.exec(title)
     if (match !== null) max = Math.max(max, match[1] === undefined ? 1 : Number(match[1]))
   }
-  return max <= 0 ? BASE_TAB_TITLE : `${BASE_TAB_TITLE} ${max + 1}`
+  return max <= 0 ? base : `${base} ${max + 1}`
 }
 
 // ── Tab meta（注册表首选寄存处；随布局持久化） ───────────────────────────────

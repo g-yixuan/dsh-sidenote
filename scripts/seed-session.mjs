@@ -47,12 +47,12 @@ const t0 = Date.now() - 60_000
 const lines = [
   { type: 'session', version: 0, id: sessionId, createdAt: t0, cwd, delegationDepth: 0, agentPreset: 'standard' },
   { type: 'turn/start', seq: 0, time: t0 + 1, data: { turn: 1 } },
-  { type: 'session/title', seq: 1, time: t0 + 2, data: { title: 'E2E 蓝鲸种子会话', messageSeqs: [3], source: { kind: 'fallback' } } },
+  { type: 'session/title', seq: 1, time: t0 + 2, data: { title: 'Side chat plugin review', messageSeqs: [3], source: { kind: 'fallback' } } },
   { type: 'step/start', seq: 2, time: t0 + 3, data: { turn: 1, step: 1 } },
   {
     type: 'user/message', seq: 3, time: t0 + 4,
     data: {
-      content: [{ type: 'text', text: 'E2E 种子：请记住「蓝鲸预算」这个词。' }],
+      content: [{ type: 'text', text: 'I forked the main session into a side panel. Review this approach and flag anything risky.' }],
       source: { kind: 'user', rpcId: 'e2e-seed', clientTimeZone: 'Asia/Shanghai' },
       role: 'user', id: 'e2e-user-1',
     },
@@ -65,7 +65,7 @@ const lines = [
       message: {
         role: 'assistant',
         id: 'e2e-assistant-1',
-        content: [{ type: 'text', text: '好的，已记住「蓝鲸预算」。这是 E2E 伪造会话的助手回复，用于验证侧边聊天 fork 后历史可见。\n\n```js\nconsole.log("blue-whale")\n```' }],
+        content: [{ type: 'text', text: 'Forking into a side panel is the right call. A few things worth flagging:\n\n**What works well**\n- The fork takes a full history snapshot, so the side chat starts with complete context\n- Archiving the child keeps the session list clean\n\n**Watch out for**\n- The seed is a deep copy — large histories cost memory per side chat\n- Fork boundaries only land on completed turns\n\n```ts\nconst childId = await ctx.sessions.fork({ sessionId: parent.id })\nawait ctx.workspaces.archiveSession(childId)\n```\n\nOverall: solid approach, ship it.' }],
         source: { kind: 'model', provider: 'e2e', model: 'e2e' },
       },
     },
@@ -99,7 +99,7 @@ try {
 projcache.tables.sessions[sessionId] = {
   identity: { createdAt: t0, cwd },
   rows: {
-    title: { ver: 1, seq: 6, val: 'E2E 蓝鲸种子会话' },
+    title: { ver: 1, seq: 6, val: 'Side chat plugin review' },
     sessionListMetadata: { ver: 1, seq: 6, val: { blank: false, lastPromptAt: t0 + 4 } },
   },
 }

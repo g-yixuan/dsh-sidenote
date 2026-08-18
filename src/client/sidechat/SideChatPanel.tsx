@@ -23,10 +23,14 @@ import type { Context, SessionFace, TabComponentProps } from '../../context-type
 import { useComposer, type Composer } from './composer.ts'
 import { clearPendingDraft, parseSideChatMeta, phaseOf, transcriptOf, type ChatMessage } from './model.ts'
 import { readTab } from './open.ts'
+import { t, useLocaleTick } from '../locales.ts'
 import css from './sidechat.module.css'
 
 /** MarkdownText 代码块复制按钮文案（契约要求中文；引用稳定，变了会清流式缓存）。 */
-const CODE_LABELS = { copyLabel: 'Copy', copiedLabel: 'Copied' } as const
+/** MarkdownText 代码块复制按钮文案（跟随 DSH 语言；函数内读取保持引用稳定）。 */
+function codeLabels() {
+  return { copyLabel: t('codeCopy'), copiedLabel: t('codeCopied') }
+}
 
 const NOOP_UNSUBSCRIBE = (): void => {}
 
@@ -44,6 +48,7 @@ function openSessionWindow(session: SessionFace | undefined): void {
 }
 
 export function SideChatPanel(props: TabComponentProps) {
+  useLocaleTick()
   const { ctx, scope, tab, visible } = props
   const meta = parseSideChatMeta(tab.meta)
   const childId = meta.childId
@@ -185,23 +190,23 @@ export function SideChatPanel(props: TabComponentProps) {
   if (phase === 'fork-error') {
     return (
       <StateScreen
-        title="Couldn't create the side chat"
+        title={t('forkErrorTitle')}
         detail={forkError ?? undefined}
-        hint="The main session needs at least one completed turn to fork from. Close this tab with the × on the tab."
+        hint={t('forkErrorHint')}
       />
     )
   }
   if (phase === 'missing') {
     return (
       <StateScreen
-        title="Session no longer exists"
-        detail="This side chat's session was removed and can't be restored."
-        hint="Close this tab with the × on the tab."
+        title={t('missingTitle')}
+        detail={t('missingDetail')}
+        hint={t('missingHint')}
       />
     )
   }
   if (phase === 'forking' || phase === 'loading') {
-    return <StateScreen title="Preparing the side chat…" />
+    return <StateScreen title={t('preparing')} />
   }
 
   const running = snapshot?.running === true
@@ -213,7 +218,7 @@ export function SideChatPanel(props: TabComponentProps) {
         {messages.length === 0 && !running
           ? <EmptyState />
           : <MessageList messages={messages} />}
-        {openFailed && <div className={css.errorRow}>Failed to load the session history. Close and reopen this tab.</div>}
+        {openFailed && <div className={css.errorRow}>{t('historyFailed')}</div>}
       </div>
       <ComposerBar ctx={ctx} session={session} composer={composer} running={running} visible={visible} modelName={modelName} />
     </div>
@@ -222,17 +227,19 @@ export function SideChatPanel(props: TabComponentProps) {
 
 /** 空状态：💬 类图标 + 标题 + fork 语义文案（形态规格）。 */
 function EmptyState() {
+  useLocaleTick()
   return (
     <div className={css.empty}>
       <div className={css.emptyIcon}><IconNewChatOutline16 size={32} /></div>
-      <div className={css.emptyTitle}>Side chat</div>
-      <div className={css.emptyText}>Forked from the current session and evolves independently. Closing the tab removes it.</div>
+      <div className={css.emptyTitle}>{t('emptyTitle')}</div>
+      <div className={css.emptyText}>{t('emptyText')}</div>
     </div>
   )
 }
 
 /** 加载 / 错误整屏态（标题 + 可选详情 + 可选指引）。 */
 function StateScreen(props: { title: string; detail?: string; hint?: string }) {
+  useLocaleTick()
   return (
     <div className={css.stateScreen}>
       <div className={css.emptyIcon}><IconNewChatOutline16 size={32} /></div>
@@ -252,6 +259,7 @@ function MessageList({ messages }: { messages: readonly ChatMessage[] }) {
 }
 
 function MessageRow({ message }: { message: ChatMessage }) {
+  useLocaleTick()
   switch (message.role) {
     case 'user':
       return (
@@ -265,14 +273,14 @@ function MessageRow({ message }: { message: ChatMessage }) {
           <div className={css.assistantBody}>
             {message.reasoning !== undefined && message.reasoning !== '' && (
               <details className={css.reasoning}>
-                <summary>Thinking</summary>
+                <summary>{t('thinking')}</summary>
                 <div className={css.reasoningBody}>{message.reasoning}</div>
               </details>
             )}
             {message.text !== ''
-              ? <MarkdownText text={message.text} streaming={message.streaming} codeLabels={CODE_LABELS} />
-              : message.streaming === true && <div className={css.streamingHint}>Writing…</div>}
-            {message.interrupted === true && <div className={css.noticeRow}>Stopped</div>}
+              ? <MarkdownText text={message.text} streaming={message.streaming} codeLabels={codeLabels()} />
+              : message.streaming === true && <div className={css.streamingHint}>{t('writing')}</div>}
+            {message.interrupted === true && <div className={css.noticeRow}>{t('stopped')}</div>}
           </div>
         </div>
       )
@@ -280,9 +288,9 @@ function MessageRow({ message }: { message: ChatMessage }) {
       return (
         <div className={css.toolCard}>
           <div className={css.toolHead}>
-            Tool · {message.toolName}
-            {message.isError === true && <span className={css.toolError}>failed</span>}
-            {message.streaming === true && <span className={css.toolRunning}>running…</span>}
+            {t('toolLabel')} · {message.toolName}
+            {message.isError === true && <span className={css.toolError}>{t('failed')}</span>}
+            {message.streaming === true && <span className={css.toolRunning}>{t('running')}</span>}
           </div>
           {message.text !== '' && <div className={css.toolBody}>{message.text}</div>}
         </div>
@@ -303,6 +311,7 @@ function ComposerBar(props: {
   visible: boolean
   modelName: string | null
 }) {
+  useLocaleTick()
   const { session, composer, running, visible } = props
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -316,7 +325,7 @@ function ComposerBar(props: {
       <textarea
         ref={inputRef}
         className={css.input}
-        placeholder="Message… (Enter to send, Shift+Enter for a newline)"
+        placeholder={t('inputPlaceholder')}
         value={composer.draft}
         onChange={(event) => { composer.setDraft(event.target.value) }}
         onKeyDown={(event) => {
@@ -328,16 +337,16 @@ function ComposerBar(props: {
         }}
       />
       <div className={css.composerFoot}>
-        <span className={css.modelLabel}>Model: {props.modelName ?? 'follows main session'}</span>
+        <span className={css.modelLabel}>{t('modelLabel', { name: props.modelName ?? t('modelFollowsMain') })}</span>
         {running
           ? (
             <button
               type="button"
               className={css.stopButton}
-              title="Stop the current reply"
+              title={t('stopReplyTitle')}
               onClick={() => { session?.cancel().catch(() => {}) }}
             >
-              <IconStopFill16 size={14} /> Stop
+              <IconStopFill16 size={14} /> {t('stopReply')}
             </button>
           )
           : (
@@ -347,7 +356,7 @@ function ComposerBar(props: {
               disabled={composer.draft.trim() === ''}
               onClick={() => { composer.submit() }}
             >
-              <IconSendOutline16 size={14} /> Send
+              <IconSendOutline16 size={14} /> {t('send')}
             </button>
           )}
       </div>

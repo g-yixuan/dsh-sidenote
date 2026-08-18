@@ -127,7 +127,7 @@ test('fork journey: 种子会话 → 侧边聊天 fork → 历史渲染 → 刷�
   // 打开伪造会话（左侧会话树行；壳层选择器非公共契约，漂移时改这里）。
   // 首选标题行（种子写了 projcache 标题）；投影缓存未生效时退到 cwd 基名行
   // （树中无 aria-expanded 的 "workspace …" 行 = 会话，非工作区分组）。
-  let seedRow = page.getByText('E2E 蓝鲸种子会话').first()
+  let seedRow = page.getByText('Side chat plugin review').first()
   if ((await seedRow.count()) === 0) {
     seedRow = page.locator('[role="treeitem"]:not([aria-expanded])', { hasText: /workspace/ }).first()
   }
@@ -147,21 +147,21 @@ test('fork journey: 种子会话 → 侧边聊天 fork → 历史渲染 → 刷�
   const sidebar = page.locator('[data-dsh-better-sidebar]')
   await dumpStep(page, '04-side-chat-opened')
   await expect(
-    sidebar.getByText(/蓝鲸预算/).first(),
+    sidebar.getByText(/full history snapshot/).first(),
     '侧边聊天面板未渲染 fork 出的历史',
   ).toBeVisible({ timeout: 60_000 })
 
   // 等布局持久化落定（better-sidebar 的 200ms 防抖写盘 + 余量）。
   await page.waitForTimeout(2_000)
 
-  // 子会话不进左侧会话列表：列表里「E2E 蓝鲸种子会话」唯一，且无新增行。
+  // 子会话不进左侧会话列表：列表里「Side chat plugin review」唯一，且无新增行。
   // （严格结构断言留给真实页面验收；这里以「侧边」Tab 存在 + 无新会话标题为准。）
 
   // 刷新：布局持久化恢复 Tab，历史重绑。
   await page.reload({ waitUntil: 'domcontentloaded' })
   await dismissOnboarding(page)
   await expect(
-    sidebar.getByText(/蓝鲸预算/).first(),
+    sidebar.getByText(/full history snapshot/).first(),
     '刷新后侧边聊天的 fork 历史未恢复',
   ).toBeVisible({ timeout: 90_000 })
   await dumpStep(page, '05-after-reload')
@@ -170,6 +170,17 @@ test('fork journey: 种子会话 → 侧边聊天 fork → 历史渲染 → 刷�
   expect(consoleErrors.filter((t) => PLUGIN_CONSOLE.test(t)), 'plugin console errors').toEqual([])
 })
 
+/** 把聊天消息区滚回顶部（角标锚点文本回到视口）。 */
+async function scrollChatToTop(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const msg = document.querySelector('[data-chat-flow-kind="assistant-step"]')
+    let el = msg?.parentElement ?? null
+    while (el && el.scrollHeight <= el.clientHeight) el = el.parentElement
+    el?.scrollTo({ top: 0 })
+  })
+  await page.waitForTimeout(400)
+}
+
 /** Open the seeded session (left nav → session row). */
 async function openSeedSession(page: Page): Promise<void> {
   const openSidebar = page.getByRole('button', { name: 'Open sidebar' }).first()
@@ -177,17 +188,17 @@ async function openSeedSession(page: Page): Promise<void> {
     await openSidebar.click()
     await page.waitForTimeout(800)
   }
-  let seedRow = page.getByText('E2E 蓝鲸种子会话').first()
+  let seedRow = page.getByText('Side chat plugin review').first()
   if ((await seedRow.count()) === 0) {
     seedRow = page.locator('[role="treeitem"]:not([aria-expanded])', { hasText: /workspace/ }).first()
   }
   await expect(seedRow, '伪造会话未出现在会话列表').toBeVisible({ timeout: 30_000 })
   await seedRow.click()
   // 等主聊天渲染出种子 assistant 消息（划选靶子）
-  await expect(page.getByText(/好的，已记住「蓝鲸预算」/).first()).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText(/Forking into a side panel is the right call/).first()).toBeVisible({ timeout: 30_000 })
 }
 
-/** 在第一条 assistant 消息的「蓝鲸预算」上注入一个真实 DOM 选区。 */
+/** 在第一条 assistant 消息的「full history snapshot」上注入一个真实 DOM 选区。 */
 async function injectSelection(page: Page): Promise<void> {
   const ok = await page.evaluate(() => {
     const messages = document.querySelectorAll('[data-chat-flow-kind="assistant-step"]')
@@ -195,11 +206,12 @@ async function injectSelection(page: Page): Promise<void> {
       const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
       for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
         const text = node.textContent ?? ''
-        const at = text.indexOf('蓝鲸预算')
+        const needle = 'full history snapshot'
+        const at = text.indexOf(needle)
         if (at === -1) continue
         const range = document.createRange()
         range.setStart(node, at)
-        range.setEnd(node, at + 4)
+        range.setEnd(node, at + needle.length)
         const sel = window.getSelection()
         sel?.removeAllRanges()
         sel?.addRange(range)
@@ -235,7 +247,7 @@ test('annotate journey: 划选 → 浮层 → 注解编辑器 → 角标 → chi
   await overlay.getByText('Add to conversation').click()
   const noteInput = overlay.locator('input, textarea').first()
   await expect(noteInput, '注解编辑器未打开').toBeVisible({ timeout: 10_000 })
-  await noteInput.fill('E2E 注解：关注这个词')
+  await noteInput.fill('watch the memory cost')
   await dumpStep(page, '07-annotation-editor')
 
   // 保存（新建态确认钮：aria-label 确认注解）→ 角标 1 锚定 + chip「1 条注释」。
@@ -250,8 +262,8 @@ test('annotate journey: 划选 → 浮层 → 注解编辑器 → 角标 → chi
   const draft = await composer.evaluate((el) => (
     el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.value : (el.textContent ?? '')
   ))
-  expect(draft, '草稿缺少引用块前缀').toContain('蓝鲸预算')
-  expect(draft).toContain('E2E 注解')
+  expect(draft, '草稿缺少引用块前缀').toContain('full history snapshot')
+  expect(draft).toContain('watch the memory cost')
 
   expect(pageErrors, 'pageerrors during annotate journey').toEqual([])
   expect(consoleErrors.filter((t) => PLUGIN_CONSOLE.test(t)), 'plugin console errors').toEqual([])
@@ -274,21 +286,21 @@ test('linkage journey: 划选 → 在侧边聊天中提问 → 编辑器 → 侧
   await overlay.getByText('Ask in side chat').click()
   const noteInput = overlay.locator('input[aria-label="Side chat note"]')
   await expect(noteInput, '侧边提问未弹注解编辑器').toBeVisible({ timeout: 10_000 })
-  await noteInput.fill('E2E 联动注解')
+  await noteInput.fill('discuss this point')
   await overlay.locator('button[aria-label="Confirm and ask"]').click()
 
   // 侧边聊天 Tab 打开（fork 主会话），composer 草稿带「引用 + 注解」。
   const sidebar = page.locator('[data-dsh-better-sidebar]')
   await expect(
-    sidebar.getByText(/蓝鲸预算/).first(),
+    sidebar.getByText(/full history snapshot/).first(),
     '侧边聊天未打开或未渲染 fork 历史',
   ).toBeVisible({ timeout: 60_000 })
   const sideComposer = sidebar.getByRole('textbox').first()
   const sideDraft = await sideComposer.evaluate((el) => (
     el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.value : (el.textContent ?? '')
   ))
-  expect(sideDraft, '侧边聊天草稿缺少引用').toContain('蓝鲸预算')
-  expect(sideDraft).toContain('E2E 联动注解')
+  expect(sideDraft, '侧边聊天草稿缺少引用').toContain('full history snapshot')
+  expect(sideDraft).toContain('discuss this point')
   await dumpStep(page, '09-linkage')
 
   // 互斥：主对话不产生注释（无角标、无 chip）。
@@ -310,7 +322,7 @@ test('multi-instance: 并存编号「侧边 N」+ 关闭互不影响', async ({ 
   // 开第一个侧边聊天
   await openPlusMenu(page)
   await page.getByRole('menuitem', { name: /Side chat/ }).first().click()
-  await expect(sidebar.getByText(/蓝鲸预算/).first()).toBeVisible({ timeout: 60_000 })
+  await expect(sidebar.getByText(/full history snapshot/).first()).toBeVisible({ timeout: 60_000 })
 
   // 开第二个：标题应为「侧边 2」（第一个 Tab 转为非激活，其内容隐藏——
   // 断言一律过滤 visible，避免命中非激活 Tab 的隐藏 DOM）。
@@ -318,7 +330,7 @@ test('multi-instance: 并存编号「侧边 N」+ 关闭互不影响', async ({ 
   await page.getByRole('menuitem', { name: /Side chat/ }).first().click()
   await expect(sidebar.getByText('Side 2', { exact: true }), '第二个侧边聊天未编号为「侧边 2」').toBeVisible({ timeout: 30_000 })
   await expect(
-    sidebar.getByText(/蓝鲸预算/).filter({ visible: true }).first(),
+    sidebar.getByText(/full history snapshot/).filter({ visible: true }).first(),
     '第二个侧边聊天未渲染 fork 历史',
   ).toBeVisible({ timeout: 60_000 })
   await dumpStep(page, '10-two-side-chats')
@@ -347,22 +359,24 @@ test('annotation manage: 双注释编号不重排 + 重开编辑 + chip 逐条�
   // 注释 1（带注解「甲」）
   await injectSelection(page)
   await overlay.getByText('Add to conversation').click()
-  await overlay.locator('input, textarea').first().fill('甲')
+  await overlay.locator('input, textarea').first().fill('note one')
   await overlay.locator('button[aria-label="Save note"]').click()
   await expect(overlay.getByRole('button', { name: '1', exact: true }), '角标 1 未出现').toBeVisible({ timeout: 10_000 })
 
-  // 注释 2（空注解）
+  // 注释 2（空注解）——草稿前缀变长会把消息顶出视口，角标按视口裁剪消失，
+  // 断言前先把消息滚回顶部。
   await injectSelection(page)
   await overlay.getByText('Add to conversation').click()
   await overlay.locator('button[aria-label="Save note"]').click()
+  await scrollChatToTop(page)
   await expect(overlay.getByRole('button', { name: '2', exact: true }), '角标 2 未出现').toBeVisible({ timeout: 10_000 })
   await expect(page.getByText('2 annotations').first(), 'chip 未显示 2 条').toBeVisible({ timeout: 10_000 })
 
-  // 点角标 1 重开编辑器：已有注解「甲」；删除 → 角标 1 消失、角标 2 不重排
+  // 点角标 1 重开编辑器：已有注解「note one」；删除 → 角标 1 消失、角标 2 不重排
   await overlay.getByRole('button', { name: '1', exact: true }).click()
   const editArea = overlay.locator('textarea').first()
   await expect(editArea, '重开态编辑器未出现').toBeVisible({ timeout: 10_000 })
-  await expect(editArea).toHaveValue('甲')
+  await expect(editArea).toHaveValue('note one')
   await overlay.locator('button[aria-label="Delete annotation"]').click()
   await expect(overlay.getByRole('button', { name: '1', exact: true }), '角标 1 未随删除消失').toHaveCount(0)
   await expect(overlay.getByRole('button', { name: '2', exact: true }), '角标 2 被误重排/误删').toBeVisible()
@@ -408,7 +422,7 @@ test('slash command: /side 出现在命令菜单且能打开侧边聊天', async
   // 侧边聊天 Tab 打开并渲染 fork 历史。
   const sidebar = page.locator('[data-dsh-better-sidebar]')
   await expect(
-    sidebar.getByText(/蓝鲸预算/).filter({ visible: true }).first(),
+    sidebar.getByText(/full history snapshot/).filter({ visible: true }).first(),
     '/side 未能打开带历史的侧边聊天',
   ).toBeVisible({ timeout: 60_000 })
   await dumpStep(page, '14-slash-opened')

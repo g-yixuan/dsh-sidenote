@@ -46,7 +46,7 @@ await dismissOnboarding(page)
 // 打开伪造会话
 const openSidebar = page.getByRole('button', { name: 'Open sidebar' }).first()
 if ((await openSidebar.count()) > 0) { await openSidebar.click(); await page.waitForTimeout(800) }
-const seedRow = page.getByText('E2E 蓝鲸种子会话').first()
+const seedRow = page.getByText('Side chat plugin review').first()
 await seedRow.waitFor({ state: 'visible', timeout: 30_000 })
 await seedRow.click()
 await page.waitForTimeout(2000)
@@ -58,11 +58,12 @@ await page.evaluate(() => {
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
     for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
       const text = node.textContent ?? ''
-      const at = text.indexOf('蓝鲸预算')
+      const needle = 'full history snapshot'
+      const at = text.indexOf(needle)
       if (at === -1) continue
       const range = document.createRange()
       range.setStart(node, at)
-      range.setEnd(node, at + 4)
+      range.setEnd(node, at + needle.length)
       const sel = window.getSelection()
       sel?.removeAllRanges(); sel?.addRange(range)
       document.dispatchEvent(new Event('selectionchange'))
@@ -92,7 +93,7 @@ await ensureSidebarExpanded(page)
 const sidebar = page.locator('[data-dsh-better-sidebar]')
 await sidebar.getByRole('button', { name: /New tab/ }).first().click()
 await page.getByRole('menuitem', { name: /侧边聊天/ }).first().click()
-await sidebar.getByText(/蓝鲸预算/).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: 60_000 })
+await sidebar.getByText(/full history snapshot/).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: 60_000 })
 await page.waitForTimeout(1200)
 await shot('04-side-chat-panel')
 

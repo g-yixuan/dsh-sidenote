@@ -21,13 +21,14 @@ import { sideChatBridge } from '../bridge.ts'
 import { SideChatPanel } from './SideChatPanel.tsx'
 import { SIDE_TAB_TYPE, canForkFrom, collectSideTabs, mintSideTabId, sideTabTitle } from './model.ts'
 import { openOrFocusSideChat } from './open.ts'
+import { t } from '../locales.ts'
 import { registerSideCommand } from './slash.ts'
 
 export function registerSideChat(ctx: Context): void {
   ctx.effect(
     () => ctx.betterSidebar.registerTab({
       id: SIDE_TAB_TYPE,
-      title: () => 'Side chat',
+      title: () => t('menuTitle'),
       icon: (size: number) => <IconNewChatOutline16 size={size} />,
       order: 60,
       available: (availableCtx, scope) => canForkFrom(availableCtx, scope.sessionId),

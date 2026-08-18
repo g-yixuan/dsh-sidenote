@@ -43,7 +43,7 @@ for (let round = 0; round < 8; round++) {
 // 打开伪造会话
 const openSidebar = page.getByRole('button', { name: 'Open sidebar' }).first()
 if ((await openSidebar.count()) > 0) { await openSidebar.click(); await pause(800) }
-const seedRow = page.getByText('E2E 蓝鲸种子会话').first()
+const seedRow = page.getByText('Side chat plugin review').first()
 await seedRow.waitFor({ state: 'visible', timeout: 30_000 })
 await seedRow.click()
 await pause(1500)
@@ -55,11 +55,12 @@ await page.evaluate(() => {
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
     for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
       const text = node.textContent ?? ''
-      const at = text.indexOf('蓝鲸预算')
+      const needle = 'full history snapshot'
+      const at = text.indexOf(needle)
       if (at === -1) continue
       const range = document.createRange()
       range.setStart(node, at)
-      range.setEnd(node, at + 4)
+      range.setEnd(node, at + needle.length)
       const sel = window.getSelection()
       sel?.removeAllRanges(); sel?.addRange(range)
       document.dispatchEvent(new Event('selectionchange'))
@@ -77,7 +78,7 @@ await overlay.getByText('添加到对话').click()
 await pause(600)
 const noteInput = overlay.locator('input').first()
 await noteInput.click()
-await noteInput.pressSequentially('这里可以写自己的注解之类的', { delay: 60 })
+await noteInput.pressSequentially('watch the memory cost', { delay: 50 })
 await pause(800)
 await overlay.locator('button[aria-label="确认注解"]').click()
 await page.getByText('1 条注释').first().waitFor({ state: 'visible', timeout: 10_000 })
@@ -89,7 +90,7 @@ if ((await expand.count()) > 0) { await expand.click(); await pause(800) }
 const sidebar = page.locator('[data-dsh-better-sidebar]')
 await sidebar.getByRole('button', { name: /New tab/ }).first().click()
 await page.getByRole('menuitem', { name: /侧边聊天/ }).first().click()
-await sidebar.getByText(/蓝鲸预算/).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: 60_000 })
+await sidebar.getByText(/full history snapshot/).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: 60_000 })
 await pause(1500)
 
 await context.close()

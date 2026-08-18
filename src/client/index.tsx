@@ -8,12 +8,15 @@
  * the plugin inactive until better-sidebar provides it.
  */
 import type { Context } from '../context-types.ts'
+import { attachLocale, type LocaleServiceLike } from './locales.ts'
 import { registerSideChat } from './sidechat/index.tsx'
 import { registerAnnotations } from './annotate/index.tsx'
 
-export const inject = ['betterSidebar', 'sessions', 'workspaces', 'slots', 'connection']
+export const inject = ['betterSidebar', 'sessions', 'workspaces', 'slots', 'connection', 'locale']
 
 export function apply(ctx: Context): void {
+  // 跟随 DSH 通用设置里的语言（locale.preference，Host-backed，实时切换）。
+  attachLocale(ctx.locale as LocaleServiceLike | undefined)
   registerSideChat(ctx)
   registerAnnotations(ctx)
 }

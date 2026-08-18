@@ -10,6 +10,7 @@
 import type { Context } from '../../context-types.ts'
 import { canForkFrom, collectSideTabs } from './model.ts'
 import { openOrFocusSideChat } from './open.ts'
+import { t } from '../locales.ts'
 
 /** dsh-client-ui-commands ClientSessionContext 的最小镜像（只有 sessionId）。 */
 interface CommandSession {
@@ -49,19 +50,19 @@ export function registerSideCommand(ctx: Context): void {
   try {
     ctx.effect(() => commandUi.register({
       name: 'side',
-      description: 'Open a side chat (forked from the current session)',
+      description: t('cmdDesc'),
       available: (session) => canForkFrom(ctx, session.sessionId),
       ui: {
         kind: 'popupSelect',
         options: (session) => {
           const options: SelectOption[] = [
-            { id: 'new', label: 'New side chat', detail: 'Forked from the current session; evolves independently' },
+            { id: 'new', label: t('cmdNew'), detail: t('cmdNewDetail') },
           ]
           // 已并存的侧边聊天列为聚焦项（命令弹层即多实例管理入口）。
           const snapshot = ctx.betterSidebar.getSnapshot()
           if (snapshot.sessionId === session.sessionId && snapshot.state !== undefined) {
             for (const tab of collectSideTabs(snapshot.state)) {
-              options.push({ id: `focus:${tab.id}`, label: `Focus "${tab.title}"`, detail: 'Existing side chat' })
+              options.push({ id: `focus:${tab.id}`, label: t('cmdFocus', { title: tab.title }), detail: t('cmdFocusDetail') })
             }
           }
           return Promise.resolve(options)

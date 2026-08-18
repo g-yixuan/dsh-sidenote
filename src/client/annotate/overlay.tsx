@@ -18,6 +18,7 @@ import type { ReactNode } from 'react'
 import { IconCheckOutline16, IconTrashOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context } from '../../context-types.ts'
 import { sideChatBridge } from '../bridge.ts'
+import { t, useLocaleTick } from '../locales.ts'
 import { badgeAnchorOf, highlightRectsOf, resolveRange, spreadBadgePoint } from './anchor.ts'
 import { buildSideChatQuote } from './format.ts'
 import type { Annotation, AnnotationStore } from './model.ts'
@@ -80,6 +81,7 @@ export function AnnotateOverlay(props: OverlayProps): ReactNode {
 }
 
 function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNode {
+  useLocaleTick()
   const selectionState = useSyncExternalStore(
     useCallback((cb: () => void) => controller.subscribe(cb), [controller]),
     () => controller.getSnapshot(),
@@ -245,6 +247,7 @@ function SideChatNoteEditor(props: {
   onSave: (note: string) => boolean
   onCancel: () => void
 }): ReactNode {
+  useLocaleTick()
   const [note, setNote] = useState('')
   const [failed, setFailed] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -285,8 +288,8 @@ function SideChatNoteEditor(props: {
       <input
         className={css.editorInput}
         value={note}
-        placeholder="Add a note for the side chat (optional)…"
-        aria-label="Side chat note"
+        placeholder={t('sideNotePlaceholder')}
+        aria-label={t('sideNoteAria')}
         autoFocus
         onChange={(event) => { setNote(event.target.value); setFailed(false) }}
         onKeyDown={(event) => {
@@ -299,13 +302,13 @@ function SideChatNoteEditor(props: {
       <button
         type="button"
         className={css.confirmButton}
-        title="Confirm"
-        aria-label="Confirm and ask"
+        title={t('confirmTitle')}
+        aria-label={t('confirmAskAria')}
         onClick={save}
       >
         <IconCheckOutline16 size={14} />
       </button>
-      {failed && <div className={css.editorError}>Couldn't open the side chat. Try again.</div>}
+      {failed && <div className={css.editorError}>{t('openSideFailed')}</div>}
     </div>
   )
 }
@@ -317,6 +320,7 @@ function SelectionToolbar(props: {
   onAdd: () => void
   onAsk: () => void
 }): ReactNode {
+  useLocaleTick()
   const { rect } = props.snapshot
   const left = Math.max(8, Math.min(window.innerWidth - 8, rect.left + rect.width / 2))
   const top = Math.max(4, rect.top - 10)
@@ -325,7 +329,7 @@ function SelectionToolbar(props: {
       className={css.toolbar}
       style={{ left, top }}
       role="toolbar"
-      aria-label="Selection annotations"
+      aria-label={t('toolbarAria')}
     >
       <button
         type="button"
@@ -337,7 +341,7 @@ function SelectionToolbar(props: {
           props.onAdd()
         }}
       >
-        Add to conversation
+        {t('addToConversation')}
       </button>
       {props.sideChatAvailable && (
         <button
@@ -350,7 +354,7 @@ function SelectionToolbar(props: {
             props.onAsk()
           }}
         >
-          Ask in side chat
+          {t('askInSideChat')}
         </button>
       )}
     </div>
@@ -385,6 +389,8 @@ function BadgeLayer(props: {
     }
     const anchor = badgeAnchorOf(range)
     if (anchor === null) continue
+    // 锚点滚出视口的角标不渲染（fixed 定位否则会漂浮在无关内容上方）。
+    if (anchor.centerY < 0 || anchor.centerY > window.innerHeight || anchor.right < 0 || anchor.right > window.innerWidth) continue
     // 同一选区/相邻行的多个角标会落在同一点位——错开保证每个都可点击。
     const point = spreadBadgePoint({ x: anchor.right, y: anchor.centerY }, placed)
     placed.push(point)
@@ -394,7 +400,7 @@ function BadgeLayer(props: {
         type="button"
         className={css.badge}
         style={{ left: point.x + 6, top: point.y }}
-        title={annotation.note === '' ? annotation.text : `${annotation.text}\n注解：${annotation.note}`}
+        title={annotation.note === '' ? annotation.text : `${annotation.text}\n${t('noteLine', { note: annotation.note })}`}
         onClick={(event) => {
           event.preventDefault()
           event.stopPropagation()
@@ -426,6 +432,7 @@ function AnnotationEditor(props: {
   onDelete: () => void
   onCancel: () => void
 }): ReactNode {
+  useLocaleTick()
   const [note, setNote] = useState(props.annotation.note)
   const rootRef = useRef<HTMLDivElement | null>(null)
 
@@ -466,7 +473,7 @@ function AnnotationEditor(props: {
         <input
           className={css.editorInput}
           value={note}
-          placeholder="Add a note (optional)…"
+          placeholder={t('notePlaceholder')}
           autoFocus
           onChange={(event) => { setNote(event.target.value) }}
           onKeyDown={(event) => {
@@ -479,8 +486,8 @@ function AnnotationEditor(props: {
         <button
           type="button"
           className={css.confirmButton}
-          title="Confirm"
-          aria-label="Save note"
+          title={t('confirmTitle')}
+          aria-label={t('saveNoteAria')}
           onClick={save}
         >
           <IconCheckOutline16 size={14} />
@@ -494,7 +501,7 @@ function AnnotationEditor(props: {
       <textarea
         className={css.editorTextarea}
         value={note}
-        placeholder="Add a note (optional)…"
+        placeholder={t('notePlaceholder')}
         rows={3}
         autoFocus
         onChange={(event) => { setNote(event.target.value) }}
@@ -509,15 +516,15 @@ function AnnotationEditor(props: {
         <button
           type="button"
           className={css.deleteButton}
-          title="Delete annotation"
-          aria-label="Delete annotation"
+          title={t('deleteNote')}
+          aria-label={t('deleteNote')}
           onClick={props.onDelete}
         >
           <IconTrashOutline16 size={14} />
         </button>
         <span className={css.editorSpacer} />
-        <button type="button" className={css.cancelButton} onClick={props.onCancel}>Cancel</button>
-        <button type="button" className={css.saveButton} onClick={save}>Save</button>
+        <button type="button" className={css.cancelButton} onClick={props.onCancel}>{t('cancel')}</button>
+        <button type="button" className={css.saveButton} onClick={save}>{t('save')}</button>
       </div>
     </div>
   )

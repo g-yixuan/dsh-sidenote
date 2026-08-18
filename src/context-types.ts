@@ -230,11 +230,19 @@ export interface ConnectionService {
 
 // ── Context ──────────────────────────────────────────────────────────────────
 
+// ── locale（dsh-client-locale；DSH 通用设置的语言偏好，Host-backed）────────────
+
+export interface LocaleService {
+  getSnapshot(): { active: string }
+  subscribe(fn: () => void): () => void
+}
+
 export interface Context extends CordisContext {
   betterSidebar: BetterSidebarService
   sessions: SessionsService
   workspaces: WorkspacesService
   connection: ConnectionService
+  locale: LocaleService
 }
 
 // ── sidechat 扩展（WI-01）───────────────────────────────────────────────────
