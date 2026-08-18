@@ -70,18 +70,18 @@ await page.evaluate(() => {
   }
 })
 const overlay = page.locator('[data-dsh-side-chat]')
-await overlay.getByText('添加到对话').waitFor({ state: 'visible', timeout: 10_000 })
+await overlay.getByText('Add to conversation').waitFor({ state: 'visible', timeout: 10_000 })
 await pause(1200)
 
 // 编辑器
-await overlay.getByText('添加到对话').click()
+await overlay.getByText('Add to conversation').click()
 await pause(600)
 const noteInput = overlay.locator('input').first()
 await noteInput.click()
 await noteInput.pressSequentially('watch the memory cost', { delay: 50 })
 await pause(800)
-await overlay.locator('button[aria-label="确认注解"]').click()
-await page.getByText('1 条注释').first().waitFor({ state: 'visible', timeout: 10_000 })
+await overlay.locator('button[aria-label="Save note"]').click()
+await page.getByText('1 annotation').first().waitFor({ state: 'visible', timeout: 10_000 })
 await pause(1500)
 
 // 侧边聊天
@@ -89,7 +89,7 @@ const expand = page.getByRole('button', { name: /Expand sidebar/ }).first()
 if ((await expand.count()) > 0) { await expand.click(); await pause(800) }
 const sidebar = page.locator('[data-dsh-better-sidebar]')
 await sidebar.getByRole('button', { name: /New tab/ }).first().click()
-await page.getByRole('menuitem', { name: /侧边聊天/ }).first().click()
+await page.getByRole('menuitem', { name: /Side chat/ }).first().click()
 await sidebar.getByText(/full history snapshot/).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: 60_000 })
 await pause(1500)
 

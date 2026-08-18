@@ -73,26 +73,26 @@ await page.evaluate(() => {
   }
 })
 const overlay = page.locator('[data-dsh-side-chat]')
-await overlay.getByText('添加到对话').waitFor({ state: 'visible', timeout: 10_000 })
+await overlay.getByText('Add to conversation').waitFor({ state: 'visible', timeout: 10_000 })
 await shot('01-selection-popover')
 
 // 2. 注解编辑器
-await overlay.getByText('添加到对话').click()
+await overlay.getByText('Add to conversation').click()
 await page.waitForTimeout(400)
 const noteInput = overlay.locator('input').first()
-await noteInput.fill('这里可以写自己的注解之类的')
+await noteInput.fill('watch the memory cost')
 await shot('02-annotation-editor')
 
 // 3. 角标 + chip
-await overlay.locator('button[aria-label="确认注解"]').click()
-await page.getByText('1 条注释').first().waitFor({ state: 'visible', timeout: 10_000 })
+await overlay.locator('button[aria-label="Save note"]').click()
+await page.getByText('1 annotation').first().waitFor({ state: 'visible', timeout: 10_000 })
 await shot('03-badge-and-chip')
 
 // 4. 侧边聊天面板（fork 历史 + 独立 composer）
 await ensureSidebarExpanded(page)
 const sidebar = page.locator('[data-dsh-better-sidebar]')
 await sidebar.getByRole('button', { name: /New tab/ }).first().click()
-await page.getByRole('menuitem', { name: /侧边聊天/ }).first().click()
+await page.getByRole('menuitem', { name: /Side chat/ }).first().click()
 await sidebar.getByText(/full history snapshot/).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: 60_000 })
 await page.waitForTimeout(1200)
 await shot('04-side-chat-panel')
