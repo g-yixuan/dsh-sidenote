@@ -1,7 +1,7 @@
 {
   "name": "dsh-side-chat",
   "version": "0.1.0",
-  "description": "DSH web plugin: Codex-style side chat (forked from the current session, persistent, hidden from the session list) plus selection annotations with numbered badges and an N-annotations composer chip. Thin consumer of dsh-better-sidebar.",
+  "description": "DSH web plugin: Codex-style side chat (fork the current session into a persistent side panel) + selection annotations with numbered badges and a composer chip. A thin consumer of dsh-better-sidebar. / Codex 风格侧边聊天 + 划选注释的 DSH 插件。",
   "type": "module",
   "license": "MIT",
   "main": "lib/index.js",
@@ -75,5 +75,22 @@
     "typescript": "^5.6.0",
     "vitest": "^4.1.8",
     "@playwright/test": "^1.50.0"
-  }
+  },
+  "keywords": [
+    "dsh-plugin",
+    "dsh",
+    "deepseek-harness",
+    "dsh-better-sidebar",
+    "side-chat",
+    "annotation",
+    "ai-coding",
+    "deepseek"
+  ],
+  "homepage": "https://github.com/g-yixuan/dsh-side-chat#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/g-yixuan/dsh-side-chat.git"
+  },
+  "bugs": "https://github.com/g-yixuan/dsh-side-chat/issues",
+  "author": "gyixuan"
 }
