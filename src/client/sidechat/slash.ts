@@ -49,19 +49,19 @@ export function registerSideCommand(ctx: Context): void {
   try {
     ctx.effect(() => commandUi.register({
       name: 'side',
-      description: '打开侧边聊天（从当前会话 fork）',
+      description: 'Open a side chat (forked from the current session)',
       available: (session) => canForkFrom(ctx, session.sessionId),
       ui: {
         kind: 'popupSelect',
         options: (session) => {
           const options: SelectOption[] = [
-            { id: 'new', label: '新建侧边聊天', detail: '从当前会话 fork，独立演进' },
+            { id: 'new', label: 'New side chat', detail: 'Forked from the current session; evolves independently' },
           ]
           // 已并存的侧边聊天列为聚焦项（命令弹层即多实例管理入口）。
           const snapshot = ctx.betterSidebar.getSnapshot()
           if (snapshot.sessionId === session.sessionId && snapshot.state !== undefined) {
             for (const tab of collectSideTabs(snapshot.state)) {
-              options.push({ id: `focus:${tab.id}`, label: `聚焦「${tab.title}」`, detail: '已存在的侧边聊天' })
+              options.push({ id: `focus:${tab.id}`, label: `Focus "${tab.title}"`, detail: 'Existing side chat' })
             }
           }
           return Promise.resolve(options)

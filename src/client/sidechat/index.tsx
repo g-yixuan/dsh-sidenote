@@ -27,7 +27,7 @@ export function registerSideChat(ctx: Context): void {
   ctx.effect(
     () => ctx.betterSidebar.registerTab({
       id: SIDE_TAB_TYPE,
-      title: () => '侧边聊天',
+      title: () => 'Side chat',
       icon: (size: number) => <IconNewChatOutline16 size={size} />,
       order: 60,
       available: (availableCtx, scope) => canForkFrom(availableCtx, scope.sessionId),

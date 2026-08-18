@@ -26,7 +26,7 @@ import { readTab } from './open.ts'
 import css from './sidechat.module.css'
 
 /** MarkdownText 代码块复制按钮文案（契约要求中文；引用稳定，变了会清流式缓存）。 */
-const CODE_LABELS = { copyLabel: '复制', copiedLabel: '已复制' } as const
+const CODE_LABELS = { copyLabel: 'Copy', copiedLabel: 'Copied' } as const
 
 const NOOP_UNSUBSCRIBE = (): void => {}
 
@@ -185,23 +185,23 @@ export function SideChatPanel(props: TabComponentProps) {
   if (phase === 'fork-error') {
     return (
       <StateScreen
-        title="无法创建侧边聊天"
+        title="Couldn't create the side chat"
         detail={forkError ?? undefined}
-        hint="主会话需要至少一轮已完成的对话才能 fork。点击标签上的 × 可关闭此标签页。"
+        hint="The main session needs at least one completed turn to fork from. Close this tab with the × on the tab."
       />
     )
   }
   if (phase === 'missing') {
     return (
       <StateScreen
-        title="会话已不存在"
-        detail="此侧边聊天的会话已被移除，无法恢复。"
-        hint="点击标签上的 × 关闭此标签页。"
+        title="Session no longer exists"
+        detail="This side chat's session was removed and can't be restored."
+        hint="Close this tab with the × on the tab."
       />
     )
   }
   if (phase === 'forking' || phase === 'loading') {
-    return <StateScreen title="正在准备侧边聊天…" />
+    return <StateScreen title="Preparing the side chat…" />
   }
 
   const running = snapshot?.running === true
@@ -213,7 +213,7 @@ export function SideChatPanel(props: TabComponentProps) {
         {messages.length === 0 && !running
           ? <EmptyState />
           : <MessageList messages={messages} />}
-        {openFailed && <div className={css.errorRow}>会话历史加载失败，可关闭后重新打开此标签页。</div>}
+        {openFailed && <div className={css.errorRow}>Failed to load the session history. Close and reopen this tab.</div>}
       </div>
       <ComposerBar ctx={ctx} session={session} composer={composer} running={running} visible={visible} modelName={modelName} />
     </div>
@@ -225,8 +225,8 @@ function EmptyState() {
   return (
     <div className={css.empty}>
       <div className={css.emptyIcon}><IconNewChatOutline16 size={32} /></div>
-      <div className={css.emptyTitle}>侧边聊天</div>
-      <div className={css.emptyText}>侧边聊天从当前会话 fork，独立演进；关闭标签页后消失。</div>
+      <div className={css.emptyTitle}>Side chat</div>
+      <div className={css.emptyText}>Forked from the current session and evolves independently. Closing the tab removes it.</div>
     </div>
   )
 }
@@ -265,14 +265,14 @@ function MessageRow({ message }: { message: ChatMessage }) {
           <div className={css.assistantBody}>
             {message.reasoning !== undefined && message.reasoning !== '' && (
               <details className={css.reasoning}>
-                <summary>思考过程</summary>
+                <summary>Thinking</summary>
                 <div className={css.reasoningBody}>{message.reasoning}</div>
               </details>
             )}
             {message.text !== ''
               ? <MarkdownText text={message.text} streaming={message.streaming} codeLabels={CODE_LABELS} />
-              : message.streaming === true && <div className={css.streamingHint}>正在输出…</div>}
-            {message.interrupted === true && <div className={css.noticeRow}>已停止</div>}
+              : message.streaming === true && <div className={css.streamingHint}>Writing…</div>}
+            {message.interrupted === true && <div className={css.noticeRow}>Stopped</div>}
           </div>
         </div>
       )
@@ -280,9 +280,9 @@ function MessageRow({ message }: { message: ChatMessage }) {
       return (
         <div className={css.toolCard}>
           <div className={css.toolHead}>
-            工具 · {message.toolName}
-            {message.isError === true && <span className={css.toolError}>失败</span>}
-            {message.streaming === true && <span className={css.toolRunning}>执行中…</span>}
+            Tool · {message.toolName}
+            {message.isError === true && <span className={css.toolError}>failed</span>}
+            {message.streaming === true && <span className={css.toolRunning}>running…</span>}
           </div>
           {message.text !== '' && <div className={css.toolBody}>{message.text}</div>}
         </div>
@@ -316,7 +316,7 @@ function ComposerBar(props: {
       <textarea
         ref={inputRef}
         className={css.input}
-        placeholder="输入消息…（Enter 发送，Shift+Enter 换行）"
+        placeholder="Message… (Enter to send, Shift+Enter for a newline)"
         value={composer.draft}
         onChange={(event) => { composer.setDraft(event.target.value) }}
         onKeyDown={(event) => {
@@ -328,16 +328,16 @@ function ComposerBar(props: {
         }}
       />
       <div className={css.composerFoot}>
-        <span className={css.modelLabel}>模型：{props.modelName ?? '跟随主会话'}</span>
+        <span className={css.modelLabel}>Model: {props.modelName ?? 'follows main session'}</span>
         {running
           ? (
             <button
               type="button"
               className={css.stopButton}
-              title="停止当前回复"
+              title="Stop the current reply"
               onClick={() => { session?.cancel().catch(() => {}) }}
             >
-              <IconStopFill16 size={14} /> 停止
+              <IconStopFill16 size={14} /> Stop
             </button>
           )
           : (
@@ -347,7 +347,7 @@ function ComposerBar(props: {
               disabled={composer.draft.trim() === ''}
               onClick={() => { composer.submit() }}
             >
-              <IconSendOutline16 size={14} /> 发送
+              <IconSendOutline16 size={14} /> Send
             </button>
           )}
       </div>

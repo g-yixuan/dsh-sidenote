@@ -75,7 +75,7 @@ export function createAnnotationChip(store: AnnotationStore) {
           onClick={() => { setExpanded(open => !open) }}
         >
           <IconListPenOutline16 size={12} />
-          <span>{active.length} 条注释</span>
+          <span>{active.length} {active.length === 1 ? 'annotation' : 'annotations'}</span>
         </button>
         {expanded && (
           <ul className={css.chipPanel}>
@@ -89,8 +89,8 @@ export function createAnnotationChip(store: AnnotationStore) {
                 <button
                   type="button"
                   className={css.chipRemove}
-                  title="移除注释"
-                  aria-label={`移除注释 ${annotation.number}`}
+                  title="Remove annotation"
+                  aria-label={`Remove annotation ${annotation.number}`}
                   onClick={() => { store.remove(annotation.id) }}
                 >
                   <IconCloseOutline16 size={12} />

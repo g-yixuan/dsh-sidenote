@@ -14,8 +14,8 @@ import type { ConversationSnapshot, Context, SidebarTab } from '../../context-ty
 /** Tab 类型 id（better-sidebar 注册表键；带包前缀防冲突）。 */
 export const SIDE_TAB_TYPE = 'dsh-side-chat:side'
 
-/** Tab 标题基准（截图5「⊕ 侧边 ×」裁定）。 */
-export const BASE_TAB_TITLE = '侧边'
+/** Tab 标题基准（截图5「⊕ 侧边 ×」裁定；英文 UI 为「Side」）。 */
+export const BASE_TAB_TITLE = 'Side'
 
 // ── Tab id 与标题 ────────────────────────────────────────────────────────────
 
@@ -32,7 +32,7 @@ export function mintSideTabId(): string {
 export function sideTabTitle(existingTitles: readonly string[]): string {
   let max = 0
   for (const title of existingTitles) {
-    const match = /^侧边(?: (\d+))?$/.exec(title)
+    const match = /^Side(?: (\d+))?$/.exec(title)
     if (match !== null) max = Math.max(max, match[1] === undefined ? 1 : Number(match[1]))
   }
   return max <= 0 ? BASE_TAB_TITLE : `${BASE_TAB_TITLE} ${max + 1}`

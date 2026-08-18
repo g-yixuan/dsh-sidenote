@@ -113,7 +113,7 @@ describe('quote formatting', () => {
       { text: '原文片段 1', note: 'xxx' },
       { text: '原文片段 2', note: '' },
     ])
-    expect(block).toBe('> 原文片段 1\n注解：xxx\n\n> 原文片段 2\n（无注解）')
+    expect(block).toBe('> 原文片段 1\nNote: xxx\n\n> 原文片段 2\n(no note)')
   })
 
   it('returns an empty block for no annotations', () => {
@@ -121,26 +121,26 @@ describe('quote formatting', () => {
   })
 
   it('builds the side-chat seed as quote + note line（与主对话注释同构）', () => {
-    expect(buildSideChatQuote('划选的\n文本')).toBe('> 划选的\n> 文本\n（无注解）')
-    expect(buildSideChatQuote('划选的文本', '关注这里')).toBe('> 划选的文本\n注解：关注这里')
+    expect(buildSideChatQuote('划选的\n文本')).toBe('> 划选的\n> 文本\n(no note)')
+    expect(buildSideChatQuote('划选的文本', '关注这里')).toBe('> 划选的文本\nNote: 关注这里')
   })
 })
 
 describe('managed draft prefix math', () => {
   it('prepends the head to an empty draft', () => {
-    const next = nextManagedDraft('', '', '> 原文\n（无注解）')
-    expect(next).toEqual({ head: '> 原文\n（无注解）\n\n', draft: '> 原文\n（无注解）\n\n' })
+    const next = nextManagedDraft('', '', '> 原文\n(no note)')
+    expect(next).toEqual({ head: '> 原文\n(no note)\n\n', draft: '> 原文\n(no note)\n\n' })
   })
 
   it('preserves user text below the head across block updates', () => {
-    const first = nextManagedDraft('', '', '> 原文 1\n（无注解）')
+    const first = nextManagedDraft('', '', '> 原文 1\n(no note)')
     const typed = `${first.draft}用户正文`
-    const second = nextManagedDraft(typed, first.head, '> 原文 1\n注解：改')
-    expect(second.draft).toBe('> 原文 1\n注解：改\n\n用户正文')
+    const second = nextManagedDraft(typed, first.head, '> 原文 1\nNote: 改')
+    expect(second.draft).toBe('> 原文 1\nNote: 改\n\n用户正文')
   })
 
   it('removes the head cleanly when the block empties (all sent/deleted)', () => {
-    const first = nextManagedDraft('', '', '> 原文\n（无注解）')
+    const first = nextManagedDraft('', '', '> 原文\n(no note)')
     const typed = `${first.draft}用户正文`
     const cleared = nextManagedDraft(typed, first.head, '')
     expect(cleared).toEqual({ head: '', draft: '用户正文' })

@@ -3,7 +3,7 @@
  * `document.body` (marked `data-dsh-side-chat` so the selection listener
  * excludes it) rendering three fixed-position layers over the conversation:
  *
- * - the selection toolbar (添加到对话 / 在侧边聊天中提问),
+ * - the selection toolbar (Add to conversation / Ask in side chat),
  * - the numbered badge layer (锚定在选区矩形右缘、选区首行高度) plus the
  *   激活态高亮 (editor open only — 关闭后高亮消退只留角标),
  * - the annotation editor popover (新建态 ✓ / 重开态 🗑 取消 保存).
@@ -32,7 +32,7 @@ interface EditorState {
   readonly y: number
 }
 
-/** 「在侧边聊天中提问」的注解收集态：先弹编辑器（与「添加到对话」一致，
+/** 「Ask in side chat」的注解收集态：先弹编辑器（与「Add to conversation」一致，
  *  允许空注解），保存后才经 bridge 注入侧边聊天草稿——不产生主对话注释
  *  （无高亮/角标/chip，两个去向互斥）。 */
 interface SideDraftState {
@@ -237,7 +237,7 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
   )
 }
 
-/** 「在侧边聊天中提问」的注解编辑器（新建态同构：输入框 + ✓，允许空注解）。
+/** 「Ask in side chat」的注解编辑器（新建态同构：输入框 + ✓，允许空注解）。
  *  bridge 失败时不关编辑器、给出内联错误——用户写好的注解不丢。 */
 function SideChatNoteEditor(props: {
   x: number
@@ -285,8 +285,8 @@ function SideChatNoteEditor(props: {
       <input
         className={css.editorInput}
         value={note}
-        placeholder="给侧边聊天写个注解（可空）…"
-        aria-label="侧边聊天注解"
+        placeholder="Add a note for the side chat (optional)…"
+        aria-label="Side chat note"
         autoFocus
         onChange={(event) => { setNote(event.target.value); setFailed(false) }}
         onKeyDown={(event) => {
@@ -299,13 +299,13 @@ function SideChatNoteEditor(props: {
       <button
         type="button"
         className={css.confirmButton}
-        title="确认"
-        aria-label="确认并提问"
+        title="Confirm"
+        aria-label="Confirm and ask"
         onClick={save}
       >
         <IconCheckOutline16 size={14} />
       </button>
-      {failed && <div className={css.editorError}>打开侧边聊天失败，请重试</div>}
+      {failed && <div className={css.editorError}>Couldn't open the side chat. Try again.</div>}
     </div>
   )
 }
@@ -325,7 +325,7 @@ function SelectionToolbar(props: {
       className={css.toolbar}
       style={{ left, top }}
       role="toolbar"
-      aria-label="划选注释"
+      aria-label="Selection annotations"
     >
       <button
         type="button"
@@ -337,7 +337,7 @@ function SelectionToolbar(props: {
           props.onAdd()
         }}
       >
-        添加到对话
+        Add to conversation
       </button>
       {props.sideChatAvailable && (
         <button
@@ -350,7 +350,7 @@ function SelectionToolbar(props: {
             props.onAsk()
           }}
         >
-          在侧边聊天中提问
+          Ask in side chat
         </button>
       )}
     </div>
@@ -466,7 +466,7 @@ function AnnotationEditor(props: {
         <input
           className={css.editorInput}
           value={note}
-          placeholder="这里可以写自己的注解…"
+          placeholder="Add a note (optional)…"
           autoFocus
           onChange={(event) => { setNote(event.target.value) }}
           onKeyDown={(event) => {
@@ -479,8 +479,8 @@ function AnnotationEditor(props: {
         <button
           type="button"
           className={css.confirmButton}
-          title="确认"
-          aria-label="确认注解"
+          title="Confirm"
+          aria-label="Save note"
           onClick={save}
         >
           <IconCheckOutline16 size={14} />
@@ -494,7 +494,7 @@ function AnnotationEditor(props: {
       <textarea
         className={css.editorTextarea}
         value={note}
-        placeholder="这里可以写自己的注解…"
+        placeholder="Add a note (optional)…"
         rows={3}
         autoFocus
         onChange={(event) => { setNote(event.target.value) }}
@@ -509,15 +509,15 @@ function AnnotationEditor(props: {
         <button
           type="button"
           className={css.deleteButton}
-          title="删除注释"
-          aria-label="删除注释"
+          title="Delete annotation"
+          aria-label="Delete annotation"
           onClick={props.onDelete}
         >
           <IconTrashOutline16 size={14} />
         </button>
         <span className={css.editorSpacer} />
-        <button type="button" className={css.cancelButton} onClick={props.onCancel}>取消</button>
-        <button type="button" className={css.saveButton} onClick={save}>保存</button>
+        <button type="button" className={css.cancelButton} onClick={props.onCancel}>Cancel</button>
+        <button type="button" className={css.saveButton} onClick={save}>Save</button>
       </div>
     </div>
   )

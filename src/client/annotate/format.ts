@@ -36,7 +36,7 @@ export interface QuoteItem {
 
 /** One annotation's block: quoted original plus the note line. */
 export function formatQuoteItem(item: QuoteItem): string {
-  const noteLine = item.note.trim() === '' ? '（无注解）' : `注解：${item.note}`
+  const noteLine = item.note.trim() === '' ? '(no note)' : `Note: ${item.note}`
   return `${quoteLines(item.text)}\n${noteLine}`
 }
 
