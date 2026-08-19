@@ -5,3 +5,9 @@ packages:
 # 开发环境会装）；CI（pnpm 11）默认拦截其构建脚本。
 allowBuilds:
   node-pty: true
+
+# vitest 是成熟工具链、发版频繁；其 patch 版本常被 <24h 的 minimumReleaseAge
+# 护栏拦截（CI 用 pnpm 11 时）。排除放行。
+minimumReleaseAgeExclude:
+  - vitest
+  - '@vitest/*'
