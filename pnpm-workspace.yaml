@@ -1,0 +1,7 @@
+packages:
+  - .
+
+# pnpm 的 strict-dep-builds 护栏放行：node-pty 来自 dsh-better-sidebar（peer，
+# 开发环境会装）；CI（pnpm 11）默认拦截其构建脚本。
+allowBuilds:
+  node-pty: true
