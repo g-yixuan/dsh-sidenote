@@ -1,16 +1,16 @@
-# dsh-side-chat bundle patch
+# dsh-sidechat bundle patch
 #
 # `dsh.bundle.patch` layer of the published package: installing through the
 # official CLI —
 #
-#   dsh plugin --profile <name> add dsh-side-chat
+#   dsh plugin --profile <name> add dsh-sidechat
 #
 # — appends this single `insert` (one plugin row) to the bundle stack. No
 # manual profile edits.
 #
-# dsh-side-chat requires dsh-better-sidebar as a hard peer dependency: the
+# dsh-sidechat requires dsh-better-sidebar as a hard peer dependency: the
 # client half declares `inject = ['betterSidebar', ...]`, so it stays inactive
 # (no UI, no behavior) until better-sidebar provides the service.
 - insert:
     - id: side-chat
-      name: 'dsh-side-chat'
+      name: 'dsh-sidechat'

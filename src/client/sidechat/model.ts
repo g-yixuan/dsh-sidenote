@@ -13,7 +13,7 @@ import type { ConversationSnapshot, Context, SidebarTab } from '../../context-ty
 import { t } from '../locales.ts'
 
 /** Tab 类型 id（better-sidebar 注册表键；带包前缀防冲突）。 */
-export const SIDE_TAB_TYPE = 'dsh-side-chat:side'
+export const SIDE_TAB_TYPE = 'dsh-sidechat:side'
 
 
 

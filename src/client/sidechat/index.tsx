@@ -1,7 +1,7 @@
 /**
  * Workitem 01 — 侧边聊天面板。
  *
- * 注册「侧边聊天」Tab 类型（dsh-side-chat:side，多实例一等公民）：
+ * 注册「侧边聊天」Tab 类型（dsh-sidechat:side，多实例一等公民）：
  * - + 菜单可见（order 60，terminal=40 / browser=50 之后）；菜单行标题
  *   「侧边聊天」，铸造出的 Tab 标题为「侧边」/「侧边 N」（createTab 按
  *   当前并存数编号 —— 带 createTab 的 descriptor 会被 openTab 忽略
@@ -37,7 +37,7 @@ export function registerSideChat(ctx: Context): void {
       }),
       component: (props) => <SideChatPanel {...props} />,
     }),
-    'dsh-side-chat: side chat tab',
+    'dsh-sidechat: side chat tab',
   )
 
   // annotate 桥：「在侧边聊天中提问」= 新建或聚焦一个侧边聊天 Tab 并写入草稿。
@@ -50,7 +50,7 @@ export function registerSideChat(ctx: Context): void {
     return () => {
       if (sideChatBridge.current === impl) sideChatBridge.current = null
     }
-  }, 'dsh-side-chat: annotate bridge')
+  }, 'dsh-sidechat: annotate bridge')
 
   registerSideCommand(ctx)
 }

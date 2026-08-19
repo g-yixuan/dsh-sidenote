@@ -1,5 +1,5 @@
 /**
- * Client half of dsh-side-chat: the side-chat tabs (Workitem 01) and the
+ * Client half of dsh-sidechat: the side-chat tabs (Workitem 01) and the
  * selection annotations (Workitem 02). Thin consumer of dsh-better-sidebar —
  * it builds no panel chrome (portal/resize/collapse/persistence); the panel
  * container is entirely better-sidebar's.

@@ -1,6 +1,6 @@
 /**
  * The annotation overlay (Workitem 02): an independent React root appended to
- * `document.body` (marked `data-dsh-side-chat` so the selection listener
+ * `document.body` (marked `data-dsh-sidechat` so the selection listener
  * excludes it) rendering three fixed-position layers over the conversation:
  *
  * - the selection toolbar (Add to conversation / Ask in side chat),
@@ -55,7 +55,7 @@ export class AnnotateErrorBoundary extends Component<{ children: ReactNode }, { 
     return { failed: true }
   }
   override componentDidCatch(error: unknown): void {
-    console.error('[dsh-side-chat] annotate overlay crashed:', error)
+    console.error('[dsh-sidechat] annotate overlay crashed:', error)
   }
   override render(): ReactNode {
     return this.state.failed ? null : this.props.children
@@ -263,7 +263,7 @@ function SideChatNoteEditor(props: {
       const root = rootRef.current
       if (root === null || !(event.target instanceof Node)) return
       if (root.contains(event.target)) return
-      if (event.target instanceof Element && event.target.closest('[data-dsh-side-chat]') !== null) return
+      if (event.target instanceof Element && event.target.closest('[data-dsh-sidechat]') !== null) return
       props.onCancel()
     }
     document.addEventListener('keydown', onKeyDown, true)
@@ -449,7 +449,7 @@ function AnnotationEditor(props: {
       if (root.contains(event.target)) return
       // 本插件自身的 DOM（角标/工具条）不算「外部」：点击角标由它自己的
       // click 处理器接管编辑器，不能先被外部点击取消掉。
-      if (event.target instanceof Element && event.target.closest('[data-dsh-side-chat]') !== null) return
+      if (event.target instanceof Element && event.target.closest('[data-dsh-sidechat]') !== null) return
       props.onCancel()
     }
     document.addEventListener('keydown', onKeyDown, true)

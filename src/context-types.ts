@@ -1,5 +1,5 @@
 /**
- * Structural mirror of the runtime surfaces dsh-side-chat consumes.
+ * Structural mirror of the runtime surfaces dsh-sidechat consumes.
  *
  * Third-party plugins resolve outside the DSH monorepo's single cordis
  * instance, so upstream `declare module 'cordis'` augmentations never reach

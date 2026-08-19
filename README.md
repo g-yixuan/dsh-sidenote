@@ -1,4 +1,4 @@
-# dsh-side-chat
+# dsh-sidechat
 
 DSH（DeepSeek Harness）web 插件：Codex 风格的**侧边聊天**与**划选注释**。[dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) 的薄消费插件（thin consumer），通过 `ctx.betterSidebar` 服务注册侧边栏 Tab。
 
@@ -35,7 +35,7 @@ DSH（DeepSeek Harness）web 插件：Codex 风格的**侧边聊天**与**划选
 前置：已安装 [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar)（本插件的硬依赖）。
 
 ```bash
-dsh plugin --profile web add dsh-side-chat
+dsh plugin --profile web add dsh-sidechat
 ```
 
 本地开发挂载：`dsh plugin --profile web add link:<本仓库路径>`（client 改动热重载，host 改动需重启 `dsh web`）。

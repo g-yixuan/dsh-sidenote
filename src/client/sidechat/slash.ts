@@ -77,8 +77,8 @@ export function registerSideCommand(ctx: Context): void {
           }
         },
       },
-    }), 'dsh-side-chat: /side command')
+    }), 'dsh-sidechat: /side command')
   } catch (error) {
-    console.warn('[dsh-side-chat] /side 命令注册失败（Tab 入口不受影响）:', error)
+    console.warn('[dsh-sidechat] /side 命令注册失败（Tab 入口不受影响）:', error)
   }
 }

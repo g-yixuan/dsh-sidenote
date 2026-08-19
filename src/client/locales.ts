@@ -1,13 +1,13 @@
 import { useSyncExternalStore } from 'react'
 
 /**
- * dsh-side-chat 的双语层（zh/en），跟随 DSH 通用设置里的语言（`ctx.locale`，
+ * dsh-sidechat 的双语层（zh/en），跟随 DSH 通用设置里的语言（`ctx.locale`，
  * Host-backed locale.preference，实时切换）。模式照 better-sidebar
  * `src/client/locales.ts`：attachLocale 挂服务，t() 读活动语言；
  * 服务缺失（独立组合/测试）时回退浏览器语言。
  */
 
-export const LOCALE_NS = 'dsh-side-chat'
+export const LOCALE_NS = 'dsh-sidechat'
 
 /** 英文词典（key 的权威清单）。 */
 export const en = {

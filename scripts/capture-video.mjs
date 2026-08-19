@@ -69,7 +69,7 @@ await page.evaluate(() => {
     }
   }
 })
-const overlay = page.locator('[data-dsh-side-chat]')
+const overlay = page.locator('[data-dsh-sidechat]')
 await overlay.getByText('Add to conversation').waitFor({ state: 'visible', timeout: 10_000 })
 await pause(1200)
 

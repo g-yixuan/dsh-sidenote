@@ -43,7 +43,7 @@ function openSessionWindow(session: SessionFace | undefined): void {
   const openable = session as unknown as { open?: () => Promise<void> } | undefined
   if (typeof openable?.open !== 'function') return
   openable.open().catch((error: unknown) => {
-    console.warn('[dsh-side-chat] 会话窗口打开失败:', error)
+    console.warn('[dsh-sidechat] 会话窗口打开失败:', error)
   })
 }
 
@@ -93,7 +93,7 @@ export function SideChatPanel(props: TabComponentProps) {
         try {
           await ctx.workspaces.archiveSession(forked)
         } catch (error) {
-          console.warn('[dsh-side-chat] 归档侧边会话失败（会话列表可能短暂可见）:', error)
+          console.warn('[dsh-sidechat] 归档侧边会话失败（会话列表可能短暂可见）:', error)
         }
         // 模型跟随主会话：fork 继承 agent preset 但不继承模型选择——读主会话
         // 当前模型（session.models.current）并 selectModel 到子会话（best-effort，
@@ -110,7 +110,7 @@ export function SideChatPanel(props: TabComponentProps) {
             })
           }
         } catch (error) {
-          console.warn('[dsh-side-chat] 同步主会话模型失败（子会话用默认模型）:', error)
+          console.warn('[dsh-sidechat] 同步主会话模型失败（子会话用默认模型）:', error)
         }
       } catch (error) {
         if (!cancelled) setForkError(error instanceof Error ? error.message : String(error))

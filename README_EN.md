@@ -1,4 +1,4 @@
-# dsh-side-chat
+# dsh-sidechat
 
 A [DSH (DeepSeek Harness)](https://github.com/DeepSeek-ai) web plugin: Codex-style **side chat** and **selection annotations**. A thin consumer of [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar), registering its sidebar tabs through the `ctx.betterSidebar` service.
 
@@ -35,7 +35,7 @@ Select text in an assistant message and turn "quote + your note" into context fo
 Prerequisite: [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) installed (hard peer dependency).
 
 ```bash
-dsh plugin --profile web add dsh-side-chat
+dsh plugin --profile web add dsh-sidechat
 ```
 
 For local development: `dsh plugin --profile web add link:<path-to-this-repo>` (client changes hot-reload; host changes need a `dsh web` restart).
