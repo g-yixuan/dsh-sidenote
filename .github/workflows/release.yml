@@ -84,6 +84,16 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
         run: pnpm publish --dry-run --no-git-checks
 
+      # The first publish happens manually (npm Trusted Publishing requires the
+      # package to exist). If the version is already on npm, skip instead of
+      # failing the release run.
+      - name: Check whether this version is already on npm
+        id: published
+        run: |
+          if npm view "$(node -p "require('./package.json').name")@$(node -p "require('./package.json').version")" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish to npm
-        if: github.event_name == 'release' || github.event.inputs.dry_run != 'true'
+        if: (github.event_name == 'release' || github.event.inputs.dry_run != 'true') && steps.published.outputs.exists != 'true'
         run: pnpm publish --provenance --access public --no-git-checks
