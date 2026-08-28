@@ -60,7 +60,7 @@ export function openOrFocusSideChat(ctx: Context, sessionId: string, draftText?:
     }
     return true
   } catch (error) {
-    console.warn('[dsh-sidechat] 打开侧边聊天失败:', error)
+    console.warn('[dsh-sidenote] 打开侧边聊天失败:', error)
     return false
   }
 }

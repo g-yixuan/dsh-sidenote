@@ -1,19 +1,19 @@
 # 发布文案包（每平台一版，禁止同文案群发）
 
-> 名字未定稿前，文中一律用 `dsh-sidechat`；若改名，全局替换即可。
+> 名字未定稿前，文中一律用 `dsh-sidenote`；若改名，全局替换即可。
 > 所有版本都遵循：朴素陈述、不拉票、不求 star、接受批评。
 
 ---
 
 ## 1. Show HN（英文，GitHub 链接直投；北京时间 21:30-22:00 发）
 
-**标题**：`Show HN: dsh-sidechat – Codex-style side chat and selection annotations for DeepSeek Harness`
+**标题**：`Show HN: dsh-sidenote – Codex-style side chat and selection annotations for DeepSeek Harness`
 
 **评论区置顶（作者自述）**：
 
 > I built this because I kept losing my main thread when a side question came up mid-conversation with an AI coding assistant.
 >
-> dsh-sidechat is a plugin for DeepSeek Harness (built on dsh-better-sidebar's tab service) that does two things and ties them together:
+> dsh-sidenote is a plugin for DeepSeek Harness (built on dsh-better-sidebar's tab service) that does two things and ties them together:
 >
 > 1. **Side chat**: fork the current session into a persistent side panel — full history snapshot, no compression. It stays out of your session list, survives reloads, and you can run several at once.
 > 2. **Selection annotations**: select text in an assistant reply, attach a note, and every annotation rides along with your next message as quoted context. Or send quote+note straight into a side chat.
@@ -34,13 +34,13 @@
 
 > 用 AI 编码助手时有个老毛病：主对话正推到关键处，突然想问个支线问题——问吧，打断主线；不问吧，憋着。
 >
-> 所以我写了 dsh-sidechat（DSH 插件，基于 dsh-better-sidebar 的 Tab 服务）：
+> 所以我写了 dsh-sidenote（DSH 插件，基于 dsh-better-sidebar 的 Tab 服务）：
 >
 > - **侧边聊天**：从当前会话 fork 出独立的侧边会话（全量历史快照，不是压缩摘要），在右侧栏开个「侧边」Tab 随便聊。可以多开，不进左侧会话列表，刷新/重启都还在，手动关掉才消失。
 > - **划选注释**：在 assistant 的回复里划一段 → 写个注解 → 输入框出现「N 条注释」chip，随下一条消息一起发给模型。也可以划完直接「在侧边聊天中提问」。
 >
 > 演示：[GIF/视频]
-> 安装：`dsh plugin --profile web add dsh-sidechat`
+> 安装：`dsh plugin --profile web add dsh-sidenote`
 > 仓库：[GitHub 链接]（MIT）
 >
 > 第一次在这个生态发插件，欢迎拍砖。有想要的功能也可以直接开 issue。
@@ -57,7 +57,7 @@
 >
 > 痛点：主对话推到一半想问支线问题，怕打断上下文。
 >
-> dsh-sidechat 是 DSH（DeepSeek Harness）的插件，消费 dsh-better-sidebar 的侧边栏服务：
+> dsh-sidenote 是 DSH（DeepSeek Harness）的插件，消费 dsh-better-sidebar 的侧边栏服务：
 >
 > 1. 侧边聊天 = 真 fork（带全部历史）的独立会话挂在右侧栏，多开、归档不进会话列表、刷新不掉；
 > 2. 划选注释 = 选中 assistant 的话 → 编号角标 + 注解 → 「N 条注释」chip 随消息发出；
@@ -65,7 +65,7 @@
 >
 > 跟同类比：sidechain 也是真 fork 但没注释，dsh-annotation 只做注释没侧聊，sidebar-qa 是摘要压缩路线（有损）。我们这条是「注释 ⇄ 侧聊」闭环。
 >
-> 安装：`dsh plugin --profile web add dsh-sidechat`（需要先装 dsh-better-sidebar）
+> 安装：`dsh plugin --profile web add dsh-sidenote`（需要先装 dsh-better-sidebar）
 > 仓库：[GitHub 链接]
 >
 > 求试用求意见 🙏
@@ -76,7 +76,7 @@
 
 > 给 DSH 写了个插件：主对话里划一句话就能挂个注解，攒几条一起发给 AI；支线问题可以 fork 出一个侧边小窗单独聊，不打断主线，刷新也不丢。
 >
-> 起名废物，先叫 dsh-sidechat。开源 MIT，一行命令装：[链接]
+> 起名废物，先叫 dsh-sidenote。开源 MIT，一行命令装：[链接]
 >
 > [效果图/视频]
 

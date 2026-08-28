@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# dsh-sidechat 挂载冒烟编排（仿 dsh-better-sidebar scripts/e2e-mount.sh）：
+# dsh-sidenote 挂载冒烟编排（仿 dsh-better-sidebar scripts/e2e-mount.sh）：
 #
 #   1. 全新 scratch DSH_HOME（绝不触碰真实 ~/.dsh）+ web profile 模板；
 #   2. 官方 CLI 安装 npm 版 dsh-better-sidebar（本插件的硬依赖）与本插件
@@ -40,13 +40,13 @@ if ! command -v "$DSH_CMD" >/dev/null 2>&1; then
 fi
 
 if [ -z "$TARBALL" ]; then
-  TARBALL="$(ls "$ROOT"/dsh-sidechat-*.tgz 2>/dev/null | head -1 || true)"
+  TARBALL="$(ls "$ROOT"/dsh-sidenote-*.tgz 2>/dev/null | head -1 || true)"
 fi
 [ -n "$TARBALL" ] && [ -f "$TARBALL" ] || die "找不到 tarball——先运行 pnpm build && pnpm pack"
 TARBALL="$(cd "$(dirname "$TARBALL")" && pwd)/$(basename "$TARBALL")"
 say "tarball: $TARBALL"
 
-SCRATCH="${DSH_HOME_BASE:-$(mktemp -d /tmp/dsh-sidechat-e2e.XXXXXX)}"
+SCRATCH="${DSH_HOME_BASE:-$(mktemp -d /tmp/dsh-sidenote-e2e.XXXXXX)}"
 export DSH_HOME="$SCRATCH/home"
 WORKSPACE_DIR="$SCRATCH/workspace"
 WEB_LOG="$SCRATCH/web.log"
@@ -97,7 +97,7 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - dsh-better-sidebar
-  - dsh-sidechat
+  - dsh-sidenote
 EOF
 
 # 步骤 2：先装硬依赖 better-sidebar（版本钉住：缺省 0.12.3 = 线上 profile 同版；
@@ -112,10 +112,10 @@ node -e '
   const fs = require("fs");
   const p = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
   const bundles = p.dsh?.profile?.bundles ?? [];
-  const missing = ["dsh-better-sidebar", "dsh-sidechat"].filter((b) => !bundles.includes(b));
+  const missing = ["dsh-better-sidebar", "dsh-sidenote"].filter((b) => !bundles.includes(b));
   if (missing.length) { console.error("挂载未注册:", missing.join(", ")); process.exit(1); }
 ' "$PROFILE_DIR/package.json"
-say "挂载已注册：dsh-better-sidebar + dsh-sidechat"
+say "挂载已注册：dsh-better-sidebar + dsh-sidenote"
 
 # 步骤 3：伪造含已完成 turn 的会话（fork 路径无需模型凭证）
 SEED_SESSION_ID="$(node "$SCRIPT_DIR/seed-session.mjs" "$DSH_HOME" "$WORKSPACE_DIR")"
@@ -151,4 +151,4 @@ say "运行 Playwright 无头渲染 lane..."
 DSH_E2E_URL="$URL" DSH_E2E_WORKSPACE="$WORKSPACE_DIR" DSH_E2E_SEED_SESSION="$SEED_SESSION_ID" \
   pnpm exec playwright test ${GREP_FILTER:+--grep "$GREP_FILTER"}
 
-say "通过：dsh-sidechat 挂载到真实 DSH 后无头渲染未崩溃"
+say "通过：dsh-sidenote 挂载到真实 DSH 后无头渲染未崩溃"

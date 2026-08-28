@@ -52,7 +52,7 @@ export function syncSessionDraft(ctx: Context, store: AnnotationStore, sessionId
     if (next.draft === draft) return
     input.setDraft(next.draft)
   } catch (error) {
-    console.warn('[dsh-sidechat] draft sync failed:', error)
+    console.warn('[dsh-sidenote] draft sync failed:', error)
   }
 }
 

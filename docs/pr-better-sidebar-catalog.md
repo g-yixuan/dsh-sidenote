@@ -7,13 +7,13 @@
 
 ```ts
   {
-    id: 'dsh-sidechat',
-    name: 'dsh-sidechat 侧边聊天',
-    url: 'https://github.com/g-yixuan/dsh-sidechat',
+    id: 'dsh-sidenote',
+    name: 'dsh-sidenote 侧边聊天',
+    url: 'https://github.com/g-yixuan/dsh-sidenote',
     description: () => t('pluginSideChatDesc'),
-    // dsh-sidechat hard-depends on dsh-better-sidebar (required peer), so
+    // dsh-sidenote hard-depends on dsh-better-sidebar (required peer), so
     // the install line installs the prerequisite first, then the plugin.
-    install: 'cd ~/.dsh && dsh plugin --profile web add dsh-better-sidebar && dsh plugin --profile web add dsh-sidechat@latest',
+    install: 'cd ~/.dsh && dsh plugin --profile web add dsh-better-sidebar && dsh plugin --profile web add dsh-sidenote@latest',
   },
 ```
 
@@ -31,15 +31,15 @@
 
 ## 3. PR 标题与正文草稿
 
-标题：`feat(plugins): add dsh-sidechat to the tab-plugin catalog`
+标题：`feat(plugins): add dsh-sidenote to the tab-plugin catalog`
 
 正文：
 ```markdown
-收录一个新 Tab 插件：**dsh-sidechat**（Codex 风格侧边聊天 + 划选注释）。
+收录一个新 Tab 插件：**dsh-sidenote**（Codex 风格侧边聊天 + 划选注释）。
 
-- 仓库：https://github.com/g-yixuan/dsh-sidechat （已打 `dsh-plugin` / `dsh-better-sidebar` topic）
+- 仓库：https://github.com/g-yixuan/dsh-sidenote （已打 `dsh-plugin` / `dsh-better-sidebar` topic）
 - 接入方式：消费 `ctx.betterSidebar`（`registerTab`，`inject = ['betterSidebar', ...]`），遵循 docs/external-plugin-guide.md
-- npm：https://www.npmjs.com/package/dsh-sidechat
+- npm：https://www.npmjs.com/package/dsh-sidenote
 - 条目：plugins-tabs.ts 按字母序插入 + locales.ts 双语 pluginSideChatDesc
 - 实测：`dsh plugin --profile web add dsh-better-sidebar@0.12.3` + 本插件在真实 DSH 挂载，Playwright 七条 journey lane 全绿（0.12.3 与 0.13.0 双版本）
 ```

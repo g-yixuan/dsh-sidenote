@@ -7,7 +7,7 @@
  * - both selection endpoints must sit in the SAME `[data-chat-flow-kind=
  *   "assistant-step"]` message node (跨消息划选不弹);
  * - `[data-streaming]` messages (still streaming) are excluded;
- * - `[data-dsh-better-sidebar]` and our own `[data-dsh-sidechat]` DOM are
+ * - `[data-dsh-better-sidebar]` and our own `[data-dsh-sidenote]` DOM are
  *   excluded (与侧边栏 viewer 浮层互斥);
  * - the text must be non-blank; over-length selections are admitted with the
  *   quote truncated (见 format.ts), never rejected.
@@ -42,7 +42,7 @@ export interface SelectionState {
 export const ASSISTANT_KIND = 'assistant-step'
 
 /** Selector roots our UI must never react to (sidebar viewer + our own root). */
-const EXCLUDED_ROOTS = '[data-dsh-better-sidebar], [data-dsh-sidechat]'
+const EXCLUDED_ROOTS = '[data-dsh-better-sidebar], [data-dsh-sidenote]'
 
 /** Pure validation of one candidate selection (unit-tested without DOM). */
 export function isEligibleSelection(input: {

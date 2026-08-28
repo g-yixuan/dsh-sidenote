@@ -1,5 +1,5 @@
 {
-  "name": "dsh-sidechat",
+  "name": "dsh-sidenote",
   "version": "0.1.0",
   "description": "DSH web plugin: Codex-style side chat (fork the current session into a persistent side panel) + selection annotations with numbered badges and a composer chip. A thin consumer of dsh-better-sidebar. / Codex 风格侧边聊天 + 划选注释的 DSH 插件。",
   "type": "module",
@@ -86,11 +86,11 @@
     "ai-coding",
     "deepseek"
   ],
-  "homepage": "https://github.com/g-yixuan/dsh-sidechat#readme",
+  "homepage": "https://github.com/g-yixuan/dsh-sidenote#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/g-yixuan/dsh-sidechat.git"
+    "url": "https://github.com/g-yixuan/dsh-sidenote.git"
   },
-  "bugs": "https://github.com/g-yixuan/dsh-sidechat/issues",
+  "bugs": "https://github.com/g-yixuan/dsh-sidenote/issues",
   "author": "gyixuan"
 }

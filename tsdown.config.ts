@@ -1,5 +1,5 @@
 /**
- * tsdown build for dsh-sidechat: the host-half ESM bundle (lib/index.js) plus
+ * tsdown build for dsh-sidenote: the host-half ESM bundle (lib/index.js) plus
  * the browser client bundle (lib/client.js, CJS closure factory) for the
  * official profile channel (bundle id = package name).
  *
@@ -176,5 +176,5 @@ export default [
     dts: false,
     clean: false,
   },
-  clientBundle('dsh-sidechat', 'client.js'),
+  clientBundle('dsh-sidenote', 'client.js'),
 ] satisfies UserConfig[]

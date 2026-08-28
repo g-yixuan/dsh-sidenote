@@ -3,6 +3,6 @@ import { name } from '../src/index.ts'
 
 describe('scaffold', () => {
   it('exports the plugin name', () => {
-    expect(name).toBe('dsh-sidechat')
+    expect(name).toBe('dsh-sidenote')
   })
 })

@@ -1,5 +1,5 @@
 /**
- * dsh-sidechat headless mount lane. The server is NOT started here —
+ * dsh-sidenote headless mount lane. The server is NOT started here —
  * scripts/e2e-mount.sh boots `dsh web` (better-sidebar from npm + our tarball
  * via the official `dsh plugin add` channel), plants a fabricated session
  * with one completed turn (scripts/seed-session.mjs), and registers the
@@ -24,7 +24,7 @@ if (!BASE_URL) {
   throw new Error('DSH_E2E_URL is not set — run via scripts/e2e-mount.sh')
 }
 
-const PLUGIN_CONSOLE = /dsh-sidechat|Unhandled/
+const PLUGIN_CONSOLE = /dsh-sidenote|Unhandled/
 
 /** Dump a labeled page snapshot + screenshot for postmortem debugging. */
 async function dumpStep(page: Page, name: string): Promise<void> {
@@ -238,7 +238,7 @@ test('annotate journey: 划选 → 浮层 → 注解编辑器 → 角标 → chi
   await injectSelection(page)
 
   // 浮层工具条：两个去向按钮。
-  const overlay = page.locator('[data-dsh-sidechat]')
+  const overlay = page.locator('[data-dsh-sidenote]')
   await expect(overlay.getByText('Add to conversation'), '划选浮层未弹出').toBeVisible({ timeout: 10_000 })
   await expect(overlay.getByText('Ask in side chat')).toBeVisible()
   await dumpStep(page, '06-selection-popover')
@@ -282,7 +282,7 @@ test('linkage journey: 划选 → 在侧边聊天中提问 → 编辑器 → 侧
   await injectSelection(page)
 
   // 「在侧边聊天中提问」→ 先弹注解编辑器（WI-03 裁定：与「添加到对话」一致）。
-  const overlay = page.locator('[data-dsh-sidechat]')
+  const overlay = page.locator('[data-dsh-sidenote]')
   await overlay.getByText('Ask in side chat').click()
   const noteInput = overlay.locator('input[aria-label="Side chat note"]')
   await expect(noteInput, '侧边提问未弹注解编辑器').toBeVisible({ timeout: 10_000 })
@@ -354,7 +354,7 @@ test('annotation manage: 双注释编号不重排 + 重开编辑 + chip 逐条�
   page.on('pageerror', (error) => pageErrors.push(String(error)))
 
   await openSeedSession(page)
-  const overlay = page.locator('[data-dsh-sidechat]')
+  const overlay = page.locator('[data-dsh-sidenote]')
 
   // 注释 1（带注解「甲」）
   await injectSelection(page)

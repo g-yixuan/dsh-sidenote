@@ -2,7 +2,7 @@
  * Workitem 02 — 划选注释：selection listener + numbered badges + annotation
  * editor + the composer「N 条注释」chip. Wiring only: one annotation store,
  * one selection controller, one overlay React root (appended to document.body
- * and marked `data-dsh-sidechat` so the listener excludes our own DOM), and
+ * and marked `data-dsh-sidenote` so the listener excludes our own DOM), and
  * one `conversation.input.dock` slot entry. 全部 additive、页面级生命周期,
  * and every seam degrades to a logged no-op instead of crashing the host page.
  *
@@ -28,7 +28,7 @@ export function registerAnnotations(ctx: Context): void {
 
       // The overlay root: toolbar + badges + highlight + editor.
       const host = document.createElement('div')
-      host.dataset.dshSidechat = ''
+      host.dataset.dshSidenote = ''
       document.body.appendChild(host)
       const root = createRoot(host)
       root.render(<AnnotateOverlay ctx={ctx} store={store} controller={controller} />)
@@ -44,9 +44,9 @@ export function registerAnnotations(ctx: Context): void {
       ctx.slots.inject('conversation.input.dock', () => {
         return ctx.slots.register({
           name: 'conversation.input.dock',
-          id: 'dsh-sidechat-annotations',
+          id: 'dsh-sidenote-annotations',
           order: 10,
-          registrant: 'dsh-sidechat',
+          registrant: 'dsh-sidenote',
         }, createAnnotationChip(store))
       })
 
@@ -59,8 +59,8 @@ export function registerAnnotations(ctx: Context): void {
         host.remove()
       }
     } catch (error) {
-      console.error('[dsh-sidechat] annotate setup failed:', error)
+      console.error('[dsh-sidenote] annotate setup failed:', error)
       return () => {}
     }
-  }, 'dsh-sidechat: annotations')
+  }, 'dsh-sidenote: annotations')
 }

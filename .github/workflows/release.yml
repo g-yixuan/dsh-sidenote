@@ -1,17 +1,17 @@
 name: Release
 
-# Publishes `dsh-sidechat` to npm via npm Trusted Publishing (OIDC) —
+# Publishes `dsh-sidenote` to npm via npm Trusted Publishing (OIDC) —
 # no NPM_TOKEN secret required, provenance is attached to the tarball.
 #
 # Trigger: a GitHub Release is published (tag vX.Y.Z). The tag MUST match
 # package.json `version`; the workflow verifies this before publishing.
 #
 # One-time npm-side setup (manual, on npmjs.com):
-#   1. package `dsh-sidechat` -> Settings -> Publishing access
+#   1. package `dsh-sidenote` -> Settings -> Publishing access
 #      -> Trusted Publishers -> "Add Trusted Publisher".
 #   2. Provider: GitHub Actions
 #      Organization or user: g-yixuan
-#      Repository:           dsh-sidechat
+#      Repository:           dsh-sidenote
 #      Workflow filename:    release.yml
 #      Environment:          (blank)
 #   3. Save. Do NOT add an NPM_TOKEN secret — Trusted Publishing replaces it.
