@@ -11,7 +11,6 @@ import {
   collectSideTabs,
   collectTabs,
   contentTextOf,
-  countSideTabs,
   mintSideTabId,
   nodeToMessage,
   parseSideChatMeta,
@@ -20,6 +19,7 @@ import {
   transcriptOf,
   truncateText,
 } from '../src/client/sidechat/model.ts'
+import { createSideChat, openOrFocusSideChat, sideChatTargetTitle } from '../src/client/sidechat/open.ts'
 
 // ── 标题编号 ────────────────────────────────────────────────────────────────
 
@@ -87,7 +87,7 @@ function sideTab(id: string, meta?: unknown) {
   return { id, type: SIDE_TAB_TYPE, title: '侧边', ...(meta !== undefined ? { meta } : {}) }
 }
 
-describe('collectTabs / collectSideTabs / countSideTabs', () => {
+describe('collectTabs / collectSideTabs', () => {
   const state = {
     splits: split('s:1', [
       leaf('p:1', [sideTab('side:a'), { id: 'e:1', type: 'explorer', title: 'Explorer' }]),
@@ -101,7 +101,7 @@ describe('collectTabs / collectSideTabs / countSideTabs', () => {
   })
   it('侧边 Tab 过滤与计数', () => {
     expect(collectSideTabs(state).map(t => t.id)).toEqual(['side:a', 'side:b', 'side:c'])
-    expect(countSideTabs(state)).toBe(3)
+    expect(collectSideTabs(state)).toHaveLength(3)
   })
   it('meta 随 Tab 一并取出', () => {
     const withMeta = { splits: leaf('p:1', [sideTab('side:x', { childId: 'c1' })]) }
@@ -113,7 +113,19 @@ describe('collectTabs / collectSideTabs / countSideTabs', () => {
     expect(collectTabs({})).toEqual([])
     expect(collectTabs({ splits: { kind: 'leaf', tabs: 'boom' } })).toEqual([])
     expect(collectTabs({ splits: { kind: 'leaf', tabs: [{ nope: 1 }, sideTab('side:ok')] } }).map(t => t.id)).toEqual(['side:ok'])
-    expect(countSideTabs({ splits: null, bottomSplits: 42 })).toBe(0)
+    expect(collectSideTabs({ splits: null, bottomSplits: 42 })).toHaveLength(0)
+  })
+  it('0.16 浮动窗 floats 里的 Tab 一并枚举（缺失字段时跳过）', () => {
+    const withFloats = {
+      splits: leaf('p:1', [sideTab('side:a')]),
+      floats: [
+        { id: 'f:1', tab: sideTab('side:float') },
+        { id: 'f:2' }, // 畸形：无 tab 字段
+        { id: 'f:3', tab: { nope: 1 } }, // 畸形：tab 不像 Tab
+      ],
+    }
+    expect(collectTabs(withFloats).map(t => t.id)).toEqual(['side:a', 'side:float'])
+    expect(collectSideTabs(withFloats).map(t => t.id)).toEqual(['side:a', 'side:float'])
   })
 })
 
@@ -188,7 +200,7 @@ describe('contentTextOf', () => {
       { type: 'image' },
       { type: 'tool_use', id: 'x' },
       { type: 'text', text: '二' },
-    ])).toBe('一\n[图片]\n二')
+    ])).toBe('一\n[Image]\n二')
   })
   it('非数组/空输入返回空串', () => {
     expect(contentTextOf(undefined)).toBe('')
@@ -246,12 +258,12 @@ describe('nodeToMessage', () => {
   it('model-retry：已取消不渲染，其余为提示行', () => {
     expect(nodeToMessage({ kind: 'model-retry', seq: 8, retryState: 'cancelled' })).toBeNull()
     expect(nodeToMessage({ kind: 'model-retry', seq: 8, retryState: 'scheduled' })?.role).toBe('notice')
-    expect(nodeToMessage({ kind: 'model-retry', seq: 8, retryState: 'started' })?.text).toContain('重试')
+    expect(nodeToMessage({ kind: 'model-retry', seq: 8, retryState: 'started' })?.text).toContain('retry')
   })
   it('turn-max-tokens / command / compaction → notice 行', () => {
     expect(nodeToMessage({ kind: 'turn-max-tokens', seq: 9 })?.role).toBe('notice')
-    expect(nodeToMessage({ kind: 'command', seq: 10, name: 'goal', args: ' x' })?.text).toBe('执行命令 /goal x')
-    expect(nodeToMessage({ kind: 'compaction', seq: 11 })?.text).toContain('压缩')
+    expect(nodeToMessage({ kind: 'command', seq: 10, name: 'goal', args: ' x' })?.text).toBe('Run command /goal x')
+    expect(nodeToMessage({ kind: 'compaction', seq: 11 })?.text).toContain('compacted')
   })
   it('context / unknown / 畸形节点不渲染', () => {
     expect(nodeToMessage({ kind: 'context', seq: 12 })).toBeNull()
@@ -304,6 +316,54 @@ describe('SidebarState 镜像', () => {
       splits: { kind: 'leaf', id: 'p:1', tabs: [], active: null },
       bottomSplits: { kind: 'leaf', id: 'p:2', tabs: [], active: null },
     }
-    expect(countSideTabs(state)).toBe(0)
+    expect(collectSideTabs(state)).toHaveLength(0)
+  })
+})
+
+// ── 打开编排（open.ts）：新建/聚焦语义与目标预览 ─────────────────────────────
+
+/** 最小 fake：openTab 同步铸造新 Tab 落状态（模拟宿主行为）。 */
+function fakeSidebarCtx(initialTabs: Array<{ id: string; title: string }>) {
+  let tabs = initialTabs.map(t => ({ ...t, type: SIDE_TAB_TYPE }))
+  const updates: Array<{ id: string; patch: unknown }> = []
+  const activations: string[] = []
+  let minted = 0
+  const ctx = {
+    betterSidebar: {
+      getSnapshot: () => ({ sessionId: 'sess', state: { splits: leaf('p:1', tabs) } }),
+      openTab: () => {
+        minted += 1
+        tabs = [...tabs, { id: `side:minted-${minted}`, type: SIDE_TAB_TYPE, title: sideTabTitle(tabs.map(t => t.title)) }]
+      },
+      updateTab: (id: string, patch: unknown) => { updates.push({ id, patch }) },
+      activateTab: (id: string) => { activations.push(id) },
+    },
+  } as unknown as Context
+  return { ctx, updates, activations, tabCount: () => tabs.length, tabs: () => tabs }
+}
+
+describe('openOrFocusSideChat / createSideChat / sideChatTargetTitle', () => {
+  it('已有侧边聊天时 openOrFocus 聚焦最后一个（不新建）', () => {
+    const fake = fakeSidebarCtx([{ id: 'side:a', title: 'Side' }])
+    expect(openOrFocusSideChat(fake.ctx, 'sess')).toBe(true)
+    expect(fake.activations).toEqual(['side:a'])
+    expect(fake.tabCount()).toBe(1)
+  })
+  it('createSideChat 无条件新建（/side「新建」选项语义）', () => {
+    const fake = fakeSidebarCtx([{ id: 'side:a', title: 'Side' }])
+    expect(createSideChat(fake.ctx, 'sess')).toBe(true)
+    expect(fake.tabCount()).toBe(2)
+    expect(fake.tabs()[1]?.title).toBe('Side 2')
+  })
+  it('目标预览：有并存报最后一个标题，无并存报首个标题', () => {
+    const fake = fakeSidebarCtx([{ id: 'side:a', title: 'Side' }, { id: 'side:b', title: 'Side 2' }])
+    expect(sideChatTargetTitle(fake.ctx, 'sess')).toBe('Side 2')
+    expect(sideChatTargetTitle(fakeSidebarCtx([]).ctx, 'sess')).toBe('Side')
+  })
+  it('新建携带 draftText 时写入新 Tab 的 pendingDraft', () => {
+    const fake = fakeSidebarCtx([])
+    expect(createSideChat(fake.ctx, 'sess', '> 引用\nNote: 注')).toBe(true)
+    expect(fake.updates).toHaveLength(1)
+    expect((fake.updates[0]?.patch as { meta?: { pendingDraft?: string } }).meta?.pendingDraft).toBe('> 引用\nNote: 注')
   })
 })

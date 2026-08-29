@@ -90,24 +90,29 @@ function walkTree(node: unknown, into: SidebarTab[]): void {
   if (Array.isArray(n.children)) for (const child of n.children) walkTree(child, into)
 }
 
-/** 枚举侧栏状态（splits + bottomSplits 两棵树）里的全部 Tab。 */
+/**
+ * 枚举侧栏状态里的全部 Tab：splits + bottomSplits 两棵树，外加 0.16 引入的
+ * 浮动窗 floats（元素形态 { id, tab, … }，tab 为窗口持有的 SidebarTab）。
+ * floats 缺失（0.16 之前）时数组检查天然跳过，前后版本通吃。
+ */
 export function collectTabs(state: unknown): SidebarTab[] {
   if (typeof state !== 'object' || state === null) return []
-  const s = state as { splits?: unknown; bottomSplits?: unknown }
+  const s = state as { splits?: unknown; bottomSplits?: unknown; floats?: unknown }
   const into: SidebarTab[] = []
   walkTree(s.splits, into)
   walkTree(s.bottomSplits, into)
+  if (Array.isArray(s.floats)) {
+    for (const float of s.floats) {
+      const tab = (float as { tab?: unknown } | null)?.tab
+      if (isTab(tab)) into.push(tab)
+    }
+  }
   return into
 }
 
 /** 枚举当前并存的侧边聊天 Tab（树顺序 = 打开顺序的近似）。 */
 export function collectSideTabs(state: unknown): SidebarTab[] {
   return collectTabs(state).filter(tab => tab.type === SIDE_TAB_TYPE)
-}
-
-/** 并存数（createTab 编号标题的输入）。 */
-export function countSideTabs(state: unknown): number {
-  return collectSideTabs(state).length
 }
 
 // ── fork 准入 ────────────────────────────────────────────────────────────────
@@ -201,7 +206,7 @@ export function contentTextOf(content: unknown): string {
     if (typeof block !== 'object' || block === null) continue
     const b = block as LooseBlock
     if (b.type === 'text' && typeof b.text === 'string') parts.push(b.text)
-    else if (b.type === 'image') parts.push('[图片]')
+    else if (b.type === 'image') parts.push(t('imagePlaceholder'))
   }
   return parts.join('\n')
 }
@@ -254,7 +259,7 @@ export function nodeToMessage(node: unknown): ChatMessage | null {
       const call = n.call as { name?: unknown } | null
       const toolName = typeof call?.name === 'string'
         ? call.name
-        : typeof n.callId === 'string' ? n.callId : '工具'
+        : typeof n.callId === 'string' ? n.callId : t('toolFallback')
       return {
         key: seqKey('t', n),
         role: 'tool',
@@ -264,24 +269,26 @@ export function nodeToMessage(node: unknown): ChatMessage | null {
       }
     }
     case 'turn-error':
-      return { key: seqKey('e', n), role: 'error', text: typeof n.message === 'string' ? n.message : '未知错误' }
+      return { key: seqKey('e', n), role: 'error', text: typeof n.message === 'string' ? n.message : t('unknownError') }
     case 'model-retry': {
       if (n.retryState === 'cancelled') return null
       return {
         key: seqKey('r', n),
         role: 'notice',
-        text: n.retryState === 'started' ? '模型请求失败，正在自动重试…' : '模型请求失败，等待自动重试…',
+        text: t(n.retryState === 'started' ? 'modelRetryStarted' : 'modelRetryWaiting'),
       }
     }
     case 'turn-max-tokens':
-      return { key: seqKey('m', n), role: 'notice', text: '输出达到长度上限，本轮回复已截断。' }
+      return { key: seqKey('m', n), role: 'notice', text: t('maxTokens') }
     case 'command': {
-      const name = typeof n.name === 'string' && n.name !== '' ? `/${n.name}` : '/命令'
-      const args = typeof n.args === 'string' ? n.args : ''
-      return { key: seqKey('c', n), role: 'notice', text: `执行命令 ${name}${args}` }
+      const name = typeof n.name === 'string' && n.name !== '' ? n.name : t('commandNameFallback')
+      // args 数据源自带前导空格（「/goal x」形态），trimStart 后统一补一个空格，
+      // 防止「/sidefoo」（缺分隔）或「/goal  x」（双空格）。
+      const args = typeof n.args === 'string' ? n.args.trimStart() : ''
+      return { key: seqKey('c', n), role: 'notice', text: t('runCommand', { cmd: `/${name}${args === '' ? '' : ` ${args}`}` }) }
     }
     case 'compaction':
-      return { key: seqKey('k', n), role: 'notice', text: '已压缩更早的对话上下文。' }
+      return { key: seqKey('k', n), role: 'notice', text: t('compacted') }
     default:
       // context（注入）/ unknown（未识面事件）：MVP 不渲染。
       return null
@@ -307,7 +314,7 @@ export function transcriptOf(snapshot: ConversationSnapshot | undefined | null):
       out.push({
         key: `rc:${typeof c.callId === 'string' ? c.callId : '?'}`,
         role: 'tool',
-        toolName: typeof c.name === 'string' ? c.name : '工具',
+        toolName: typeof c.name === 'string' ? c.name : t('toolFallback'),
         text: '',
         streaming: true,
       })

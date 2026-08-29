@@ -26,7 +26,6 @@ import { readTab } from './open.ts'
 import { t, useLocaleTick } from '../locales.ts'
 import css from './sidechat.module.css'
 
-/** MarkdownText 代码块复制按钮文案（契约要求中文；引用稳定，变了会清流式缓存）。 */
 /** MarkdownText 代码块复制按钮文案（跟随 DSH 语言；函数内读取保持引用稳定）。 */
 function codeLabels() {
   return { copyLabel: t('codeCopy'), copiedLabel: t('codeCopied') }
@@ -169,11 +168,15 @@ export function SideChatPanel(props: TabComponentProps) {
 
   // ── 桥接草稿移交：meta.pendingDraft → composer 草稿，应用后清除 ──
   const pendingDraft = meta.pendingDraft
+  const rootRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (pendingDraft === undefined || pendingDraft === '' || phase !== 'chat') return
     composer.appendDraft(pendingDraft)
     const current = parseSideChatMeta(readTab(ctx, tab.id)?.meta)
     ctx.betterSidebar.updateTab(tab.id, { meta: clearPendingDraft(current) })
+    // 划选提问的落点体验：草稿注入后焦点直达输入框，用户接着打字即可。
+    // visible 预聚焦 effect 只在可见性跳变时跑，已可见的 tab 覆盖不到。
+    requestAnimationFrame(() => { rootRef.current?.querySelector('textarea')?.focus() })
     // appendDraft 随草稿逐键换身份；不列入依赖 —— effect 只在
     // pendingDraft/相位变化时真正动作（清除后 pendingDraft 为 undefined，幂等）。
   }, [pendingDraft, phase, ctx, tab.id])
@@ -213,7 +216,7 @@ export function SideChatPanel(props: TabComponentProps) {
   const openFailed = snapshot?.openState === 'error'
 
   return (
-    <div className={css.root}>
+    <div ref={rootRef} className={css.root}>
       <div ref={bodyRef} className={css.body}>
         {messages.length === 0 && !running
           ? <EmptyState />

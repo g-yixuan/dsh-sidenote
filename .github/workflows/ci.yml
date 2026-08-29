@@ -42,8 +42,14 @@ jobs:
   plugin-mount:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # 双版本矩阵：声明支持的最低版 + 当前最新版（peer 放宽后必须持续验证两端）。
+    strategy:
+      fail-fast: false
+      matrix:
+        bs-version: ['0.12.3', '0.16.1']
     env:
       DSH_TELEMETRY_DISABLED: '1'
+      BS_VERSION: ${{ matrix.bs-version }}
     steps:
       - uses: actions/checkout@v7
 
@@ -75,7 +81,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-bs-${{ matrix.bs-version }}
           path: |
             playwright-report/
             test-results/

@@ -33,6 +33,29 @@ export function createAnnotationChip(store: AnnotationStore) {
       () => store.getSnapshot(),
     )
     const [expanded, setExpanded] = useState(false)
+    const rootRef = useRef<HTMLDivElement | null>(null)
+
+    // 展开态的关闭路径：Esc / 点击面板外部（与浮层编辑器同款心智）。
+    useEffect(() => {
+      if (!expanded) return
+      const onKeyDown = (event: KeyboardEvent): void => {
+        if (event.key === 'Escape') {
+          event.stopPropagation()
+          setExpanded(false)
+        }
+      }
+      const onMouseDown = (event: MouseEvent): void => {
+        const root = rootRef.current
+        if (root === null || !(event.target instanceof Node)) return
+        if (!root.contains(event.target)) setExpanded(false)
+      }
+      document.addEventListener('keydown', onKeyDown, true)
+      document.addEventListener('mousedown', onMouseDown, true)
+      return () => {
+        document.removeEventListener('keydown', onKeyDown, true)
+        document.removeEventListener('mousedown', onMouseDown, true)
+      }
+    }, [expanded])
 
     // 发送沿检测：草稿非空→空 且 伴随机器信号（提交相位/队列增长/running 启
     // 动）——纯「草稿清空」不算发送（用户手动全选删除满足前者，但没有机器信
@@ -69,7 +92,7 @@ export function createAnnotationChip(store: AnnotationStore) {
     if (active.length === 0) return null
 
     return (
-      <div className={css.chipWrap}>
+      <div ref={rootRef} className={css.chipWrap}>
         <button
           type="button"
           className={css.chip}

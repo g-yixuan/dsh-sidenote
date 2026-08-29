@@ -9,7 +9,7 @@
  */
 import type { Context } from '../../context-types.ts'
 import { canForkFrom, collectSideTabs } from './model.ts'
-import { openOrFocusSideChat } from './open.ts'
+import { createSideChat } from './open.ts'
 import { t } from '../locales.ts'
 
 /** dsh-client-ui-commands ClientSessionContext 的最小镜像（只有 sessionId）。 */
@@ -69,7 +69,9 @@ export function registerSideCommand(ctx: Context): void {
         },
         onSelect: (option, session) => {
           if (option.id === 'new') {
-            openOrFocusSideChat(ctx, session.sessionId)
+            // 「新建侧边聊天」必须真新建——既有实例的聚焦项在弹层里另列，
+            // 走 openOrFocusSideChat 会在已有侧边聊天时静默聚焦（标签说谎）。
+            createSideChat(ctx, session.sessionId)
             return
           }
           if (option.id.startsWith('focus:')) {

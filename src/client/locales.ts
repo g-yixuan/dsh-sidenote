@@ -39,6 +39,17 @@ export const en = {
   stopReplyTitle: 'Stop the current reply',
   send: 'Send',
 
+  // transcript fallbacks (node → message folding)
+  imagePlaceholder: '[Image]',
+  toolFallback: 'Tool',
+  unknownError: 'Unknown error',
+  modelRetryStarted: 'Model request failed, retrying…',
+  modelRetryWaiting: 'Model request failed, waiting to retry…',
+  maxTokens: 'Output hit the length limit; this turn was truncated.',
+  runCommand: 'Run command {cmd}',
+  commandNameFallback: 'command',
+  compacted: 'Earlier conversation context was compacted.',
+
   // /side command
   cmdDesc: 'Open a side chat (forked from the current session)',
   cmdNew: 'New side chat',
@@ -57,6 +68,7 @@ export const en = {
   sideNoteAria: 'Side chat note',
   confirmAskAria: 'Confirm and ask',
   openSideFailed: "Couldn't open the side chat. Try again.",
+  sendToTarget: 'Send to: {title}',
   deleteNote: 'Delete annotation',
   cancel: 'Cancel',
   save: 'Save',
@@ -103,6 +115,16 @@ export const zh: Record<CopyKey, string> = {
   stopReplyTitle: '停止当前回复',
   send: '发送',
 
+  imagePlaceholder: '[图片]',
+  toolFallback: '工具',
+  unknownError: '未知错误',
+  modelRetryStarted: '模型请求失败，正在自动重试…',
+  modelRetryWaiting: '模型请求失败，等待自动重试…',
+  maxTokens: '输出达到长度上限，本轮回复已截断。',
+  runCommand: '执行命令 {cmd}',
+  commandNameFallback: '命令',
+  compacted: '已压缩更早的对话上下文。',
+
   cmdDesc: '打开侧边聊天（从当前会话 fork）',
   cmdNew: '新建侧边聊天',
   cmdNewDetail: '从当前会话 fork，独立演进',
@@ -119,6 +141,7 @@ export const zh: Record<CopyKey, string> = {
   sideNoteAria: '侧边聊天注解',
   confirmAskAria: '确认并提问',
   openSideFailed: '打开侧边聊天失败，请重试',
+  sendToTarget: '发送至：{title}',
   deleteNote: '删除注释',
   cancel: '取消',
   save: '保存',

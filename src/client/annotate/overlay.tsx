@@ -40,6 +40,8 @@ interface SideDraftState {
   readonly snapshot: SelectionSnapshot
   readonly x: number
   readonly y: number
+  /** 目标侧边聊天 Tab 标题（编辑器上标明「发送至：侧边 N」）。 */
+  readonly targetTitle?: string
 }
 
 interface OverlayProps {
@@ -162,7 +164,8 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
     // WI-03 联动：先弹注解编辑器收集注解（可空），保存后经 bridge 注入侧边
     // 聊天草稿；本路径不产生主对话注释（无高亮/角标/chip）。
     const anchor = selectionBadgePoint(snapshot)
-    setSideDraft({ snapshot, x: anchor.x, y: anchor.y })
+    const targetTitle = sideChatBridge.current?.peekTargetTitle(snapshot.sessionId)
+    setSideDraft({ snapshot, x: anchor.x, y: anchor.y, ...(targetTitle !== undefined ? { targetTitle } : {}) })
     controller.clear()
     window.getSelection()?.removeAllRanges()
   }
@@ -231,6 +234,7 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
         <SideChatNoteEditor
           x={sideDraft.x}
           y={sideDraft.y}
+          targetTitle={sideDraft.targetTitle}
           onSave={commitSideDraft}
           onCancel={() => { setSideDraft(null) }}
         />
@@ -244,6 +248,7 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
 function SideChatNoteEditor(props: {
   x: number
   y: number
+  targetTitle?: string
   onSave: (note: string) => boolean
   onCancel: () => void
 }): ReactNode {
@@ -284,30 +289,36 @@ function SideChatNoteEditor(props: {
   }
 
   return (
-    <div ref={rootRef} className={css.editorNew} style={{ left, top, width }}>
-      <input
-        className={css.editorInput}
-        value={note}
-        placeholder={t('sideNotePlaceholder')}
-        aria-label={t('sideNoteAria')}
-        autoFocus
-        onChange={(event) => { setNote(event.target.value); setFailed(false) }}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
+    <div ref={rootRef} className={css.editorAsk} style={{ left, top, width }}>
+      {props.targetTitle !== undefined && props.targetTitle !== '' && (
+        <div className={css.editorTarget}>{t('sendToTarget', { title: props.targetTitle })}</div>
+      )}
+      <div className={css.editorAskRow}>
+        <input
+          className={css.editorInput}
+          value={note}
+          placeholder={t('sideNotePlaceholder')}
+          aria-label={t('sideNoteAria')}
+          autoFocus
+          onChange={(event) => { setNote(event.target.value); setFailed(false) }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return
+            // IME 保护：组合中（候选窗未提交）的 Enter 属于输入法，不能算确认。
+            if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
             event.preventDefault()
             save()
-          }
-        }}
-      />
-      <button
-        type="button"
-        className={css.confirmButton}
-        title={t('confirmTitle')}
-        aria-label={t('confirmAskAria')}
-        onClick={save}
-      >
-        <IconCheckOutline16 size={14} />
-      </button>
+          }}
+        />
+        <button
+          type="button"
+          className={css.confirmButton}
+          title={t('confirmTitle')}
+          aria-label={t('confirmAskAria')}
+          onClick={save}
+        >
+          <IconCheckOutline16 size={14} />
+        </button>
+      </div>
       {failed && <div className={css.editorError}>{t('openSideFailed')}</div>}
     </div>
   )
@@ -323,10 +334,16 @@ function SelectionToolbar(props: {
   useLocaleTick()
   const { rect } = props.snapshot
   const left = Math.max(8, Math.min(window.innerWidth - 8, rect.left + rect.width / 2))
-  const top = Math.max(4, rect.top - 10)
+  // 上方空间不足（选区贴视口顶部）时翻转到选区下方——工具条绝不能整体出屏。
+  // snapshot.rect 只有 left/top/width（首行矩形），翻转落点取整选区包围盒的底缘。
+  const flipBelow = rect.top < 64
+  const selectionBottom = props.snapshot.range.getBoundingClientRect().bottom
+  const top = flipBelow
+    ? Math.max(4, Math.min(window.innerHeight - 48, selectionBottom + 10))
+    : Math.max(4, rect.top - 10)
   return (
     <div
-      className={css.toolbar}
+      className={flipBelow ? `${css.toolbar} ${css.toolbarBelow}` : css.toolbar}
       style={{ left, top }}
       role="toolbar"
       aria-label={t('toolbarAria')}
@@ -373,6 +390,12 @@ function BadgeLayer(props: {
   const badges: ReactNode[] = []
   const placed: { x: number; y: number }[] = []
   let highlight: ReactNode = null
+  // composer 区域（宿主 [data-composer-seat]，非公开契约，查不到则只按视口
+  // 裁剪）：锚点滚进 composer 遮挡区时角标必须隐藏——否则角标会画在 composer
+  // 卡片上，看起来像引用块自带的编号（极具迷惑性）。
+  const composerRect = typeof document === 'undefined'
+    ? null
+    : document.querySelector('[data-composer-seat]')?.getBoundingClientRect() ?? null
   for (const annotation of annotations) {
     const range = resolveRange(annotation, props.cache)
     if (range === null) continue
@@ -391,6 +414,10 @@ function BadgeLayer(props: {
     if (anchor === null) continue
     // 锚点滚出视口的角标不渲染（fixed 定位否则会漂浮在无关内容上方）。
     if (anchor.centerY < 0 || anchor.centerY > window.innerHeight || anchor.right < 0 || anchor.right > window.innerWidth) continue
+    // 锚点落入 composer 遮挡区的角标同样不渲染。
+    if (composerRect !== null
+      && anchor.centerY >= composerRect.top && anchor.centerY <= composerRect.bottom
+      && anchor.right >= composerRect.left && anchor.right <= composerRect.right) continue
     // 同一选区/相邻行的多个角标会落在同一点位——错开保证每个都可点击。
     const point = spreadBadgePoint({ x: anchor.right, y: anchor.centerY }, placed)
     placed.push(point)
@@ -477,10 +504,11 @@ function AnnotationEditor(props: {
           autoFocus
           onChange={(event) => { setNote(event.target.value) }}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              save()
-            }
+            if (event.key !== 'Enter') return
+            // IME 保护：组合中（候选窗未提交）的 Enter 属于输入法，不能算确认。
+            if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
+            event.preventDefault()
+            save()
           }}
         />
         <button
@@ -506,10 +534,11 @@ function AnnotationEditor(props: {
         autoFocus
         onChange={(event) => { setNote(event.target.value) }}
         onKeyDown={(event) => {
-          if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault()
-            save()
-          }
+          if (event.key !== 'Enter' || event.shiftKey) return
+          // IME 保护：组合中（候选窗未提交）的 Enter 属于输入法，不能算保存。
+          if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
+          event.preventDefault()
+          save()
         }}
       />
       <div className={css.editorFooter}>

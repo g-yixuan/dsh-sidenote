@@ -20,7 +20,7 @@ import type { Context } from '../../context-types.ts'
 import { sideChatBridge } from '../bridge.ts'
 import { SideChatPanel } from './SideChatPanel.tsx'
 import { SIDE_TAB_TYPE, canForkFrom, collectSideTabs, mintSideTabId, sideTabTitle } from './model.ts'
-import { openOrFocusSideChat } from './open.ts'
+import { openOrFocusSideChat, sideChatTargetTitle } from './open.ts'
 import { t } from '../locales.ts'
 import { registerSideCommand } from './slash.ts'
 
@@ -45,6 +45,8 @@ export function registerSideChat(ctx: Context): void {
     const impl = {
       askInSideChat: (sessionId: string, draftText: string): boolean =>
         openOrFocusSideChat(ctx, sessionId, draftText),
+      peekTargetTitle: (sessionId: string): string | undefined =>
+        sideChatTargetTitle(ctx, sessionId),
     }
     sideChatBridge.current = impl
     return () => {

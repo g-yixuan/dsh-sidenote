@@ -16,6 +16,11 @@
   user-select: none;
 }
 
+/* 选区贴视口顶部时的翻转修饰类（与 .toolbar 叠加使用）：渲染在选区下方。 */
+.toolbarBelow {
+  transform: translate(-50%, 0);
+}
+
 .toolbarButton {
   appearance: none;
   border: none;
@@ -121,6 +126,35 @@
   color: var(--dsw-alias-label-caption, #8f959e);
 }
 
+/* 划选提问编辑器（带目标行，纵排卡片形态，与单行 pill 的 editorNew 区分）。 */
+.editorAsk {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px 6px 12px;
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
+  border-radius: 14px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
+}
+
+.editorAskRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 注解编辑器里的投递目标提示行（「发送至：侧边 2」）。 */
+.editorTarget {
+  padding: 2px 2px 0;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-caption, #8f959e);
+  user-select: none;
+}
+
 .confirmButton {
   flex: none;
   width: 26px;
@@ -194,11 +228,19 @@
 
 /* ── composer chip (conversation.input.dock) ─────────────────────────────── */
 
+/* dock 槽容器是通栏的（composerStack 全宽），宿主内建 dock（todo/queue）靠
+   同一组令牌公式自我对齐 composer 卡片——照抄该公式，让 chip 贴在输入框
+   卡片正上方（左缘对齐），而不是漂在消息列左边缘。 */
 .chipWrap {
+  box-sizing: border-box;
+  width: calc(100% - var(--dsh-composer-side-clearance, 16px) - var(--dsh-composer-side-clearance, 16px));
+  max-width: var(--dsh-composer-card-max-width, 780px);
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
+  position: relative;
 }
 
 .chip {
@@ -220,7 +262,12 @@
   background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
 }
 
+/* chip 在输入框卡片正上方，展开面板向上打开（向下会盖住输入区）。 */
 .chipPanel {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
   margin: 0;
   padding: 4px;
   list-style: none;

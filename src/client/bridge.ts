@@ -14,6 +14,11 @@ export interface SideChatBridge {
    * when no side chat could be opened (caller keeps its own flow).
    */
   askInSideChat(sessionId: SessionId, draftText: string): boolean
+  /**
+   * 预览 askInSideChat 此刻会落到哪个侧边聊天 Tab 的标题（编辑器上标明
+   * 「发送至：侧边 N」）；目标不可预知时返回 undefined。
+   */
+  peekTargetTitle(sessionId: SessionId): string | undefined
 }
 
 export const sideChatBridge: { current: SideChatBridge | null } = { current: null }
