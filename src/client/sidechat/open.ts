@@ -16,6 +16,8 @@ import {
   sideTabTitle,
 } from './model.ts'
 import { readInputDraft, resolveSessionInput } from './composer.ts'
+import { truncateQuote } from '../annotate/format.ts'
+import { t } from '../locales.ts'
 
 /** 从最新快照读一个 Tab（meta 合并写入前的读取面；布局即注册表）。 */
 export function readTab(ctx: Context, tabId: string): SidebarTab | undefined {
@@ -96,5 +98,25 @@ export function sideChatTargetTitle(ctx: Context, sessionId: string): string | u
     return sideTabTitle([])
   } catch {
     return undefined
+  }
+}
+
+/**
+ * 回流通道（Delivery_02 Workitem_04）：把侧边聊天里的一段 assistant 结论
+ * 以引用形态注入**主会话**的 composer 草稿（用户审阅/编辑后再发送，
+ * 不直接发）。Codex 无回流、Cursor 靠 @-mention——这是我们的反超点。
+ * @returns false = 主会话输入机不可达（调用方决定提示与否）。
+ */
+export function reflowToMainSession(ctx: Context, parentSessionId: string, text: string, sideTitle: string): boolean {
+  try {
+    const input = resolveSessionInput(ctx, parentSessionId)
+    if (input === null) return false
+    const quote = truncateQuote(text).split('\n').map(line => (line === '' ? '>' : `> ${line}`)).join('\n')
+    const block = `> ${t('reflowFrom', { title: sideTitle })}\n${quote}`
+    input.setDraft(appendDraftText(readInputDraft(input), block))
+    return true
+  } catch (error) {
+    console.warn('[dsh-sidenote] 回流主会话失败:', error)
+    return false
   }
 }

@@ -98,6 +98,12 @@ export const en = {
   headerSideTitle: 'Open a side chat (forked from the current session)',
   hintText: 'Tip: select any text in a reply to annotate it or ask in a side chat',
   hintClose: 'Got it',
+
+  // 回流通道（侧边 → 主会话）
+  reflowToMain: 'Send back to main session',
+  reflowFrom: 'From side chat ({title}):',
+  reflowDone: 'Added to the main session draft',
+  reflowFailed: "Couldn't reach the main session's composer",
 }
 
 export type CopyKey = keyof typeof en
@@ -182,6 +188,11 @@ export const zh: Record<CopyKey, string> = {
   headerSideTitle: '打开侧边聊天（从当前会话 fork）',
   hintText: '小技巧：划选回复里的文字，可以加注解或在侧边提问',
   hintClose: '知道了',
+
+  reflowToMain: '回流到主会话',
+  reflowFrom: '来自侧边聊天（{title}）：',
+  reflowDone: '已回流到主会话草稿',
+  reflowFailed: '主会话输入框不可达',
 }
 
 /** The DSH locale service face we consume (subset of LocaleRuntime). */

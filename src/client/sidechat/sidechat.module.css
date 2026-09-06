@@ -83,6 +83,40 @@
 .assistantRow {
   display: flex;
   justify-content: flex-start;
+  position: relative;
+}
+
+/* hover 浮出的行操作（回流按钮）：贴消息右上，不hover不打扰。 */
+.rowActions {
+  position: absolute;
+  top: -8px;
+  right: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease-out;
+  z-index: 2;
+}
+
+.assistantRow:hover .rowActions {
+  opacity: 1;
+}
+
+.reflowButton {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.1));
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+  color: var(--dsw-alias-label-tertiary, #8f959e);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.reflowButton:hover {
+  color: var(--dsw-alias-state-business-primary, #2f88ff);
+  border-color: var(--dsw-alias-state-business-primary, #2f88ff);
 }
 
 .assistantBody {

@@ -18,11 +18,11 @@
  * feature-check、幂等），否则消息流永远为空。
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { IconNewChatOutline16, IconSendOutline16, IconStopFill16, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCheckOutline16, IconNewChatOutline16, IconSendOutline16, IconShareOutline16, IconStopFill16, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context, SessionFace, TabComponentProps } from '../../context-types.ts'
 import { useComposer, type Composer } from './composer.ts'
 import { clearPendingDraft, parseSideChatMeta, phaseOf, transcriptOf, type ChatMessage } from './model.ts'
-import { readTab } from './open.ts'
+import { readTab, reflowToMainSession } from './open.ts'
 import { t, useLocaleTick } from '../locales.ts'
 import css from './sidechat.module.css'
 
@@ -220,7 +220,7 @@ export function SideChatPanel(props: TabComponentProps) {
       <div ref={bodyRef} className={css.body}>
         {messages.length === 0 && !running
           ? <EmptyState />
-          : <MessageList messages={messages} />}
+          : <MessageList messages={messages} ctx={ctx} parentSessionId={meta.parentSessionId} sideTitle={tab.title} />}
         {openFailed && <div className={css.errorRow}>{t('historyFailed')}</div>}
       </div>
       <ComposerBar ctx={ctx} session={session} composer={composer} running={running} visible={visible} modelName={modelName} />
@@ -253,15 +253,52 @@ function StateScreen(props: { title: string; detail?: string; hint?: string }) {
   )
 }
 
-function MessageList({ messages }: { messages: readonly ChatMessage[] }) {
+function MessageList({ messages, ctx, parentSessionId, sideTitle }: {
+  messages: readonly ChatMessage[]
+  ctx: Context
+  parentSessionId: string | undefined
+  sideTitle: string
+}) {
   return (
     <div className={css.transcript}>
-      {messages.map(message => <MessageRow key={message.key} message={message} />)}
+      {messages.map(message => <MessageRow key={message.key} message={message} ctx={ctx} parentSessionId={parentSessionId} sideTitle={sideTitle} />)}
     </div>
   )
 }
 
-function MessageRow({ message }: { message: ChatMessage }) {
+/** 回流按钮（W04）：把这条 assistant 结论以引用形态注入主会话草稿。 */
+function ReflowButton({ ctx, parentSessionId, sideTitle, text }: {
+  ctx: Context
+  parentSessionId: string | undefined
+  sideTitle: string
+  text: string
+}) {
+  useLocaleTick()
+  const [state, setState] = useState<'idle' | 'done' | 'failed'>('idle')
+  if (parentSessionId === undefined) return null
+  return (
+    <button
+      type="button"
+      className={css.reflowButton}
+      title={state === 'done' ? t('reflowDone') : state === 'failed' ? t('reflowFailed') : t('reflowToMain')}
+      aria-label={t('reflowToMain')}
+      onClick={() => {
+        const ok = reflowToMainSession(ctx, parentSessionId, text, sideTitle)
+        setState(ok ? 'done' : 'failed')
+        window.setTimeout(() => { setState('idle') }, 1600)
+      }}
+    >
+      {state === 'done' ? <IconCheckOutline16 size={12} /> : <IconShareOutline16 size={12} />}
+    </button>
+  )
+}
+
+function MessageRow({ message, ctx, parentSessionId, sideTitle }: {
+  message: ChatMessage
+  ctx: Context
+  parentSessionId: string | undefined
+  sideTitle: string
+}) {
   useLocaleTick()
   switch (message.role) {
     case 'user':
@@ -273,6 +310,11 @@ function MessageRow({ message }: { message: ChatMessage }) {
     case 'assistant':
       return (
         <div className={css.assistantRow}>
+          {message.text !== '' && message.streaming !== true && (
+            <div className={css.rowActions}>
+              <ReflowButton ctx={ctx} parentSessionId={parentSessionId} sideTitle={sideTitle} text={message.text} />
+            </div>
+          )}
           <div className={css.assistantBody}>
             {message.reasoning !== undefined && message.reasoning !== '' && (
               <details className={css.reasoning}>
