@@ -120,6 +120,29 @@ export function badgeAnchorOf(range: Range): BadgeAnchor | null {
   }
 }
 
+/**
+ * 角标的 gutter 落点（Delivery_02 W03）：角标统一钉在**消息列内容右缘**、
+ * 锚点首行的垂直中心——行内划选时旧策略（选区末端+6px）会压住后续文字
+ * （B3-P2③「分❶治」），右缘 gutter 永不遮挡正文，多角标自然纵向排开
+ * （Google Docs 页边评论同款心智）。找不到宿主消息容器时回退旧策略。
+ */
+export function gutterAnchorOf(range: Range): BadgeAnchor | null {
+  const base = badgeAnchorOf(range)
+  if (base === null) return null
+  try {
+    const node = range.startContainer instanceof Element
+      ? range.startContainer
+      : range.startContainer.parentElement
+    const flowItem = node?.closest('[data-chat-anchor-key]')
+    if (!(flowItem instanceof HTMLElement)) return base
+    const rect = flowItem.getBoundingClientRect()
+    if (!Number.isFinite(rect.right) || rect.right <= 0) return base
+    return { right: rect.right - 8, centerY: base.centerY }
+  } catch {
+    return base
+  }
+}
+
 /** Client rects of a range for the active-highlight overlay (empty on failure). */
 export function highlightRectsOf(range: Range): readonly { left: number; top: number; width: number; height: number }[] {
   try {

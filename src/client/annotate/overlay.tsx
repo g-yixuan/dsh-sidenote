@@ -19,7 +19,7 @@ import { IconCheckOutline16, IconTrashOutline16 } from '@deepseek-ai/dsh-client-
 import type { Context } from '../../context-types.ts'
 import { sideChatBridge } from '../bridge.ts'
 import { t, useLocaleTick } from '../locales.ts'
-import { badgeAnchorOf, highlightRectsOf, resolveRange, spreadBadgePoint } from './anchor.ts'
+import { badgeAnchorOf, gutterAnchorOf, highlightRectsOf, resolveRange, spreadBadgePoint } from './anchor.ts'
 import { buildSideChatQuote } from './format.ts'
 import { FirstUseHint } from './hint.tsx'
 import type { Annotation, AnnotationStore } from './model.ts'
@@ -459,11 +459,13 @@ function BadgeLayer(props: {
   const composerRect = typeof document === 'undefined'
     ? null
     : document.querySelector('[data-composer-seat]')?.getBoundingClientRect() ?? null
+  // gutter 角标与锚文本拉开了距离——hover 角标时高亮原文，绑定关系始终可见。
+  const [hoveredId, setHoveredId] = useState<number | null>(null)
+  const highlightId = props.editingId ?? hoveredId
   for (const annotation of annotations) {
     const range = resolveRange(annotation, props.cache)
     if (range === null) continue
-    if (annotation.id === props.editingId) {
-      // 高亮仅激活态呈现：编辑器打开时被选文本保持高亮。
+    if (annotation.id === highlightId) {
       const rects = highlightRectsOf(range)
       highlight = rects.map((rect, index) => (
         <div
@@ -473,7 +475,8 @@ function BadgeLayer(props: {
         />
       ))
     }
-    const anchor = badgeAnchorOf(range)
+    // 角标统一钉消息列右缘 gutter（W03：行内划选旧策略会压住后续文字）。
+    const anchor = gutterAnchorOf(range)
     if (anchor === null) continue
     // 锚点滚出视口的角标不渲染（fixed 定位否则会漂浮在无关内容上方）。
     if (anchor.centerY < 0 || anchor.centerY > window.innerHeight || anchor.right < 0 || anchor.right > window.innerWidth) continue
@@ -489,10 +492,12 @@ function BadgeLayer(props: {
         key={annotation.id}
         type="button"
         className={annotation.state === 'sent' ? `${css.badge} ${css.badgeSent}` : css.badge}
-        style={{ left: point.x + 6, top: point.y }}
+        style={{ left: point.x - 18, top: point.y }}
         title={annotation.state === 'sent'
           ? t('sentBadgeTitle', { n: annotation.number })
           : annotation.note === '' ? annotation.text : `${annotation.text}\n${t('noteLine', { note: annotation.note })}`}
+        onMouseEnter={() => { setHoveredId(annotation.id) }}
+        onMouseLeave={() => { setHoveredId(null) }}
         onClick={(event) => {
           event.preventDefault()
           event.stopPropagation()
