@@ -235,6 +235,14 @@ test('annotate journey: 划选 → 浮层 → 注解编辑器 → 角标 → chi
   })
 
   await openSeedSession(page)
+
+  // Delivery_02 W02：顶栏「Side」常驻入口（header.utilities 槽位；非 blank
+  // 会话内才渲染）。
+  await expect(
+    page.getByRole('button', { name: /Open a side chat/ }).first(),
+    '顶栏「侧边」入口未出现（header.utilities 槽位注册未生效）',
+  ).toBeVisible({ timeout: 10_000 })
+
   await injectSelection(page)
 
   // 浮层工具条：两个去向按钮。

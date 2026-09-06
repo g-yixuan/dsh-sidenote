@@ -228,3 +228,25 @@
   opacity: 0.55;
   cursor: default;
 }
+
+/* 顶栏「侧边」入口（conversation.session.header.utilities 槽位）：
+   对齐宿主 header 工具条的轻量 pill 形态。 */
+.headerSide {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.1));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #3f454d);
+  font-size: 12px;
+  line-height: 18px;
+  padding: 3px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.headerSide:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+  color: var(--dsw-alias-label-primary, #1f2329);
+}

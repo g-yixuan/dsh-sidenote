@@ -22,6 +22,7 @@ import { SideChatPanel } from './SideChatPanel.tsx'
 import { SIDE_TAB_TYPE, canForkFrom, collectSideTabs, mintSideTabId, sideTabTitle } from './model.ts'
 import { openOrFocusSideChat, sideChatTargetTitle } from './open.ts'
 import { t } from '../locales.ts'
+import { registerHeaderEntry } from './header.tsx'
 import { registerSideCommand } from './slash.ts'
 
 export function registerSideChat(ctx: Context): void {
@@ -55,4 +56,6 @@ export function registerSideChat(ctx: Context): void {
   }, 'dsh-sidenote: annotate bridge')
 
   registerSideCommand(ctx)
+  // 顶栏「侧边」入口（发现性）：会话头部右上角常驻按钮。
+  registerHeaderEntry(ctx)
 }

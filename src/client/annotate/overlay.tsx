@@ -21,6 +21,7 @@ import { sideChatBridge } from '../bridge.ts'
 import { t, useLocaleTick } from '../locales.ts'
 import { badgeAnchorOf, highlightRectsOf, resolveRange, spreadBadgePoint } from './anchor.ts'
 import { buildSideChatQuote } from './format.ts'
+import { FirstUseHint } from './hint.tsx'
 import type { Annotation, AnnotationStore } from './model.ts'
 import type { SelectionController, SelectionSnapshot } from './selection.ts'
 import css from './annotate.module.css'
@@ -198,6 +199,7 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
 
   return (
     <>
+      <FirstUseHint />
       {selection !== null && editor === null && sideDraft === null && viewer === null && (
         <SelectionToolbar
           snapshot={selection}

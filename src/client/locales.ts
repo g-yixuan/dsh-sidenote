@@ -92,6 +92,12 @@ export const en = {
   // chip
   clearAll: 'Clear all',
   chipNote: ' ({note})',
+
+  // 顶栏入口 + 首次引导
+  headerSide: 'Side',
+  headerSideTitle: 'Open a side chat (forked from the current session)',
+  hintText: 'Tip: select any text in a reply to annotate it or ask in a side chat',
+  hintClose: 'Got it',
 }
 
 export type CopyKey = keyof typeof en
@@ -171,6 +177,11 @@ export const zh: Record<CopyKey, string> = {
 
   clearAll: '清空全部',
   chipNote: '（{note}）',
+
+  headerSide: '侧边',
+  headerSideTitle: '打开侧边聊天（从当前会话 fork）',
+  hintText: '小技巧：划选回复里的文字，可以加注解或在侧边提问',
+  hintClose: '知道了',
 }
 
 /** The DSH locale service face we consume (subset of LocaleRuntime). */
