@@ -73,6 +73,34 @@ const lines = [
   },
   { type: 'step/end', seq: 5, time: t0 + 6, data: { turn: 1, step: 1 } },
   { type: 'turn/end', seq: 6, time: t0 + 7, data: { turn: 1, reason: { kind: 'completed' } } },
+  // Turn 2：携带 v3 协议前缀（注释 XML 块）的用户消息——气泡留痕手术的
+  // 确定性回归 fixture（无需模型：读历史即可断言隐藏与「N annotated」标签）。
+  { type: 'turn/start', seq: 7, time: t0 + 8, data: { turn: 2 } },
+  { type: 'step/start', seq: 8, time: t0 + 9, data: { turn: 2, step: 1 } },
+  {
+    type: 'user/message', seq: 9, time: t0 + 10,
+    data: {
+      content: [{ type: 'text', text: 'I annotated 1 passage(s) of the conversation above:\n<annotation id="1">\n<quote>the seeded protocol quote</quote>\n<note>watch the memory cost</note>\n</annotation>\n\nLooks good overall' }],
+      source: { kind: 'user', rpcId: 'e2e-seed-2', clientTimeZone: 'Asia/Shanghai' },
+      role: 'user', id: 'e2e-user-2',
+    },
+    surfaceOp: 'append',
+  },
+  {
+    type: 'assistant/message', seq: 10, time: t0 + 11,
+    data: {
+      turn: 2, step: 1,
+      message: {
+        role: 'assistant',
+        id: 'e2e-assistant-2',
+        content: [{ type: 'text', text: 'Noted — memory cost is a fair concern.' }],
+        source: { kind: 'model', provider: 'e2e', model: 'e2e' },
+      },
+    },
+    surfaceOp: 'append',
+  },
+  { type: 'step/end', seq: 11, time: t0 + 12, data: { turn: 2, step: 1 } },
+  { type: 'turn/end', seq: 12, time: t0 + 13, data: { turn: 2, reason: { kind: 'completed' } } },
 ]
 
 const dir = join(dshHome, 'sessions', projectKey(cwd), sessionId)

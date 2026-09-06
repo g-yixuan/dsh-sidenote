@@ -52,8 +52,9 @@ export interface AnnotationStore {
   add(draft: AnnotationDraft): Annotation
   setNote(id: number, note: string): void
   remove(id: number): void
-  /** Flip every active annotation of the session to 'sent' (send edge). */
-  markSessionSent(sessionId: string): void
+  /** 把指定 id 的 active 注释翻为 'sent'（发送拦截器只翻当时拼进消息的
+   *  那批——窗口内新增的注释不得误标，C2 P1-3）。 */
+  markSent(ids: readonly number[]): void
   get(id: number): Annotation | undefined
   /** All annotations of a session in creation order (active + sent). */
   list(sessionId: string): readonly Annotation[]
@@ -199,12 +200,17 @@ export function createAnnotationStore(
       persistTouched([target.sessionId])
       notify()
     },
-    markSessionSent(sessionId: string): void {
-      if (!annotations.some(a => a.sessionId === sessionId && a.state === 'active')) return
-      annotations = annotations.map(a => (
-        a.sessionId === sessionId && a.state === 'active' ? { ...a, state: 'sent' } : a
-      ))
-      persistTouched([sessionId])
+    markSent(ids: readonly number[]): void {
+      if (ids.length === 0) return
+      const idSet = new Set(ids)
+      if (!annotations.some(a => idSet.has(a.id) && a.state === 'active')) return
+      const touched = new Set<string>()
+      annotations = annotations.map(a => {
+        if (!idSet.has(a.id) || a.state !== 'active') return a
+        touched.add(a.sessionId)
+        return { ...a, state: 'sent' }
+      })
+      persistTouched([...touched])
       notify()
     },
     get(id: number): Annotation | undefined {

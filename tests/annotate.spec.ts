@@ -52,17 +52,17 @@ describe('annotation store', () => {
     expect(store.countActive('nope')).toBe(0)
   })
 
-  it('markSessionSent flips active → sent: chip clears, badges stay listed', () => {
+  it('markSent 只翻转指定 id（窗口内新增的不误标）', () => {
     const store = createAnnotationStore()
-    store.add(draft('s1', '一'))
-    store.add(draft('s1', '二'))
-    store.markSessionSent('s1')
-    expect(store.countActive('s1')).toBe(0)
-    expect(store.list('s1')).toHaveLength(2)
-    expect(store.list('s1').every(a => a.state === 'sent')).toBe(true)
-    // 幂等：再次 markSent 不再变化
+    const a1 = store.add(draft('s1', '一'))
+    const a2 = store.add(draft('s1', '二'))
+    store.markSent([a1.id])
+    expect(store.get(a1.id)?.state).toBe('sent')
+    expect(store.get(a2.id)?.state).toBe('active')
+    expect(store.countActive('s1')).toBe(1)
+    // 幂等：再次 markSent 同 id 不再变化
     const version = store.getSnapshot()
-    store.markSessionSent('s1')
+    store.markSent([a1.id])
     expect(store.getSnapshot()).toBe(version)
   })
 
@@ -176,7 +176,7 @@ describe('store 持久化（localStorage 注入替身）', () => {
     const first = createAnnotationStore(() => 1, storage)
     first.add(draft('s1', '甲'))
     const b = first.add(draft('s1', '乙', '注'))
-    first.markSessionSent('s1')
+    first.markSent(first.list('s1').map(a => a.id))
     const second = createAnnotationStore(() => 2, storage)
     expect(second.list('s1')).toHaveLength(2)
     expect(second.list('s1').every(a => a.state === 'sent')).toBe(true)

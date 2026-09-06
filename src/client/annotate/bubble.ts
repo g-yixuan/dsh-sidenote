@@ -58,7 +58,7 @@ function applySurgery(flowItem: HTMLElement): void {
     chip.className = css.sentChip ?? ''
     chip.textContent = t('sentChipLabel', { n: proto.annotations.length })
     chip.title = proto.annotations
-      .map(a => `${a.id}. 「${a.quote}」${a.note === '' ? t('noNote') : a.note}`)
+      .map(a => `${a.id}. 「${a.quote.length > 200 ? `${a.quote.slice(0, 200)}…` : a.quote}」${a.note === '' ? t('noNote') : a.note}`)
       .join('\n')
     labels.appendChild(chip)
   }
@@ -72,9 +72,10 @@ function applySurgery(flowItem: HTMLElement): void {
   hidden.insertAdjacentElement('afterend', labels)
 }
 
-/** 全量扫描（去抖后调用）；只处理尚未手术的 user 流项。 */
+/** 全量扫描（去抖后调用）；只处理尚未手术的 user/steering 流项
+ *  （steer 发出的消息同用 UserStyleBubble 渲染，kind 不同——C2 审查发现）。 */
 function scan(): void {
-  const items = document.querySelectorAll<HTMLElement>('[data-chat-flow-kind="user"]')
+  const items = document.querySelectorAll<HTMLElement>('[data-chat-flow-kind="user"], [data-chat-flow-kind="steering"]')
   for (const item of items) {
     try {
       applySurgery(item)

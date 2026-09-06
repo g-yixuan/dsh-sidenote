@@ -177,7 +177,7 @@ export function createReflowChip(reflow: ReflowStore) {
             {items.map(item => (
               <li key={item.id} className={css.chipRow}>
                 <span className={css.chipText} title={item.text}>
-                  {t('reflowFrom', { title: item.sideTitle })} {item.text}
+                  {t('reflowFrom', { title: item.sideTitle })} {item.text.replace(/[*_`#>[\]]/g, '').replace(/\s+/g, ' ')}
                 </span>
                 <button
                   type="button"

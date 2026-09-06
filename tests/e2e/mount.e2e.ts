@@ -182,6 +182,20 @@ async function scrollChatToTop(page: Page): Promise<void> {
 }
 
 /** Open the seeded session (left nav → session row). */
+/** 把指定文本滚进视口中央（不依赖滚动容器结构，跨 better-sidebar 版本稳）。 */
+async function scrollTextIntoView(page: Page, text: string): Promise<void> {
+  await page.evaluate((needle) => {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+      if ((n.textContent ?? '').includes(needle)) {
+        n.parentElement?.scrollIntoView({ block: 'center' })
+        return
+      }
+    }
+  }, text)
+  await page.waitForTimeout(400)
+}
+
 async function openSeedSession(page: Page): Promise<void> {
   const openSidebar = page.getByRole('button', { name: 'Open sidebar' }).first()
   if ((await openSidebar.count()) > 0) {
@@ -236,6 +250,17 @@ test('annotate journey: 划选 → 浮层 → 注解编辑器 → 角标 → chi
 
   await openSeedSession(page)
 
+  // 气泡留痕（C2 P0-3 回归）：种子会话 turn 2 的用户消息携带 v3 协议前缀
+  // ——协议区必须被隐藏、显示「1 annotated」标签，正文仍在。
+  const seededBubble = page.locator('[data-chat-flow-kind="user"]', { hasText: 'Looks good overall' })
+  await expect(seededBubble, '种子协议气泡未出现').toBeVisible({ timeout: 10_000 })
+  await expect(seededBubble.getByText('1 annotated'), '气泡「批注 ×N」标签未出现（手术未命中）').toBeVisible({ timeout: 10_000 })
+  // 协议区被隐藏（display:none 的包层 span；文本仍在 DOM 但不可见）。
+  await expect(
+    seededBubble.getByText('<annotation', { exact: false }).first(),
+    '协议 XML 块未被隐藏',
+  ).toBeHidden()
+
   // Delivery_02 W02：顶栏「Side」常驻入口（header.utilities 槽位；非 blank
   // 会话内才渲染）。
   await expect(
@@ -260,6 +285,9 @@ test('annotate journey: 划选 → 浮层 → 注解编辑器 → 角标 → chi
 
   // 保存（新建态确认钮：aria-label 确认注解）→ 角标 1 锚定 + chip「1 条注释」。
   await overlay.locator('button[aria-label="Save note"]').first().click()
+  // 锚点可能在视口上方（长会话滚底）——角标按视口裁剪不渲染是设计行为，
+  // 先把消息滚回顶部再断言。
+  await scrollChatToTop(page)
   await expect(overlay.getByText('1', { exact: true }).first(), '编号角标 1 未出现').toBeVisible({ timeout: 10_000 })
   await expect(page.getByText('1 annotation').first(), 'composer chip 未出现').toBeVisible({ timeout: 10_000 })
   await dumpStep(page, '08-chip')
@@ -275,9 +303,36 @@ test('annotate journey: 划选 → 浮层 → 注解编辑器 → 角标 → chi
 
   // 持久化（Delivery_02）：刷新后角标 + chip 从 localStorage 恢复。
   await page.reload()
-  await expect(overlay.getByText('1', { exact: true }).first(), '刷新后角标未恢复').toBeVisible({ timeout: 15_000 })
   await expect(page.getByText('1 annotation').first(), '刷新后 chip 未恢复').toBeVisible({ timeout: 10_000 })
+  // 角标受视口裁剪纪律约束——等历史渲染完、把锚文本滚进视口再断言
+  //（scrollChatToTop 在内容未就绪时会滚空，跨版本时序不稳）。
+  await expect(page.getByText(/full history snapshot/).first()).toBeVisible({ timeout: 15_000 })
+  await scrollTextIntoView(page, 'full history snapshot')
+  await expect(overlay.getByText('1', { exact: true }).first(), '刷新后角标未恢复').toBeVisible({ timeout: 15_000 })
   await dumpStep(page, '08b-restored-after-reload')
+
+  // 发送拦截全链路（C2 P0/P1 回归）：带注释 Enter → 草稿拼入协议块 →
+  // 提交后草稿清空 → chip 消失（注释 sent）→ 新气泡协议区隐藏 +「1 annotated」标签。
+  await composer.click()
+  await composer.pressSequentially('answer my notes')
+  await page.keyboard.press('Enter')
+  await expect
+    .poll(async () => composer.evaluate((el) => (
+      el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.value : (el.textContent ?? '')
+    )), { timeout: 3_000 })
+    .toContain('<annotation id="1"')
+  // 提交被宿主接受（无模型 → turn 会报错，但消息已入流）：草稿清空。
+  await expect
+    .poll(async () => composer.evaluate((el) => (
+      el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.value : (el.textContent ?? '')
+    )), { timeout: 8_000 })
+    .toBe('')
+  await expect(page.getByText('1 annotation').filter({ visible: true }), '发送后 chip 未消失').toHaveCount(0)
+  // 新发出的气泡：协议区隐藏 + 留痕标签。
+  const sentBubble = page.locator('[data-chat-flow-kind="user"]', { hasText: 'answer my notes' })
+  await expect(sentBubble.getByText('1 annotated'), '新气泡留痕标签未出现').toBeVisible({ timeout: 10_000 })
+  await expect(sentBubble.getByText('<annotation', { exact: false }).first(), '新气泡协议区未隐藏').toBeHidden()
+  await dumpStep(page, '08c-sent-with-annotation')
 
   expect(pageErrors, 'pageerrors during annotate journey').toEqual([])
   expect(consoleErrors.filter((t) => PLUGIN_CONSOLE.test(t)), 'plugin console errors').toEqual([])
@@ -319,7 +374,7 @@ test('linkage journey: 划选 → 在侧边聊天中提问 → 编辑器 → 侧
 
   // 互斥：主对话不产生注释（无角标、无 chip）。
   await expect(overlay.getByText('1', { exact: true })).toHaveCount(0)
-  await expect(page.getByText(/annotation|annotations/)).toHaveCount(0)
+  await expect(page.getByText(/^\d+ annotations?$/).filter({ visible: true })).toHaveCount(0)
 
   expect(pageErrors, 'pageerrors during linkage journey').toEqual([])
   expect(consoleErrors.filter((t) => PLUGIN_CONSOLE.test(t)), 'plugin console errors').toEqual([])
@@ -375,6 +430,8 @@ test('annotation manage: 双注释编号不重排 + 重开编辑 + chip 逐条�
   await overlay.getByText('Add to conversation').click()
   await overlay.locator('input, textarea').first().fill('note one')
   await overlay.locator('button[aria-label="Save note"]').click()
+  // 锚点在视口上方时角标按设计不渲染——先滚回顶部（视口裁剪纪律）。
+  await scrollChatToTop(page)
   await expect(overlay.getByRole('button', { name: '1', exact: true }), '角标 1 未出现').toBeVisible({ timeout: 10_000 })
 
   // 注释 2（空注解）——先把消息滚回顶部再断言角标（视口裁剪纪律）。
@@ -398,7 +455,8 @@ test('annotation manage: 双注释编号不重排 + 重开编辑 + chip 逐条�
   // chip 展开 → 逐条移除剩余注释 → chip 消失、角标清空
   await page.getByText('1 annotation').first().click()
   await page.locator('button[aria-label="Remove annotation 2"]').click()
-  await expect(page.getByText(/annotation|annotations/), 'chip 未随清空消失').toHaveCount(0)
+  // 只数可见元素（气泡手术隐藏区的协议文本仍在 DOM，display:none 不算）。
+  await expect(page.getByText(/^\d+ annotations?$/).filter({ visible: true }), 'chip 未随清空消失').toHaveCount(0)
   await expect(overlay.getByRole('button', { name: '2', exact: true }), '角标 2 未随 chip 移除消失').toHaveCount(0)
   await dumpStep(page, '12-annotations-cleared')
 

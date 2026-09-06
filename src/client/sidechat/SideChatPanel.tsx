@@ -277,6 +277,9 @@ function ReflowButton({ reflow, parentSessionId, sideTitle, text }: {
 }) {
   useLocaleTick()
   const [done, setDone] = useState(false)
+  const timer = useRef(0)
+  // 卸载清定时器（C2 P2-7）。
+  useEffect(() => () => { window.clearTimeout(timer.current) }, [])
   if (parentSessionId === undefined) return null
   return (
     <button
@@ -287,7 +290,8 @@ function ReflowButton({ reflow, parentSessionId, sideTitle, text }: {
       onClick={() => {
         reflow.add(parentSessionId, sideTitle, text)
         setDone(true)
-        window.setTimeout(() => { setDone(false) }, 1600)
+        window.clearTimeout(timer.current)
+        timer.current = window.setTimeout(() => { setDone(false) }, 1600)
       }}
     >
       {done ? <IconCheckOutline16 size={12} /> : <IconShareOutline16 size={12} />}

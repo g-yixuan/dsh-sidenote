@@ -137,7 +137,10 @@ export function gutterAnchorOf(range: Range): BadgeAnchor | null {
     if (!(flowItem instanceof HTMLElement)) return base
     const rect = flowItem.getBoundingClientRect()
     if (!Number.isFinite(rect.right) || rect.right <= 0) return base
-    return { right: rect.right - 8, centerY: base.centerY }
+    // 落在流项右缘之外 6px（列与侧栏/页边之间的间隙）——内缩会盖住行尾文字
+    //（M2 实测 P1：角标盖住「间」），外探则永不遮挡正文；钳制在视口内
+    //（窄窗口/全宽列时不被 BadgeLayer 的视口裁剪误杀）。
+    return { right: Math.min(rect.right + 6, window.innerWidth - 26), centerY: base.centerY }
   } catch {
     return base
   }

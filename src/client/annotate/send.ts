@@ -1,23 +1,24 @@
 /**
- * 发送拦截器（Delivery_02 Workitem_01 的核心）：注释对象从此不进 composer
- * 草稿；有 active 注释时，在「最终提交」瞬间（主 composer 的 Enter / 发送
- * 按钮）把协议块拼到用户正文前，再驱动宿主完成真实发送。
+ * 发送拦截器 v2（Delivery_02 Workitem_01 的核心；v2 经 C2 对抗性审查重写）：
+ * 注释/回流对象不进 composer 草稿；有 active 内容时，在「最终提交」瞬间
+ * （主 composer 的 Enter / 发送按钮点击）把协议前缀拼到正文前，然后调
+ * **宿主输入机原生 `input.submit('queue')`** 完成真实发送。
  *
- * 宿主没有 send-transform 钩子，本模块采用 dsh-annotation 验证过的
- * capture 拦截（其 issue#20/#23 的教训已吸收：斜杠命令跳过、发送按钮
- * 路径同样覆盖、IME 守卫）。
+ * 为什么不点 DOM 按钮（C2 P0 教训）：宿主运行中主按钮变身「停止」、
+ * goal bar 的「清除目标」按钮排在 seat 末位——DOM 序识别必然误点。
+ * 机器 submit 与宿主 Enter 同路（adjudication/sink/commitSend），
+ * running 时自动入队，idle 时直发，对按钮布局零假设。
  *
- * 识别面（宿主 DOM，非公开契约——全部 feature-check，识别失败即不拦截，
- * 注释留在 active 等下次，绝不丢）：
- * - 主 composer：document 里的 [data-composer-seat]（侧边聊天面板的
- *   textarea 不在其中，天然不串）；
- * - 发送按钮：seat 内 DOM 序最后一个 <button>（宿主 InputBar 尾部行
- *   最末是主按钮，运行中「停止」按钮在其前；aria-label 是宿主本地化
- *   文案，不作为识别依据）。
+ * 守卫（全部先检后吞，任一不满足即放行宿主原行为）：
+ * - 斜杠命令草稿跳过（dsh-annotation issue#20）；
+ * - Cmd/Ctrl+Enter（steer 手势）归还宿主；
+ * - 机器相位非 plain（trigger 弹窗/命令菜单/提交事务中）不拦（C2 P1-1）；
+ * - seat 内存在打开的 listbox/展开菜单时不拦。
  *
- * 状态一致性：拼稿后先等按钮就绪 → click 驱动宿主 → 以「草稿被清空」为
- * 提交确认（队列路径同样清空草稿）；确认才 markSessionSent，超时则精确
- * 回滚草稿、注释保持 active——任何失败路径都不留半成品。
+ * 确认与回滚（C2 P1-2）：以 input.state 订阅为唯一确认面——相位回到
+ * plain 且草稿清空 = 发出（markSent 只翻当时拼进去的那批 id，C2 P1-3）；
+ * 回到 plain 而草稿未清 = 发送失败（宿主 notice + 留稿）→ 仅在草稿仍以
+ * 我们拼的前缀开头时剥离回滚（C2 P2-3）；相位未到终态前绝不回滚。
  */
 import type { Context, ConversationService, SessionId, SessionInput } from '../../context-types.ts'
 import { buildProtocolBlock } from './format.ts'
@@ -36,20 +37,23 @@ export function resolveInput(ctx: Context, sessionId: SessionId): SessionInput |
   }
 }
 
-/** 主 composer 的宿主容器。 */
+/** 主 composer 的宿主容器（侧边面板 textarea 不在其中，天然不串）。 */
 function composerSeat(): HTMLElement | null {
   return document.querySelector<HTMLElement>('[data-composer-seat]')
 }
 
-/** 发送按钮 = seat 内 DOM 序最后一个 button（无 seat/无按钮 → null，不拦截）。 */
-function findSendButton(seat: HTMLElement): HTMLButtonElement | null {
-  const buttons = seat.querySelectorAll('button')
+/** 发送按钮 = [data-composer-card] 内 DOM 序最后一个 button（仅 click 路径用，
+ *  且只在非运行态作为识别面——运行态主按钮变身「停止」，整个 click 路径不拦）。 */
+function findSendButtonInCard(): HTMLButtonElement | null {
+  const card = document.querySelector<HTMLElement>('[data-composer-card]')
+  if (card === null) return null
+  const buttons = card.querySelectorAll('button')
   const last = buttons[buttons.length - 1]
   return last instanceof HTMLButtonElement ? last : null
 }
 
 export function installSendInterceptor(ctx: Context, store: AnnotationStore, reflow: ReflowStore): () => void {
-  /** 重入护栏：我们程序化 click 发送按钮会再次路过 click 监听。 */
+  /** 重入/连按护栏：事务进行中吞掉命中识别面的 Enter/点击（不重复驱动）。 */
   let committing = false
 
   const currentSessionId = (): string => {
@@ -60,10 +64,6 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     }
   }
 
-  /**
-   * 尝试接管一次提交。返回 true = 已接管（事件已吞、发送由我们驱动）；
-   * 返回 false = 放行（无注释/斜杠命令/识别面缺失），宿主行为原样。
-   */
   const hijack = (): boolean => {
     const sessionId = currentSessionId()
     if (sessionId === '') return false
@@ -72,84 +72,98 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     if (active.length === 0 && reflows.length === 0) return false
     const input = resolveInput(ctx, sessionId)
     if (input === undefined) return false
-    const draft = input.state.getSnapshot().draft
-    // 斜杠命令/技能触发不拼协议块（dsh-annotation issue#20）。
+    const snap = input.state.getSnapshot()
+    const draft = snap.draft
     if (draft.trimStart().startsWith('/')) return false
+    // 机器相位守卫：claimed/adjudicating/submitting = 弹窗/命令/事务在走。
+    if (snap.phase !== 'plain') return false
+    // 弹窗 DOM 守卫：@引用 listbox、「+」菜单展开等。
     const seat = composerSeat()
     if (seat === null) return false
-    const sendButton = findSendButton(seat)
-    if (sendButton === null) return false
+    if (seat.querySelector('[role="listbox"]') !== null) return false
+    if (seat.querySelector('[aria-expanded="true"]') !== null) return false
 
-    // 消息组装序：回流上下文（背景） → 注释协议块（具体锚点） → 用户正文。
+    // 拼稿：回流上下文（背景） → 注释协议块（具体锚点） → 用户正文。
     const parts: string[] = []
     for (const item of reflows) parts.push(buildReflowBlock(item))
     if (active.length > 0) parts.push(buildProtocolBlock(active))
     const body = draft.trim()
     const full = [...parts, ...(body === '' ? [] : [body])].join('\n\n')
+    const sentIds = active.map(a => a.id)
+
     input.setDraft(full)
     committing = true
-
-    // 草稿经 React 状态异步生效 → 等按钮就绪后点击 → 以草稿清空为提交确认。
-    const startedAt = Date.now()
-    const attempt = (): void => {
-      // 宿主结构中途消失（路由切换等）：回滚，下轮用户操作重试。
-      if (!sendButton.isConnected) {
-        input.setDraft(draft)
-        committing = false
-        return
-      }
-      if (sendButton.disabled) {
-        if (Date.now() - startedAt < 1000) window.setTimeout(attempt, 50)
-        else {
-          input.setDraft(draft)
-          committing = false
-        }
-        return
-      }
-      sendButton.click()
-      // 提交确认窗口：草稿被宿主清空（提交/入队都会）才算真正发出。
-      const confirm = (): void => {
-        const nowDraft = input.state.getSnapshot().draft
-        if (nowDraft.trim() === '') {
-          store.markSessionSent(sessionId)
-          reflow.clearSession(sessionId)
-          committing = false
-          return
-        }
-        if (Date.now() - startedAt < 1500) {
-          window.setTimeout(confirm, 50)
-          return
-        }
-        // 发送未发生（宿主拒绝/失败回填）：精确回滚到我们拼稿前的正文。
-        input.setDraft(draft)
-        committing = false
-      }
-      confirm()
+    try {
+      input.submit('queue')
+    } catch (error) {
+      // 提交抛错：精确剥离前缀回滚，内容保持 active。
+      console.warn('[dsh-sidenote] 提交失败，回滚草稿:', error)
+      const now = input.state.getSnapshot().draft
+      if (now.startsWith(full)) input.setDraft(draft)
+      committing = false
+      return true
     }
-    attempt()
+
+    // 确认面：订阅机器相位。回到 plain 后看草稿判定成败。
+    const off = input.state.subscribe(() => {
+      const state = input.state.getSnapshot()
+      if (state.phase !== 'plain') return
+      window.clearTimeout(watchdog)
+      off()
+      committing = false
+      if (state.draft.trim() === '') {
+        // 成功：只翻转当时拼进去的那批注释（窗口内新增的不动）。
+        store.markSent(sentIds)
+        reflow.clearSession(sessionId)
+        return
+      }
+      // 失败（宿主 notice + 留稿）：草稿仍以我们拼的前缀开头才剥离。
+      const stuck = state.draft
+      if (stuck.startsWith(full)) input.setDraft(draft)
+    })
+    // 看门狗：相位永远不回 plain（宿主异常）→ 解锁护栏，不动草稿（保守）。
+    const watchdog = window.setTimeout(() => {
+      off()
+      committing = false
+    }, 15_000)
     return true
   }
 
   const onKeyDown = (event: KeyboardEvent): void => {
-    if (committing) return
-    if (event.key !== 'Enter' || event.shiftKey) return
-    if (event.isComposing || event.keyCode === 229) return
     const target = event.target
-    if (!(target instanceof HTMLTextAreaElement)) return
-    if (target.closest('[data-composer-seat]') === null) return
+    const inSeat = target instanceof HTMLTextAreaElement && target.closest('[data-composer-seat]') !== null
+    if (!inSeat) return
+    if (committing) {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+      }
+      return
+    }
+    if (event.key !== 'Enter' || event.shiftKey) return
+    if (event.metaKey || event.ctrlKey) return // steer 手势归还宿主
+    if (event.isComposing || event.keyCode === 229) return
     if (!hijack()) return
     event.preventDefault()
     event.stopImmediatePropagation()
   }
 
   const onClick = (event: MouseEvent): void => {
-    if (committing) return
     const target = event.target
     if (!(target instanceof Element)) return
     const seat = target.closest('[data-composer-seat]')
     if (seat === null) return
     const button = target.closest('button')
-    if (button === null || button !== findSendButton(seat as HTMLElement)) return
+    if (button === null) return
+    if (committing) {
+      // 事务进行中：吞掉 seat 内一切按钮点击（防双驱动）。
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      return
+    }
+    // 识别面收窄到卡片内末位按钮（goal bar 在 card 外、不构成误点）；
+    // 运行态主按钮是「停止」——相位守卫已在 hijack 内（plain 才拦）。
+    if (button !== findSendButtonInCard()) return
     if (!hijack()) return
     event.preventDefault()
     event.stopImmediatePropagation()
