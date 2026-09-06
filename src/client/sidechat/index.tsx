@@ -18,6 +18,7 @@
 import { IconNewChatOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context } from '../../context-types.ts'
 import { sideChatBridge } from '../bridge.ts'
+import type { ReflowStore } from '../reflow.ts'
 import { SideChatPanel } from './SideChatPanel.tsx'
 import { SIDE_TAB_TYPE, canForkFrom, collectSideTabs, mintSideTabId, sideTabTitle } from './model.ts'
 import { openOrFocusSideChat, sideChatTargetTitle } from './open.ts'
@@ -25,7 +26,7 @@ import { t } from '../locales.ts'
 import { registerHeaderEntry } from './header.tsx'
 import { registerSideCommand } from './slash.ts'
 
-export function registerSideChat(ctx: Context): void {
+export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
   ctx.effect(
     () => ctx.betterSidebar.registerTab({
       id: SIDE_TAB_TYPE,
@@ -36,7 +37,7 @@ export function registerSideChat(ctx: Context): void {
       createTab: (state) => ({
         tab: { id: mintSideTabId(), type: SIDE_TAB_TYPE, title: sideTabTitle(collectSideTabs(state).map(tab => tab.title)) },
       }),
-      component: (props) => <SideChatPanel {...props} />,
+      component: (props) => <SideChatPanel {...props} reflow={reflow} />,
     }),
     'dsh-sidenote: side chat tab',
   )

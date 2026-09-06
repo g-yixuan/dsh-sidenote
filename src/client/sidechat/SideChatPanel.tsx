@@ -22,7 +22,8 @@ import { IconCheckOutline16, IconNewChatOutline16, IconSendOutline16, IconShareO
 import type { Context, SessionFace, TabComponentProps } from '../../context-types.ts'
 import { useComposer, type Composer } from './composer.ts'
 import { clearPendingDraft, parseSideChatMeta, phaseOf, transcriptOf, type ChatMessage } from './model.ts'
-import { readTab, reflowToMainSession } from './open.ts'
+import { readTab } from './open.ts'
+import type { ReflowStore } from '../reflow.ts'
 import { t, useLocaleTick } from '../locales.ts'
 import css from './sidechat.module.css'
 
@@ -46,7 +47,7 @@ function openSessionWindow(session: SessionFace | undefined): void {
   })
 }
 
-export function SideChatPanel(props: TabComponentProps) {
+export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }) {
   useLocaleTick()
   const { ctx, scope, tab, visible } = props
   const meta = parseSideChatMeta(tab.meta)
@@ -220,7 +221,7 @@ export function SideChatPanel(props: TabComponentProps) {
       <div ref={bodyRef} className={css.body}>
         {messages.length === 0 && !running
           ? <EmptyState />
-          : <MessageList messages={messages} ctx={ctx} parentSessionId={meta.parentSessionId} sideTitle={tab.title} />}
+          : <MessageList messages={messages} reflow={props.reflow} parentSessionId={meta.parentSessionId} sideTitle={tab.title} />}
         {openFailed && <div className={css.errorRow}>{t('historyFailed')}</div>}
       </div>
       <ComposerBar ctx={ctx} session={session} composer={composer} running={running} visible={visible} modelName={modelName} />
@@ -253,49 +254,50 @@ function StateScreen(props: { title: string; detail?: string; hint?: string }) {
   )
 }
 
-function MessageList({ messages, ctx, parentSessionId, sideTitle }: {
+function MessageList({ messages, reflow, parentSessionId, sideTitle }: {
   messages: readonly ChatMessage[]
-  ctx: Context
+  reflow: ReflowStore
   parentSessionId: string | undefined
   sideTitle: string
 }) {
   return (
     <div className={css.transcript}>
-      {messages.map(message => <MessageRow key={message.key} message={message} ctx={ctx} parentSessionId={parentSessionId} sideTitle={sideTitle} />)}
+      {messages.map(message => <MessageRow key={message.key} message={message} reflow={reflow} parentSessionId={parentSessionId} sideTitle={sideTitle} />)}
     </div>
   )
 }
 
-/** 回流按钮（W04）：把这条 assistant 结论以引用形态注入主会话草稿。 */
-function ReflowButton({ ctx, parentSessionId, sideTitle, text }: {
-  ctx: Context
+/** 回流按钮（W04 v2）：把这条 assistant 结论收为主会话的受控回流对象
+ *  （主 composer 上方出现「侧边回流」chip），发送时随拦截器序列化。 */
+function ReflowButton({ reflow, parentSessionId, sideTitle, text }: {
+  reflow: ReflowStore
   parentSessionId: string | undefined
   sideTitle: string
   text: string
 }) {
   useLocaleTick()
-  const [state, setState] = useState<'idle' | 'done' | 'failed'>('idle')
+  const [done, setDone] = useState(false)
   if (parentSessionId === undefined) return null
   return (
     <button
       type="button"
       className={css.reflowButton}
-      title={state === 'done' ? t('reflowDone') : state === 'failed' ? t('reflowFailed') : t('reflowToMain')}
+      title={done ? t('reflowDone') : t('reflowToMain')}
       aria-label={t('reflowToMain')}
       onClick={() => {
-        const ok = reflowToMainSession(ctx, parentSessionId, text, sideTitle)
-        setState(ok ? 'done' : 'failed')
-        window.setTimeout(() => { setState('idle') }, 1600)
+        reflow.add(parentSessionId, sideTitle, text)
+        setDone(true)
+        window.setTimeout(() => { setDone(false) }, 1600)
       }}
     >
-      {state === 'done' ? <IconCheckOutline16 size={12} /> : <IconShareOutline16 size={12} />}
+      {done ? <IconCheckOutline16 size={12} /> : <IconShareOutline16 size={12} />}
     </button>
   )
 }
 
-function MessageRow({ message, ctx, parentSessionId, sideTitle }: {
+function MessageRow({ message, reflow, parentSessionId, sideTitle }: {
   message: ChatMessage
-  ctx: Context
+  reflow: ReflowStore
   parentSessionId: string | undefined
   sideTitle: string
 }) {
@@ -312,7 +314,7 @@ function MessageRow({ message, ctx, parentSessionId, sideTitle }: {
         <div className={css.assistantRow}>
           {message.text !== '' && message.streaming !== true && (
             <div className={css.rowActions}>
-              <ReflowButton ctx={ctx} parentSessionId={parentSessionId} sideTitle={sideTitle} text={message.text} />
+              <ReflowButton reflow={reflow} parentSessionId={parentSessionId} sideTitle={sideTitle} text={message.text} />
             </div>
           )}
           <div className={css.assistantBody}>

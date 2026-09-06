@@ -102,8 +102,13 @@ export const en = {
   // 回流通道（侧边 → 主会话）
   reflowToMain: 'Send back to main session',
   reflowFrom: 'From side chat ({title}):',
-  reflowDone: 'Added to the main session draft',
-  reflowFailed: "Couldn't reach the main session's composer",
+  reflowDone: 'Added above the main composer',
+  reflowFailed: "Couldn't reach the main session",
+  reflowChipOne: '1 side-chat reflow',
+  reflowChipMany: '{n} side-chat reflows',
+  reflowReason: 'brought back from a side chat by the user',
+  reflowBubbleLabel: 'Side-chat context',
+  reflowRemoveTitle: 'Remove reflow',
 }
 
 export type CopyKey = keyof typeof en
@@ -191,8 +196,13 @@ export const zh: Record<CopyKey, string> = {
 
   reflowToMain: '回流到主会话',
   reflowFrom: '来自侧边聊天（{title}）：',
-  reflowDone: '已回流到主会话草稿',
-  reflowFailed: '主会话输入框不可达',
+  reflowDone: '已回流到主会话输入框上方',
+  reflowFailed: '主会话不可达',
+  reflowChipOne: '1 条侧边回流',
+  reflowChipMany: '{n} 条侧边回流',
+  reflowReason: '用户选择从侧边聊天带回主线',
+  reflowBubbleLabel: '含侧边回流上下文',
+  reflowRemoveTitle: '移除回流',
 }
 
 /** The DSH locale service face we consume (subset of LocaleRuntime). */

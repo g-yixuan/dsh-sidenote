@@ -9,6 +9,7 @@
  */
 import type { Context } from '../context-types.ts'
 import { attachLocale, type LocaleServiceLike } from './locales.ts'
+import { createReflowStore } from './reflow.ts'
 import { registerSideChat } from './sidechat/index.tsx'
 import { registerAnnotations } from './annotate/index.tsx'
 
@@ -17,6 +18,9 @@ export const inject = ['betterSidebar', 'sessions', 'workspaces', 'slots', 'conn
 export function apply(ctx: Context): void {
   // 跟随 DSH 通用设置里的语言（locale.preference，Host-backed，实时切换）。
   attachLocale(ctx.locale as LocaleServiceLike | undefined)
-  registerSideChat(ctx)
-  registerAnnotations(ctx)
+  // 回流 store 两个模块共享：sidechat 生产（回流按钮），annotate 消费
+  // （chip + 发送拦截器序列化）。
+  const reflow = createReflowStore()
+  registerSideChat(ctx, reflow)
+  registerAnnotations(ctx, reflow)
 }

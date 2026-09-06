@@ -17,11 +17,12 @@ import type { Context } from '../../context-types.ts'
 import { createAnnotationStore } from './model.ts'
 import { createSelectionController } from './selection.ts'
 import { AnnotateOverlay } from './overlay.tsx'
-import { createAnnotationChip } from './chip.tsx'
+import { createAnnotationChip, createReflowChip } from './chip.tsx'
 import { installSendInterceptor } from './send.ts'
 import { installBubbleSurgery } from './bubble.ts'
+import type { ReflowStore } from '../reflow.ts'
 
-export function registerAnnotations(ctx: Context): void {
+export function registerAnnotations(ctx: Context, reflow: ReflowStore): void {
   ctx.effect(() => {
     try {
       const store = createAnnotationStore()
@@ -34,8 +35,8 @@ export function registerAnnotations(ctx: Context): void {
       const root = createRoot(host)
       root.render(<AnnotateOverlay ctx={ctx} store={store} controller={controller} />)
 
-      // 发送携带：拦截器在提交瞬间把协议块拼入正文（草稿零污染）。
-      const offInterceptor = installSendInterceptor(ctx, store)
+      // 发送携带：拦截器在提交瞬间把协议块（注释 + 回流）拼入正文（草稿零污染）。
+      const offInterceptor = installSendInterceptor(ctx, store, reflow)
       // 发送后留痕：用户气泡里的协议块隐藏为「批注 ×N」标签。
       const offSurgery = installBubbleSurgery()
 
@@ -44,12 +45,22 @@ export function registerAnnotations(ctx: Context): void {
       // ui-conversation todo/queue docks register the same way)。disposer 由
       // cordis 服务代理级联进本 fiber，随 effect 撤销自动回收。
       ctx.slots.inject('conversation.input.dock', () => {
-        return ctx.slots.register({
+        const offAnnotations = ctx.slots.register({
           name: 'conversation.input.dock',
           id: 'dsh-sidenote-annotations',
           order: 10,
           registrant: 'dsh-sidenote',
         }, createAnnotationChip(store))
+        const offReflow = ctx.slots.register({
+          name: 'conversation.input.dock',
+          id: 'dsh-sidenote-reflow',
+          order: 11,
+          registrant: 'dsh-sidenote',
+        }, createReflowChip(reflow))
+        return () => {
+          offAnnotations()
+          offReflow()
+        }
       })
 
       return () => {

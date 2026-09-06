@@ -22,6 +22,7 @@
 import type { Context, ConversationService, SessionId, SessionInput } from '../../context-types.ts'
 import { buildProtocolBlock } from './format.ts'
 import type { AnnotationStore } from './model.ts'
+import { buildReflowBlock, type ReflowStore } from '../reflow.ts'
 
 /** Resolve the per-session input facade, degrading to undefined (never throws). */
 export function resolveInput(ctx: Context, sessionId: SessionId): SessionInput | undefined {
@@ -47,7 +48,7 @@ function findSendButton(seat: HTMLElement): HTMLButtonElement | null {
   return last instanceof HTMLButtonElement ? last : null
 }
 
-export function installSendInterceptor(ctx: Context, store: AnnotationStore): () => void {
+export function installSendInterceptor(ctx: Context, store: AnnotationStore, reflow: ReflowStore): () => void {
   /** 重入护栏：我们程序化 click 发送按钮会再次路过 click 监听。 */
   let committing = false
 
@@ -67,7 +68,8 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore): ()
     const sessionId = currentSessionId()
     if (sessionId === '') return false
     const active = store.listActive(sessionId)
-    if (active.length === 0) return false
+    const reflows = reflow.list(sessionId)
+    if (active.length === 0 && reflows.length === 0) return false
     const input = resolveInput(ctx, sessionId)
     if (input === undefined) return false
     const draft = input.state.getSnapshot().draft
@@ -78,9 +80,12 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore): ()
     const sendButton = findSendButton(seat)
     if (sendButton === null) return false
 
-    const block = buildProtocolBlock(active)
+    // 消息组装序：回流上下文（背景） → 注释协议块（具体锚点） → 用户正文。
+    const parts: string[] = []
+    for (const item of reflows) parts.push(buildReflowBlock(item))
+    if (active.length > 0) parts.push(buildProtocolBlock(active))
     const body = draft.trim()
-    const full = body === '' ? block : `${block}\n\n${body}`
+    const full = [...parts, ...(body === '' ? [] : [body])].join('\n\n')
     input.setDraft(full)
     committing = true
 
@@ -107,6 +112,7 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore): ()
         const nowDraft = input.state.getSnapshot().draft
         if (nowDraft.trim() === '') {
           store.markSessionSent(sessionId)
+          reflow.clearSession(sessionId)
           committing = false
           return
         }

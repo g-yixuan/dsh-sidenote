@@ -15,11 +15,10 @@
  * These are DSH-internal DOM attributes rather than a public contract — an
  * upstream redesign silently degrades the feature (no popup), never crashes.
  */
-import { truncateQuote } from './format.ts'
 
 /** One validated selection, ready for the toolbar. */
 export interface SelectionSnapshot {
-  /** Truncated quote (sent to the model / stored on the annotation). */
+  /** 引用全文（发送给模型/存储；不截断——用户裁定 2026-09-06）。 */
   readonly text: string
   /** Full selection text (re-anchor needle). */
   readonly anchorText: string
@@ -118,7 +117,7 @@ export function captureSelection(currentSessionId: string): SelectionSnapshot | 
   if (!eligible || message === null) return null
   const rect = range.getBoundingClientRect()
   return {
-    text: truncateQuote(anchorText),
+    text: anchorText,
     anchorText,
     anchorKey: anchor?.dataset.chatAnchorKey,
     occurrence: anchor === null ? 0 : occurrenceOf(anchor, range, anchorText),

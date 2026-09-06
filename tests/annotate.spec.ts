@@ -8,13 +8,9 @@ import { createAnnotationStore } from '../src/client/annotate/model.ts'
 import type { AnnotationDraft } from '../src/client/annotate/model.ts'
 import {
   PROTOCOL_HEADER_RE,
-  SELECTION_LIMIT,
-  TRUNCATION_MARK,
   buildProtocolBlock,
   buildSideChatQuote,
-  flattenQuote,
-  parseProtocolItem,
-  truncateQuote,
+  splitProtocolPrefix,
 } from '../src/client/annotate/format.ts'
 import { ASSISTANT_KIND, isEligibleSelection } from '../src/client/annotate/selection.ts'
 import { BADGE_SPREAD_STEP, spreadBadgePoint } from '../src/client/annotate/anchor.ts'
@@ -94,43 +90,57 @@ describe('annotation store', () => {
   })
 })
 
-describe('protocol block v2', () => {
-  it('truncates over-limit quotes with the truncation mark', () => {
-    const long = 'x'.repeat(SELECTION_LIMIT + 10)
-    const out = truncateQuote(long)
-    expect(out).toBe('x'.repeat(SELECTION_LIMIT) + TRUNCATION_MARK)
-    expect(truncateQuote('short')).toBe('short')
-  })
-
-  it('flattens multi-line quotes to a single line (⏎)', () => {
-    expect(flattenQuote('第一行\n第二行')).toBe('第一行⏎第二行')
-  })
-
-  it('builds header + numbered lines (model-facing wire format)', () => {
+describe('protocol block v3（XML 形态）', () => {
+  it('builds header + annotation XML blocks（无注解省略 <note>）', () => {
     const block = buildProtocolBlock([
-      { text: '原文片段 1', note: 'xxx' },
-      { text: '多行\n原文', note: '' },
+      { text: '原文片段 1', note: 'xxx', number: 1 },
+      { text: '多行\n原文', note: '', number: 2 },
     ])
     expect(block).toBe(
       'I annotated 2 passage(s) of the conversation above:\n'
-      + '1. 「原文片段 1」Note: xxx\n'
-      + '2. 「多行⏎原文」(no note)',
+      + '<annotation id="1">\n<quote>原文片段 1</quote>\n<note>xxx</note>\n</annotation>\n'
+      + '<annotation id="2">\n<quote>多行\n原文</quote>\n</annotation>',
     )
+  })
+
+  it('嵌套消歧：引用内容自身含「」/markdown 不影响解析', () => {
+    const block = buildProtocolBlock([{ text: '这里有「内层引号」和 > 引用符', note: '注', number: 3 }])
+    const msg = `${block}\n\n我的问题`
+    const parsed = splitProtocolPrefix(msg)
+    expect(parsed).not.toBeNull()
+    expect(parsed!.annotations).toHaveLength(1)
+    expect(parsed!.annotations[0]).toEqual({ id: 3, quote: '这里有「内层引号」和 > 引用符', note: '注' })
+  })
+
+  it('前缀反解析：注释+正文、正文留白边界正确', () => {
+    const block = buildProtocolBlock([{ text: 'A', note: '', number: 1 }])
+    const parsed = splitProtocolPrefix(`${block}\n\n正文内容`)
+    expect(parsed).not.toBeNull()
+    expect(parsed!.annotations).toEqual([{ id: 1, quote: 'A', note: '' }])
+    expect((`${block}\n\n正文内容`).slice(parsed!.length)).toBe('正文内容')
+  })
+
+  it('普通消息不误判', () => {
+    expect(splitProtocolPrefix('随便聊聊')).toBeNull()
+    expect(splitProtocolPrefix('我批注了以下 2 处内容：\n但没有 XML 块')).toBeNull()
+    expect(splitProtocolPrefix('')).toBeNull()
+  })
+
+  it('回流块前缀一并反解析（回流在前、注释在后）', () => {
+    const msg = '<reflow source="Side 2" reason="r">\n结论全文\n</reflow>\n\n'
+      + buildProtocolBlock([{ text: 'A', note: 'n', number: 1 }]) + '\n\n正文'
+    const parsed = splitProtocolPrefix(msg)
+    expect(parsed).not.toBeNull()
+    expect(parsed!.reflows).toEqual([{ source: 'Side 2', content: '结论全文' }])
+    expect(parsed!.annotations).toHaveLength(1)
+    expect(msg.slice(parsed!.length)).toBe('正文')
   })
 
   it('protocol header regex matches both locales, rejects lookalikes', () => {
     expect(PROTOCOL_HEADER_RE.test('我批注了以下 2 处内容：')).toBe(true)
     expect(PROTOCOL_HEADER_RE.test('I annotated 1 passage(s) of the conversation above:')).toBe(true)
-    expect(PROTOCOL_HEADER_RE.test('我批注了以下 2 处内容')).toBe(false) // 缺冒号
+    expect(PROTOCOL_HEADER_RE.test('我批注了以下 2 处内容')).toBe(false)
     expect(PROTOCOL_HEADER_RE.test('随便一句 我批注了以下 2 处内容：')).toBe(false)
-  })
-
-  it('parses protocol items back (round-trip, both locales)', () => {
-    expect(parseProtocolItem('「引用」Note: 改这里')).toEqual({ quote: '引用', note: '改这里' })
-    expect(parseProtocolItem('「引用」注解：改这里')).toEqual({ quote: '引用', note: '改这里' })
-    expect(parseProtocolItem('「引用」(no note)')).toEqual({ quote: '引用', note: '' })
-    expect(parseProtocolItem('「引用」（无注解）')).toEqual({ quote: '引用', note: '' })
-    expect(parseProtocolItem('没有括号')).toBeNull()
   })
 
   it('builds the side-chat seed as quote + note line（轻量、非协议块）', () => {
