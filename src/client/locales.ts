@@ -82,6 +82,16 @@ export const en = {
   // model-facing quote format
   noteLine: 'Note: {note}',
   noNote: '(no note)',
+  protocolHeader: 'I annotated {n} passage(s) of the conversation above:',
+
+  // sent 留痕（气泡标签 + 只读回看）
+  sentChipLabel: '{n} annotated',
+  sentBadgeTitle: 'Sent annotation {n} (view only)',
+  sentCardTitle: 'Annotation {n} (sent)',
+
+  // chip
+  clearAll: 'Clear all',
+  chipNote: ' ({note})',
 }
 
 export type CopyKey = keyof typeof en
@@ -153,6 +163,14 @@ export const zh: Record<CopyKey, string> = {
 
   noteLine: '注解：{note}',
   noNote: '（无注解）',
+  protocolHeader: '我批注了以下 {n} 处内容：',
+
+  sentChipLabel: '批注 ×{n}',
+  sentBadgeTitle: '已发送的注释 {n}（只读回看）',
+  sentCardTitle: '注释 {n}（已发送）',
+
+  clearAll: '清空全部',
+  chipNote: '（{note}）',
 }
 
 /** The DSH locale service face we consume (subset of LocaleRuntime). */

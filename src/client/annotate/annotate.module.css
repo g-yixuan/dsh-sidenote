@@ -346,3 +346,74 @@
   font-size: 12px;
   white-space: nowrap;
 }
+
+/* chip 展开面板的「清空全部」行。 */
+.chipClearAll {
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #8f959e);
+  font-size: 12px;
+  line-height: 18px;
+  padding: 2px 6px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.chipClearAll:hover {
+  color: var(--dsw-alias-state-error-primary, #d53f3f);
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.04));
+}
+
+/* sent 态角标：灰底只读（resolve 语义——已随消息发出，仅可回看）。 */
+.badgeSent {
+  background: var(--dsw-alias-label-caption, #8f959e);
+  box-shadow: none;
+  opacity: 0.75;
+}
+
+.badgeSent:hover {
+  background: var(--dsw-alias-label-tertiary, #6b7075);
+}
+
+/* 已发消息气泡里的「批注 ×N」留痕标签（气泡手术注入）。 */
+.sentChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 6px;
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.1));
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+  color: var(--dsw-alias-label-secondary, #3f454d);
+  font-size: 12px;
+  line-height: 18px;
+  padding: 1px 10px;
+  cursor: default;
+  user-select: none;
+}
+
+/* sent 只读回看卡片（复用 editorEdit 外壳，内部是静态文本）。 */
+.sentCardTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-tertiary, #8f959e);
+  padding: 2px 12px 0;
+}
+
+.sentCardQuote {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary, #3f454d);
+  padding: 4px 12px;
+  border-left: 2px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.12));
+  margin: 4px 12px 0;
+  word-break: break-word;
+}
+
+.sentCardNote {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary, #1f2329);
+  padding: 4px 12px 10px;
+  word-break: break-word;
+}

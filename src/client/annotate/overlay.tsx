@@ -180,17 +180,25 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
     return ok
   }
 
-  const reopenEditor = (annotation: Annotation, point: { x: number; y: number }): void => {
+  // sent 态注释的只读回看卡片（角标灰态点开的落点）。
+  const [viewer, setViewer] = useState<{ annotationId: number; x: number; y: number } | null>(null)
+
+  const reopenAnnotation = (annotation: Annotation, point: { x: number; y: number }): void => {
+    if (annotation.state === 'sent') {
+      setViewer({ annotationId: annotation.id, x: point.x, y: point.y })
+      return
+    }
     setEditor({ annotationId: annotation.id, mode: 'edit', x: point.x, y: point.y })
   }
 
   const closeEditor = (): void => setEditor(null)
 
   const editingAnnotation = editor === null ? undefined : store.get(editor.annotationId)
+  const viewingAnnotation = viewer === null ? undefined : store.get(viewer.annotationId)
 
   return (
     <>
-      {selection !== null && editor === null && sideDraft === null && (
+      {selection !== null && editor === null && sideDraft === null && viewer === null && (
         <SelectionToolbar
           snapshot={selection}
           sideChatAvailable={sideChatBridge.current !== null}
@@ -202,8 +210,8 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
         store={store}
         sessionId={currentSessionId}
         cache={rangeCache.current}
-        editingId={editor?.annotationId ?? null}
-        onOpen={reopenEditor}
+        editingId={editor?.annotationId ?? viewer?.annotationId ?? null}
+        onOpen={reopenAnnotation}
       />
       {editingAnnotation !== undefined && editor !== null && (
         <AnnotationEditor
@@ -239,7 +247,60 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
           onCancel={() => { setSideDraft(null) }}
         />
       )}
+      {viewingAnnotation !== undefined && viewer !== null && (
+        <SentViewer
+          annotation={viewingAnnotation}
+          x={viewer.x}
+          y={viewer.y}
+          onClose={() => { setViewer(null) }}
+        />
+      )}
     </>
+  )
+}
+
+/** sent 态注释的只读回看卡片（引用 + 注解，无编辑按钮；Esc/外点关闭）。 */
+function SentViewer(props: {
+  annotation: Annotation
+  x: number
+  y: number
+  onClose: () => void
+}): ReactNode {
+  useLocaleTick()
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        props.onClose()
+      }
+    }
+    const onMouseDown = (event: MouseEvent): void => {
+      const root = rootRef.current
+      if (root === null || !(event.target instanceof Node)) return
+      if (root.contains(event.target)) return
+      if (event.target instanceof Element && event.target.closest('[data-dsh-sidenote]') !== null) return
+      props.onClose()
+    }
+    document.addEventListener('keydown', onKeyDown, true)
+    document.addEventListener('mousedown', onMouseDown, true)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true)
+      document.removeEventListener('mousedown', onMouseDown, true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const width = 320
+  const left = Math.max(8, Math.min(window.innerWidth - width - 8, props.x + 16))
+  const top = Math.max(8, Math.min(window.innerHeight - 120, props.y - 20))
+
+  return (
+    <div ref={rootRef} className={css.editorEdit} style={{ left, top, width }}>
+      <div className={css.sentCardTitle}>{t('sentCardTitle', { n: props.annotation.number })}</div>
+      <div className={css.sentCardQuote}>{props.annotation.text}</div>
+      {props.annotation.note !== '' && <div className={css.sentCardNote}>{props.annotation.note}</div>}
+    </div>
   )
 }
 
@@ -425,9 +486,11 @@ function BadgeLayer(props: {
       <button
         key={annotation.id}
         type="button"
-        className={css.badge}
+        className={annotation.state === 'sent' ? `${css.badge} ${css.badgeSent}` : css.badge}
         style={{ left: point.x + 6, top: point.y }}
-        title={annotation.note === '' ? annotation.text : `${annotation.text}\n${t('noteLine', { note: annotation.note })}`}
+        title={annotation.state === 'sent'
+          ? t('sentBadgeTitle', { n: annotation.number })
+          : annotation.note === '' ? annotation.text : `${annotation.text}\n${t('noteLine', { note: annotation.note })}`}
         onClick={(event) => {
           event.preventDefault()
           event.stopPropagation()

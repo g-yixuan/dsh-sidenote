@@ -225,7 +225,7 @@ async function injectSelection(page: Page): Promise<void> {
   expect(ok, '未能在 assistant 消息上注入选区（DOM 契约漂移？）').toBe(true)
 }
 
-test('annotate journey: 划选 → 浮层 → 注解编辑器 → 角标 → chip → 草稿前缀', async ({ page }) => {
+test('annotate journey: 划选 → 浮层 → 注解编辑器 → 角标 → chip（草稿零污染）→ 刷新恢复', async ({ page }) => {
   test.skip(!process.env.DSH_E2E_SEED_SESSION, 'no seeded session id')
   const pageErrors: string[] = []
   const consoleErrors: string[] = []
@@ -256,14 +256,20 @@ test('annotate journey: 划选 → 浮层 → 注解编辑器 → 角标 → chi
   await expect(page.getByText('1 annotation').first(), 'composer chip 未出现').toBeVisible({ timeout: 10_000 })
   await dumpStep(page, '08-chip')
 
-  // 发送携带：主输入框草稿应含引用块（受管前缀）。主 composer 可能是
-  // textarea 或 contenteditable，两种读法都试。
+  // 受控架构（Delivery_02）：草稿**不被污染**（注释不进草稿文本流）。
+  // 主 composer 可能是 textarea 或 contenteditable，两种读法都试。
   const composer = page.getByRole('textbox', { name: /Message the agent|输入消息|随心输入/ }).first()
   const draft = await composer.evaluate((el) => (
     el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.value : (el.textContent ?? '')
   ))
-  expect(draft, '草稿缺少引用块前缀').toContain('full history snapshot')
-  expect(draft).toContain('watch the memory cost')
+  expect(draft, '草稿被协议文本污染（受控架构要求草稿无引用块）').not.toContain('watch the memory cost')
+  expect(draft).not.toContain('annotated')
+
+  // 持久化（Delivery_02）：刷新后角标 + chip 从 localStorage 恢复。
+  await page.reload()
+  await expect(overlay.getByText('1', { exact: true }).first(), '刷新后角标未恢复').toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('1 annotation').first(), '刷新后 chip 未恢复').toBeVisible({ timeout: 10_000 })
+  await dumpStep(page, '08b-restored-after-reload')
 
   expect(pageErrors, 'pageerrors during annotate journey').toEqual([])
   expect(consoleErrors.filter((t) => PLUGIN_CONSOLE.test(t)), 'plugin console errors').toEqual([])
@@ -363,8 +369,7 @@ test('annotation manage: 双注释编号不重排 + 重开编辑 + chip 逐条�
   await overlay.locator('button[aria-label="Save note"]').click()
   await expect(overlay.getByRole('button', { name: '1', exact: true }), '角标 1 未出现').toBeVisible({ timeout: 10_000 })
 
-  // 注释 2（空注解）——草稿前缀变长会把消息顶出视口，角标按视口裁剪消失，
-  // 断言前先把消息滚回顶部。
+  // 注释 2（空注解）——先把消息滚回顶部再断言角标（视口裁剪纪律）。
   await injectSelection(page)
   await overlay.getByText('Add to conversation').click()
   await overlay.locator('button[aria-label="Save note"]').click()

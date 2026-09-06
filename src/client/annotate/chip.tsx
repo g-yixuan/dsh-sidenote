@@ -1,17 +1,17 @@
 /**
- * The 「N 条注释」 composer chip (Workitem 02): a `conversation.input.dock`
+ * The 「N 条注释」 composer chip (Delivery_02 重构): a `conversation.input.dock`
  * list entry (the official composer-attachment seat; todo dock lives at order
  * 0, the queue strip at 20 — we sit between at 10). The chip counts the
- * session's ACTIVE annotations, expands inline to preview/remove each one,
- * and watches the owner-provided input snapshot for the send edge (draft
- * non-empty → empty) to flip the annotations to 'sent' — the chip then
- * disappears while the badges stay on the message flow.
+ * session's ACTIVE annotations and expands inline to preview/remove each one.
+ *
+ * 架构分工：chip 只呈现与增删注释对象；发送携带由 send.ts 拦截器负责
+ * （协议块在提交瞬间拼入，草稿不再被污染），sent 迁移也由拦截器显式触发
+ * ——chip 不再监听草稿发送沿。
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { IconCloseOutline16, IconListPenOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InputZone } from '../../context-types.ts'
-import { isSendEdge } from './format.ts'
 import type { AnnotationStore } from './model.ts'
 import { t, useLocaleTick } from '../locales.ts'
 import { AnnotateErrorBoundary } from './overlay.tsx'
@@ -57,36 +57,10 @@ export function createAnnotationChip(store: AnnotationStore) {
       }
     }, [expanded])
 
-    // 发送沿检测：草稿非空→空 且 伴随机器信号（提交相位/队列增长/running 启
-    // 动）——纯「草稿清空」不算发送（用户手动全选删除满足前者，但没有机器信
-    // 号，注释不应被误归档为已发送）。
-    // owner share 是 point-in-time 快照、由骨架负责重渲染——禁止订阅，只在
-    // effect 里比边沿。会话切换不重置：仅当两次渲染属于同一会话时才比较。
-    const previous = useRef({
-      sessionId,
-      draft: props.input.draft,
-      phase: props.input.phase,
-      queueLen: props.input.queue?.length ?? 0,
-      running: props.session.running,
-    })
+    // 会话切换时收起展开态（slot 组件实例不随会话切换重建）。
     useEffect(() => {
-      const prev = previous.current
-      previous.current = {
-        sessionId,
-        draft: props.input.draft,
-        phase: props.input.phase,
-        queueLen: props.input.queue?.length ?? 0,
-        running: props.session.running,
-      }
-      if (prev.sessionId !== sessionId) return
-      if (store.countActive(sessionId) === 0) return
-      if (!isSendEdge(prev.draft, props.input.draft)) return
-      const machineSignal = prev.phase !== 'plain'
-        || (props.input.queue?.length ?? 0) > prev.queueLen
-        || (props.session.running && !prev.running)
-      if (!machineSignal) return
-      store.markSessionSent(sessionId)
-    })
+      setExpanded(false)
+    }, [sessionId])
 
     const active = store.listActive(sessionId)
     if (active.length === 0) return null
@@ -109,7 +83,7 @@ export function createAnnotationChip(store: AnnotationStore) {
                 <span className={css.chipNumber}>{annotation.number}</span>
                 <span className={css.chipText} title={annotation.text}>
                   {annotation.text}
-                  {annotation.note !== '' && <span className={css.chipNote}>（{annotation.note}）</span>}
+                  {annotation.note !== '' && <span className={css.chipNote}>{t('chipNote', { note: annotation.note })}</span>}
                 </span>
                 <button
                   type="button"
@@ -122,6 +96,15 @@ export function createAnnotationChip(store: AnnotationStore) {
                 </button>
               </li>
             ))}
+            <li className={css.chipRow}>
+              <button
+                type="button"
+                className={css.chipClearAll}
+                onClick={() => { for (const a of active) store.remove(a.id) }}
+              >
+                {t('clearAll')}
+              </button>
+            </li>
           </ul>
         )}
       </div>

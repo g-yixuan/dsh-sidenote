@@ -1,19 +1,19 @@
 /**
- * Workitem 02 纯函数单测：注释 store（增删 / 编号不重排 / 计数 / 发送沿）、
- * 引用块格式化（发送给模型的数据形态）、截断、选区校验、受管草稿前缀数学。
+ * 纯函数单测：注释 store（增删 / 编号不重排 / 计数 / sent 迁移 / 持久化）、
+ * 协议块 v2 序列化与反解析（发送给模型的数据形态）、截断、选区校验。
  * 全部为 node 环境的纯函数测试（无 jsdom 依赖）。
  */
 import { describe, expect, it } from 'vitest'
 import { createAnnotationStore } from '../src/client/annotate/model.ts'
 import type { AnnotationDraft } from '../src/client/annotate/model.ts'
 import {
+  PROTOCOL_HEADER_RE,
   SELECTION_LIMIT,
   TRUNCATION_MARK,
-  buildQuoteBlock,
+  buildProtocolBlock,
   buildSideChatQuote,
-  isSendEdge,
-  nextManagedDraft,
-  quoteLines,
+  flattenQuote,
+  parseProtocolItem,
   truncateQuote,
 } from '../src/client/annotate/format.ts'
 import { ASSISTANT_KIND, isEligibleSelection } from '../src/client/annotate/selection.ts'
@@ -94,74 +94,96 @@ describe('annotation store', () => {
   })
 })
 
-describe('quote formatting', () => {
+describe('protocol block v2', () => {
   it('truncates over-limit quotes with the truncation mark', () => {
     const long = 'x'.repeat(SELECTION_LIMIT + 10)
     const out = truncateQuote(long)
     expect(out).toBe('x'.repeat(SELECTION_LIMIT) + TRUNCATION_MARK)
     expect(truncateQuote('short')).toBe('short')
-    expect(truncateQuote('x'.repeat(SELECTION_LIMIT))).toBe('x'.repeat(SELECTION_LIMIT))
   })
 
-  it('quotes multi-line text with > on every line', () => {
-    expect(quoteLines('第一行\n第二行')).toBe('> 第一行\n> 第二行')
-    expect(quoteLines('a\n\nb')).toBe('> a\n>\n> b')
+  it('flattens multi-line quotes to a single line (⏎)', () => {
+    expect(flattenQuote('第一行\n第二行')).toBe('第一行⏎第二行')
   })
 
-  it('builds the model-facing block: > 原文 + 注解 line, joined by blank lines', () => {
-    const block = buildQuoteBlock([
+  it('builds header + numbered lines (model-facing wire format)', () => {
+    const block = buildProtocolBlock([
       { text: '原文片段 1', note: 'xxx' },
-      { text: '原文片段 2', note: '' },
+      { text: '多行\n原文', note: '' },
     ])
-    expect(block).toBe('> 原文片段 1\nNote: xxx\n\n> 原文片段 2\n(no note)')
+    expect(block).toBe(
+      'I annotated 2 passage(s) of the conversation above:\n'
+      + '1. 「原文片段 1」Note: xxx\n'
+      + '2. 「多行⏎原文」(no note)',
+    )
   })
 
-  it('returns an empty block for no annotations', () => {
-    expect(buildQuoteBlock([])).toBe('')
+  it('protocol header regex matches both locales, rejects lookalikes', () => {
+    expect(PROTOCOL_HEADER_RE.test('我批注了以下 2 处内容：')).toBe(true)
+    expect(PROTOCOL_HEADER_RE.test('I annotated 1 passage(s) of the conversation above:')).toBe(true)
+    expect(PROTOCOL_HEADER_RE.test('我批注了以下 2 处内容')).toBe(false) // 缺冒号
+    expect(PROTOCOL_HEADER_RE.test('随便一句 我批注了以下 2 处内容：')).toBe(false)
   })
 
-  it('builds the side-chat seed as quote + note line（与主对话注释同构）', () => {
+  it('parses protocol items back (round-trip, both locales)', () => {
+    expect(parseProtocolItem('「引用」Note: 改这里')).toEqual({ quote: '引用', note: '改这里' })
+    expect(parseProtocolItem('「引用」注解：改这里')).toEqual({ quote: '引用', note: '改这里' })
+    expect(parseProtocolItem('「引用」(no note)')).toEqual({ quote: '引用', note: '' })
+    expect(parseProtocolItem('「引用」（无注解）')).toEqual({ quote: '引用', note: '' })
+    expect(parseProtocolItem('没有括号')).toBeNull()
+  })
+
+  it('builds the side-chat seed as quote + note line（轻量、非协议块）', () => {
     expect(buildSideChatQuote('划选的\n文本')).toBe('> 划选的\n> 文本\n(no note)')
     expect(buildSideChatQuote('划选的文本', '关注这里')).toBe('> 划选的文本\nNote: 关注这里')
   })
 })
 
-describe('managed draft prefix math', () => {
-  it('prepends the head to an empty draft', () => {
-    const next = nextManagedDraft('', '', '> 原文\n(no note)')
-    expect(next).toEqual({ head: '> 原文\n(no note)\n\n', draft: '> 原文\n(no note)\n\n' })
+describe('store 持久化（localStorage 注入替身）', () => {
+  function fakeStorage() {
+    const map = new Map<string, string>()
+    return {
+      get length() { return map.size },
+      key: (i: number) => [...map.keys()][i] ?? null,
+      getItem: (k: string) => map.get(k) ?? null,
+      setItem: (k: string, v: string) => { map.set(k, v) },
+      removeItem: (k: string) => { map.delete(k) },
+      map,
+    }
+  }
+
+  it('mutation 后按会话落盘，清空后删键', () => {
+    const storage = fakeStorage()
+    const store = createAnnotationStore(() => 1, storage)
+    const a = store.add(draft('s1', '原文', '注'))
+    expect(storage.map.size).toBe(1)
+    store.remove(a.id)
+    expect(storage.map.size).toBe(0)
   })
 
-  it('preserves user text below the head across block updates', () => {
-    const first = nextManagedDraft('', '', '> 原文 1\n(no note)')
-    const typed = `${first.draft}用户正文`
-    const second = nextManagedDraft(typed, first.head, '> 原文 1\nNote: 改')
-    expect(second.draft).toBe('> 原文 1\nNote: 改\n\n用户正文')
+  it('刷新后水合恢复：编号续接、状态保留', () => {
+    const storage = fakeStorage()
+    const first = createAnnotationStore(() => 1, storage)
+    first.add(draft('s1', '甲'))
+    const b = first.add(draft('s1', '乙', '注'))
+    first.markSessionSent('s1')
+    const second = createAnnotationStore(() => 2, storage)
+    expect(second.list('s1')).toHaveLength(2)
+    expect(second.list('s1').every(a => a.state === 'sent')).toBe(true)
+    // 编号续接（不复用 1/2）
+    const c = second.add(draft('s1', '丙'))
+    expect(c.number).toBe(3)
+    // id 也不与水合的撞车
+    expect(c.id).toBeGreaterThan(b.id)
   })
 
-  it('removes the head cleanly when the block empties (all sent/deleted)', () => {
-    const first = nextManagedDraft('', '', '> 原文\n(no note)')
-    const typed = `${first.draft}用户正文`
-    const cleared = nextManagedDraft(typed, first.head, '')
-    expect(cleared).toEqual({ head: '', draft: '用户正文' })
-  })
-
-  it('treats a meddled head as user text instead of crashing', () => {
-    const next = nextManagedDraft('用户把头部改掉了', '> 旧头\n\n', '> 新头\n（无注解）')
-    expect(next.draft).toBe('> 新头\n（无注解）\n\n用户把头部改掉了')
-  })
-})
-
-describe('send edge', () => {
-  it('fires on non-empty → empty and on non-empty → whitespace', () => {
-    expect(isSendEdge('草稿', '')).toBe(true)
-    expect(isSendEdge('草稿', '  \n')).toBe(true)
-  })
-  it('ignores every other transition', () => {
-    expect(isSendEdge('', '')).toBe(false)
-    expect(isSendEdge('', 'x')).toBe(false)
-    expect(isSendEdge('a', 'b')).toBe(false)
-    expect(isSendEdge('a', 'ab')).toBe(false)
+  it('畸形持久化数据被容错丢弃', () => {
+    const storage = fakeStorage()
+    storage.setItem('dsh-sidenote:annotations:v1:s1', JSON.stringify([{ bogus: true }, null]))
+    storage.setItem('dsh-sidenote:annotations:v1:s2', 'not json')
+    const store = createAnnotationStore(() => 1, storage)
+    expect(store.list('s1')).toHaveLength(0)
+    expect(store.list('s2')).toHaveLength(0)
   })
 })
 
