@@ -16,7 +16,8 @@
  * 对象会清缓存）。
  */
 import type { ComponentProps } from 'react'
-import { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
+// type-only：值导入会把 katex CSS 拉进 node 测试环境（vitest 无法加载 .css）。
+import type { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import { t } from './locales.ts'
 
 interface MarkdownChrome {
