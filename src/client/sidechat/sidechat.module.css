@@ -4,6 +4,7 @@
  * 不做任何每皮肤适配、不写死颜色。
  */
 .root {
+  position: relative; /* jumpBottom 浮动按钮的定位锚 */
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -346,4 +347,45 @@
   border-top: 1px dashed var(--dsw-alias-border-l2);
   padding: 6px 0 2px;
   opacity: 0.92;
+}
+
+/* P1-4 密度管理 */
+.densityRow {
+  display: flex;
+  justify-content: flex-end;
+  padding: 2px 2px 4px;
+}
+
+.densityToggle {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.densityToggle:hover {
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.jumpBottom {
+  position: absolute;
+  right: 12px;
+  bottom: 96px;
+  z-index: 5;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.jumpBottom:hover {
+  background: var(--dsw-alias-bg-layer-2);
 }

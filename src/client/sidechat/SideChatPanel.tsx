@@ -143,14 +143,25 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
     // pendingDraft/相位变化时真正动作（清除后 pendingDraft 为 undefined，幂等）。
   }, [pendingDraft, phase, ctx, tab.id])
 
-  // 新消息到底自动滚动（窄栏面板，不做「接近底部才跟」的判定）。
-  // tailKey 并入 reasoning 长度：纯思考流式增长（text 为空）也要跟滚。
+  // 新消息自动跟滚：仅在用户本就在底部附近时跟（读历史时不被拽走——
+  // Copilot #1167 滚动重置是用户恨点）；离开底部时浮「跳到最新」按钮。
   const bodyRef = useRef<HTMLDivElement>(null)
+  const [nearBottom, setNearBottom] = useState(true)
   const tailKey = messages.length === 0 ? '' : `${messages[messages.length - 1]!.key}:${messages[messages.length - 1]!.text.length}:${messages[messages.length - 1]!.reasoning?.length ?? 0}`
   useEffect(() => {
     const el = bodyRef.current
-    if (el !== null && visible) el.scrollTop = el.scrollHeight
-  }, [tailKey, visible])
+    if (el !== null && visible && nearBottom) el.scrollTop = el.scrollHeight
+  }, [tailKey, visible, nearBottom])
+  const onBodyScroll = useCallback(() => {
+    const el = bodyRef.current
+    if (el === null) return
+    setNearBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80)
+  }, [])
+  const jumpToLatest = useCallback(() => {
+    const el = bodyRef.current
+    if (el !== null) el.scrollTop = el.scrollHeight
+    setNearBottom(true)
+  }, [])
 
   if (phase === 'fork-error') {
     return (
@@ -179,12 +190,17 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
 
   return (
     <div ref={rootRef} className={css.root}>
-      <div ref={bodyRef} className={css.body}>
+      <div ref={bodyRef} className={css.body} onScroll={onBodyScroll}>
         {messages.length === 0 && !running
           ? <EmptyState />
           : <MessageList messages={messages} fold={fold} boundarySeq={meta.boundarySeq} reflow={props.reflow} parentSessionId={meta.parentSessionId} sideTitle={tab.title} />}
         {openFailed && <div className={css.errorRow}>{t('historyFailed')}</div>}
       </div>
+      {!nearBottom && (
+        <button type="button" className={css.jumpBottom} onClick={jumpToLatest}>
+          {t('jumpToLatest')}
+        </button>
+      )}
       <ComposerBar ctx={ctx} session={session} composer={composer} running={running} visible={visible} modelName={modelName} />
     </div>
   )
@@ -232,8 +248,28 @@ function MessageList({ messages, fold, boundarySeq, reflow, parentSessionId, sid
   const renderRow = (message: ChatMessage) => (
     <MessageRow key={message.key} message={message} question={questions.get(message.key)} fold={fold} reflow={reflow} parentSessionId={parentSessionId} sideTitle={sideTitle} />
   )
+  // P1-4 密度管理：≥2 个可折叠项时出现「全部折叠/展开」开关（FoldCard/工具卡/
+  // 思考块全部折叠态外置在 fold store，一键收敛长工具流）。
+  const foldableKeys = useMemo(() => {
+    const keys: string[] = []
+    if (inherited.length > 0) keys.push('inherited')
+    for (const m of messages) {
+      if (m.card !== undefined) keys.push(m.key)
+      if (m.reasoning !== undefined && m.reasoning !== '') keys.push(`${m.key}:thinking`)
+    }
+    return keys
+  }, [messages, inherited.length])
+  useSyncExternalStore(useCallback((fn: () => void) => fold.subscribe(fn), [fold]), () => fold.getSnapshot())
+  const anyOpen = foldableKeys.some(k => fold.isOpen(k))
   return (
     <div className={css.transcript}>
+      {foldableKeys.length >= 2 && (
+        <div className={css.densityRow}>
+          <button type="button" className={css.densityToggle} onClick={() => { fold.setAll(foldableKeys, !anyOpen) }}>
+            {anyOpen ? t('collapseAll') : t('expandAll')}
+          </button>
+        </div>
+      )}
       {inherited.length > 0 && (
         <FoldCard count={inherited.length} rowKey="inherited" fold={fold}>
           {inherited.map(renderRow)}

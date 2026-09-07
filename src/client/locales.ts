@@ -121,6 +121,11 @@ export const en = {
 
   // D1 父历史折叠卡
   inheritedLabel: 'Inherited from main session · up to the fork point · {n}',
+
+  // P1-4 密度管理
+  collapseAll: 'Collapse all',
+  expandAll: 'Expand all',
+  jumpToLatest: '↓ Jump to latest',
 }
 
 export type CopyKey = keyof typeof en
@@ -226,6 +231,10 @@ export const zh: Record<CopyKey, string> = {
   termExpandAria: '展开全部（隐藏 {n} 行）',
 
   inheritedLabel: '继承自主会话 · 截至 fork 点 · {n} 条',
+
+  collapseAll: '全部折叠',
+  expandAll: '全部展开',
+  jumpToLatest: '↓ 跳到最新',
 }
 
 /** The DSH locale service face we consume (subset of LocaleRuntime). */
