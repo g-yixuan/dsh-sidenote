@@ -92,6 +92,16 @@ export interface ProtocolPrefix {
 const ANNOTATION_RE = /<annotation id="(\d+)">\s*<quote>([\s\S]*?)<\/quote>\s*(?:<note>([\s\S]*?)<\/note>\s*)?<\/annotation>/y
 const REFLOW_RE = /<reflow\s+source="([^"]*)"(?:\s+reason="([^"]*)")?\s*>([\s\S]*?)<\/reflow>/y
 
+/**
+ * 气泡 tooltip / 面板留痕 chip 的展示拍平：剥掉 <问>/<答> 协议标签只留内容行
+ * （协议标签是 wire 形态，不出现在 UI）。仅用于 title 悬浮文案。
+ */
+export function flattenReflowContent(content: string): string {
+  return content
+    .replace(/<问>([\s\S]*?)<\/问>/g, '$1')
+    .replace(/<答>([\s\S]*?)<\/答>/g, '$1')
+}
+
 /** 跳过空白（含换行），返回新位置。 */
 function skipBlank(text: string, pos: number): number {
   while (pos < text.length && /\s/.test(text[pos]!)) pos += 1

@@ -4,8 +4,8 @@
  * 发送瞬间由 annotate/send.ts 拦截器与注释协议块一起序列化进消息。
  * 不经草稿文本流（用户裁定：直接进草稿「很脏」）。
  *
- * 气泡留痕：序列化形态是**单块 blockquote**（首行为来源说明），bubble.ts
- * 按首行标记识别并整块折叠为「含侧边回流上下文」标签。
+ * 气泡留痕：序列化形态是 XML 协议块（见 buildReflowBlock），随注释协议块
+ * 一起作为消息连续前缀注入，bubble.ts 反解析后折叠为「含侧边回流上下文」标签。
  *
  * 持久化：localStorage 按会话键（dsh-sidenote:reflow:v1:<sessionId>），
  * 与注释 store 同款纪律（刷新不丢、容错 revive、空删键）。
@@ -20,15 +20,17 @@ export interface ReflowItem {
   readonly sessionId: string
   /** 来源侧边聊天 Tab 标题（「侧边 2」）。 */
   readonly sideTitle: string
-  /** 结论内容（截断后）。 */
+  /** 结论内容（assistant 回答全文，不截断）。 */
   readonly text: string
+  /** 该回答对应的用户提问（问答成对回流；缺省 = 无，如 fork 历史里的消息）。 */
+  readonly question?: string
   readonly createdAt: number
 }
 
 export interface ReflowStore {
   getSnapshot(): number
   subscribe(fn: () => void): () => void
-  add(sessionId: string, sideTitle: string, text: string): ReflowItem
+  add(sessionId: string, sideTitle: string, text: string, question?: string): ReflowItem
   remove(id: number): void
   /** 发送确认后清空该会话的待回流集（一次性消费）。 */
   clearSession(sessionId: string): void
@@ -41,14 +43,21 @@ const STORAGE_PREFIX = 'dsh-sidenote:reflow:v1:'
  * 回流块序列化（XML 形态，与注释协议同族）：
  *
  *   <reflow source="侧边 2" reason="用户选择从侧边聊天带回主线">
- *   结论全文（不截断）
+ *   <问>用户在侧边聊天里的提问</问>
+ *   <答>结论全文（不截断）</答>
  *   </reflow>
  *
+ * 问答成对：只有答没有问，模型理解打折；question 缺省时只有 <答>。
  * 来源与意图放在属性里，内容行保持纯净；模型对 XML 包裹的上下文理解最好
  * （Claude 官方推荐形态 / Codex additionalContext 同款思路）。
  */
 export function buildReflowBlock(item: ReflowItem): string {
-  return `<reflow source="${item.sideTitle}" reason="${t('reflowReason')}">\n${item.text}\n</reflow>`
+  const parts: string[] = []
+  if (item.question !== undefined && item.question.trim() !== '') {
+    parts.push(`<问>${item.question}</问>`)
+  }
+  parts.push(`<答>${item.text}</答>`)
+  return `<reflow source="${item.sideTitle}" reason="${t('reflowReason')}">\n${parts.join('\n')}\n</reflow>`
 }
 
 function revive(value: unknown): ReflowItem | null {
@@ -61,6 +70,7 @@ function revive(value: unknown): ReflowItem | null {
     sessionId: r.sessionId,
     sideTitle: r.sideTitle,
     text: r.text,
+    ...(typeof r.question === 'string' && r.question.trim() !== '' ? { question: r.question } : {}),
     createdAt: typeof r.createdAt === 'number' ? r.createdAt : 0,
   }
 }
@@ -123,9 +133,15 @@ export function createReflowStore(
       listeners.add(fn)
       return () => { listeners.delete(fn) }
     },
-    add(sessionId, sideTitle, text) {
+    add(sessionId, sideTitle, text, question) {
       const item: ReflowItem = {
-        id: nextId, sessionId, sideTitle, text, createdAt: now(),
+        id: nextId,
+        sessionId,
+        sideTitle,
+        text,
+        // 问答成对：空串/全空白视为无提问（缺省语义同未传）。
+        ...(typeof question === 'string' && question.trim() !== '' ? { question } : {}),
+        createdAt: now(),
       }
       nextId += 1
       items = [...items, item]

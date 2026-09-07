@@ -10,6 +10,7 @@
  *   lib/types/client/sessions/conversation.d.ts）。
  */
 import type { ConversationSnapshot, Context, SidebarTab } from '../../context-types.ts'
+import { splitProtocolPrefix } from '../annotate/format.ts'
 import { t } from '../locales.ts'
 
 /** Tab 类型 id（better-sidebar 注册表键；带包前缀防冲突）。 */
@@ -164,6 +165,29 @@ export function appendDraftText(draft: string, text: string): string {
 }
 
 // ── 会话快照 → 消息流折叠 ────────────────────────────────────────────────────
+
+/**
+ * 回流「问答成对」的数据源：为每条 assistant 消息配对它在回答的用户提问。
+ * 顺序扫描消息流，记录最近一条用户消息的可见文本（剥掉注释/回流协议前缀——
+ * fork 历史里的主会话消息可能携带），其后每条非流式 assistant 消息都配对到它；
+ * 中间的 tool/notice 节点不打断配对。此前没有用户提问（如 fork 历史结尾
+ * 恰是 assistant）则不配对，回流块退化为只有 <答>。
+ * 返回 Map：assistant 消息 key → 提问全文。
+ */
+export function pairQuestions(messages: readonly ChatMessage[]): ReadonlyMap<string, string> {
+  const pairs = new Map<string, string>()
+  let pending: string | undefined
+  for (const message of messages) {
+    if (message.role === 'user') {
+      const proto = splitProtocolPrefix(message.text)
+      const visible = (proto === null ? message.text : message.text.slice(proto.length)).trim()
+      pending = visible === '' ? undefined : visible
+    } else if (message.role === 'assistant' && message.streaming !== true && pending !== undefined) {
+      pairs.set(message.key, pending)
+    }
+  }
+  return pairs
+}
 
 /** 面板渲染用的消息视图（自绘；工具卡片等复杂节点降级为简洁块）。 */
 export interface ChatMessage {

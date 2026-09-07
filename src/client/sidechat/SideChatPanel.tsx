@@ -21,9 +21,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { IconCheckOutline16, IconNewChatOutline16, IconSendOutline16, IconShareOutline16, IconStopFill16, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context, SessionFace, TabComponentProps } from '../../context-types.ts'
 import { useComposer, type Composer } from './composer.ts'
-import { clearPendingDraft, parseSideChatMeta, phaseOf, transcriptOf, type ChatMessage } from './model.ts'
+import { clearPendingDraft, pairQuestions, parseSideChatMeta, phaseOf, transcriptOf, type ChatMessage } from './model.ts'
 import { readTab } from './open.ts'
-import { splitProtocolPrefix } from '../annotate/format.ts'
+import { flattenReflowContent, splitProtocolPrefix } from '../annotate/format.ts'
 import type { ReflowStore } from '../reflow.ts'
 import { t, useLocaleTick } from '../locales.ts'
 import css from './sidechat.module.css'
@@ -261,20 +261,24 @@ function MessageList({ messages, reflow, parentSessionId, sideTitle }: {
   parentSessionId: string | undefined
   sideTitle: string
 }) {
+  // 问答成对：每条 assistant 消息配对它在回答的用户提问（回流时带上）。
+  const questions = useMemo(() => pairQuestions(messages), [messages])
   return (
     <div className={css.transcript}>
-      {messages.map(message => <MessageRow key={message.key} message={message} reflow={reflow} parentSessionId={parentSessionId} sideTitle={sideTitle} />)}
+      {messages.map(message => <MessageRow key={message.key} message={message} question={questions.get(message.key)} reflow={reflow} parentSessionId={parentSessionId} sideTitle={sideTitle} />)}
     </div>
   )
 }
 
 /** 回流按钮（W04 v2）：把这条 assistant 结论收为主会话的受控回流对象
- *  （主 composer 上方出现「侧边回流」chip），发送时随拦截器序列化。 */
-function ReflowButton({ reflow, parentSessionId, sideTitle, text }: {
+ *  （主 composer 上方出现「侧边回流」chip），发送时随拦截器序列化。
+ *  问答成对：带上它回答的那条用户提问（question 缺省时只有 <答>）。 */
+function ReflowButton({ reflow, parentSessionId, sideTitle, text, question }: {
   reflow: ReflowStore
   parentSessionId: string | undefined
   sideTitle: string
   text: string
+  question?: string
 }) {
   useLocaleTick()
   const [done, setDone] = useState(false)
@@ -289,7 +293,7 @@ function ReflowButton({ reflow, parentSessionId, sideTitle, text }: {
       title={done ? t('reflowDone') : t('reflowToMain')}
       aria-label={t('reflowToMain')}
       onClick={() => {
-        reflow.add(parentSessionId, sideTitle, text)
+        reflow.add(parentSessionId, sideTitle, text, question)
         setDone(true)
         window.clearTimeout(timer.current)
         timer.current = window.setTimeout(() => { setDone(false) }, 1600)
@@ -300,8 +304,9 @@ function ReflowButton({ reflow, parentSessionId, sideTitle, text }: {
   )
 }
 
-function MessageRow({ message, reflow, parentSessionId, sideTitle }: {
+function MessageRow({ message, question, reflow, parentSessionId, sideTitle }: {
   message: ChatMessage
+  question?: string
   reflow: ReflowStore
   parentSessionId: string | undefined
   sideTitle: string
@@ -323,7 +328,7 @@ function MessageRow({ message, reflow, parentSessionId, sideTitle }: {
                   </span>
                 )}
                 {proto.reflows.length > 0 && (
-                  <span className={css.sentChip} title={proto.reflows.map(r => `${r.source}: ${r.content.slice(0, 200)}`).join('\n')}>
+                  <span className={css.sentChip} title={proto.reflows.map(r => `${r.source}: ${flattenReflowContent(r.content).slice(0, 200)}`).join('\n')}>
                     {t('reflowBubbleLabel')}
                   </span>
                 )}
@@ -344,7 +349,7 @@ function MessageRow({ message, reflow, parentSessionId, sideTitle }: {
         <div className={css.assistantRow}>
           {message.text !== '' && message.streaming !== true && (
             <div className={css.rowActions}>
-              <ReflowButton reflow={reflow} parentSessionId={parentSessionId} sideTitle={sideTitle} text={message.text} />
+              <ReflowButton reflow={reflow} parentSessionId={parentSessionId} sideTitle={sideTitle} text={message.text} question={question} />
             </div>
           )}
           <div className={css.assistantBody}>

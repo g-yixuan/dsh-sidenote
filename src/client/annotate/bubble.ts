@@ -12,7 +12,7 @@
  * 幂等：注入的标签带 data-dsh-sidenote-bubble 标记；宿主重渲染丢失后下次
  * 扫描重挂。观察者纪律与 overlay 同款（100ms 尾沿去抖）。
  */
-import { splitProtocolPrefix } from './format.ts'
+import { flattenReflowContent, splitProtocolPrefix } from './format.ts'
 import { t } from '../locales.ts'
 import css from './annotate.module.css'
 
@@ -66,7 +66,7 @@ function applySurgery(flowItem: HTMLElement): void {
     const chip = document.createElement('span')
     chip.className = css.sentChip ?? ''
     chip.textContent = t('reflowBubbleLabel')
-    chip.title = proto.reflows.map(r => `${r.source}: ${r.content.slice(0, 200)}`).join('\n')
+    chip.title = proto.reflows.map(r => `${r.source}: ${flattenReflowContent(r.content).slice(0, 200)}`).join('\n')
     labels.appendChild(chip)
   }
   hidden.insertAdjacentElement('afterend', labels)
