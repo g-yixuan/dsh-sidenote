@@ -40,7 +40,11 @@ if ! command -v "$DSH_CMD" >/dev/null 2>&1; then
 fi
 
 if [ -z "$TARBALL" ]; then
-  TARBALL="$(ls "$ROOT"/dsh-sidenote-*.tgz 2>/dev/null | head -1 || true)"
+  # 按 package.json 版本精确选 tarball——仓库根可能残留历史版本的
+  # dsh-sidenote-*.tgz，字典序 head -1 会选中旧版（0.1.1 排在 0.2.0 前），
+  # 静默测了旧构建（2026-09-07 实踩）。
+  VERSION="$(node -p "require('$ROOT/package.json').version")"
+  TARBALL="$ROOT/dsh-sidenote-$VERSION.tgz"
 fi
 [ -n "$TARBALL" ] && [ -f "$TARBALL" ] || die "找不到 tarball——先运行 pnpm build && pnpm pack"
 TARBALL="$(cd "$(dirname "$TARBALL")" && pwd)/$(basename "$TARBALL")"
