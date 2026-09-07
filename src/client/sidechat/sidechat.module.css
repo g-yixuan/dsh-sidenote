@@ -73,10 +73,15 @@
 
 .userBubble {
   max-width: 88%;
-  background: var(--dsw-alias-button-info-fill);
-  color: #fff;
-  border-radius: 12px 12px 2px 12px;
+  /* 与主对话用户气泡同源：浅蓝便签（实测宿主计算样式 rgb(237,243,254) =
+     --dsw-specific-bubble，W01-visual-verify 定量对照）+ 深色字 + 大圆角。
+     字号对齐面板基准 13px（气泡曾是全面板最小的 12px，视觉权重倒挂）。 */
+  background: var(--dsw-specific-bubble, rgb(237, 243, 254));
+  color: var(--dsw-alias-label-primary);
+  border-radius: 16px;
   padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
 }
