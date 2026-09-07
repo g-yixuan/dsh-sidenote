@@ -18,7 +18,9 @@ import type { Context, SessionFace, TabComponentProps } from '../host/contracts.
 import { useComposer, type Composer } from './composer.ts'
 import { clearPendingDraft, pairQuestions, parseSideChatMeta, phaseOf } from './model.ts'
 import { transcriptOf, type ChatMessage } from '../chat/transcript.ts'
-import { ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, updateTabMeta } from './lifecycle.ts'
+import { chatSourceOf, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, updateTabMeta } from './lifecycle.ts'
+import { ToolCard } from '../chat/ToolCard.tsx'
+import { createFoldStore, type FoldStore } from '../chat/viewState.ts'
 import { flattenReflowContent, splitProtocolPrefix } from '../annotate/format.ts'
 import { markdownTextProps } from '../host/markdown.ts'
 import type { ReflowStore } from '../reflow.ts'
@@ -85,7 +87,31 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
     ),
     () => (session === undefined ? null : session.getSnapshot()),
   )
-  const messages = useMemo(() => transcriptOf(snapshot), [snapshot])
+  // 内容面双兼容（W00-fork-replay-012）：0.1.2 的 nodes/partial/runningCalls 在
+  // uiConversation.chat target 的 .legacy 切片，0.1.1 在 Session 快照顶层。
+  // chatSourceOf 探测链优先新面、miss 回退旧面；running/openState 两版都在
+  // Session 快照上，继续读旧面。
+  // 内容面双兼容（W00-fork-replay-012）：0.1.2 的 nodes/partial/runningCalls 在
+  // uiConversation.chat target 的 .legacy 切片，0.1.1 在 Session 快照顶层。
+  // chatSourceOf 探测链优先新面、miss 回退旧面；running/openState 两版都在
+  // Session 快照上，继续读旧面。
+  const chat = useMemo(
+    () => chatSourceOf(ctx, childId === undefined ? undefined : ctx.sessions.binding(childId)),
+    [ctx, childId, session],
+  )
+  const chatLegacy = useSyncExternalStore(
+    useCallback(
+      (notify: () => void) => (visible && chat !== undefined ? chat.subscribe(notify) : NOOP_UNSUBSCRIBE),
+      [visible, chat],
+    ),
+    () => chat?.getLegacy() ?? null,
+  )
+  const messages = useMemo(() => transcriptOf(chatLegacy ?? snapshot), [chatLegacy, snapshot])
+
+  // 折叠态外置 store（P0-2 状态零丢失的架构约束）：Tab 切换/重挂不丢展开态。
+  // 注意：必须在相位早退之前创建（hooks 纪律——forking/error 相位渲染的
+  // hooks 数与 chat 相位必须一致，否则 React #310「Rendered more hooks」）。
+  const fold = useMemo(() => createFoldStore(), [])
 
   // ── composer（input 机器优先，降级本地草稿 + session.prompt） ──
   const composer = useComposer(ctx, session, childId)
@@ -154,7 +180,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
       <div ref={bodyRef} className={css.body}>
         {messages.length === 0 && !running
           ? <EmptyState />
-          : <MessageList messages={messages} reflow={props.reflow} parentSessionId={meta.parentSessionId} sideTitle={tab.title} />}
+          : <MessageList messages={messages} fold={fold} reflow={props.reflow} parentSessionId={meta.parentSessionId} sideTitle={tab.title} />}
         {openFailed && <div className={css.errorRow}>{t('historyFailed')}</div>}
       </div>
       <ComposerBar ctx={ctx} session={session} composer={composer} running={running} visible={visible} modelName={modelName} />
@@ -187,8 +213,9 @@ function StateScreen(props: { title: string; detail?: string; hint?: string }) {
   )
 }
 
-function MessageList({ messages, reflow, parentSessionId, sideTitle }: {
+function MessageList({ messages, fold, reflow, parentSessionId, sideTitle }: {
   messages: readonly ChatMessage[]
+  fold: FoldStore
   reflow: ReflowStore
   parentSessionId: string | undefined
   sideTitle: string
@@ -197,7 +224,7 @@ function MessageList({ messages, reflow, parentSessionId, sideTitle }: {
   const questions = useMemo(() => pairQuestions(messages), [messages])
   return (
     <div className={css.transcript}>
-      {messages.map(message => <MessageRow key={message.key} message={message} question={questions.get(message.key)} reflow={reflow} parentSessionId={parentSessionId} sideTitle={sideTitle} />)}
+      {messages.map(message => <MessageRow key={message.key} message={message} question={questions.get(message.key)} fold={fold} reflow={reflow} parentSessionId={parentSessionId} sideTitle={sideTitle} />)}
     </div>
   )
 }
@@ -236,9 +263,10 @@ function ReflowButton({ reflow, parentSessionId, sideTitle, text, question }: {
   )
 }
 
-function MessageRow({ message, question, reflow, parentSessionId, sideTitle }: {
+function MessageRow({ message, question, fold, reflow, parentSessionId, sideTitle }: {
   message: ChatMessage
   question?: string
+  fold: FoldStore
   reflow: ReflowStore
   parentSessionId: string | undefined
   sideTitle: string
@@ -299,6 +327,18 @@ function MessageRow({ message, question, reflow, parentSessionId, sideTitle }: {
         </div>
       )
     case 'tool':
+      // WI-01：渲染意图在场 → 原生级工具卡（DisclosureRow 壳 + 同源叶子块，
+      // 默认折叠）；缺省（老快照/无 view）回退纯文本卡。
+      if (message.card !== undefined) {
+        return (
+          <ToolCard
+            model={message.card}
+            rowKey={message.key}
+            fold={fold}
+            {...(message.streaming === true ? { streaming: true } : {})}
+          />
+        )
+      }
       return (
         <div className={css.toolCard}>
           <div className={css.toolHead}>

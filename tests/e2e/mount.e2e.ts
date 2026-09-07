@@ -188,6 +188,44 @@ test('fork journey: 种子会话 → 侧边聊天 fork → 历史渲染 → 刷�
   expect(consoleErrors.filter((t) => PLUGIN_CONSOLE.test(t)), 'plugin console errors').toEqual([])
 })
 
+test('tool cards: fork 历史里的 read/bash 渲染为原生级工具卡（正样本）', async ({ page }) => {
+  test.skip(!process.env.DSH_E2E_SEED_SESSION, 'no seeded session id')
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(String(error)))
+
+  await openSeedSession(page)
+  await openPlusMenu(page)
+  await page.getByRole('menuitem', { name: /Side chat/ }).first().click()
+
+  const sidebar = page.locator('[data-dsh-better-sidebar]')
+  await expect(
+    sidebar.getByText(/full history snapshot/).first(),
+    '侧边聊天未渲染 fork 历史',
+  ).toBeVisible({ timeout: 60_000 })
+
+  // 种子 turn 3：read README.md + bash `ls -1` 并行（presentationMeta fixture）。
+  // 卡片默认折叠（密度于默认态）：标题行可见即渲染意图已生效；
+  // 卡种类正样本——终端卡的标题就是命令本身，read 卡的标题含文件路径。
+  const terminalTitle = sidebar.getByText('ls -1', { exact: true }).first()
+  await expect(terminalTitle, '终端工具卡标题未出现（callView/resultView 未映射）').toBeVisible({ timeout: 15_000 })
+  // read 卡标题是宿主工具的 presentCall 产物（`Read <path>`，dsh-tool-fs 实证）。
+  await expect(
+    sidebar.getByText(/Read README\.md/).first(),
+    'read 工具卡标题未出现',
+  ).toBeVisible({ timeout: 15_000 })
+
+  // 展开终端卡 → TerminalBlock 输出（exit code 0 的输出正文，种子 fixture 已验证
+  // 宿主投影产出 terminal 卡）。点击标题行展开（DisclosureRow expandOnRowClick）。
+  await terminalTitle.click()
+  await expect(
+    sidebar.getByText(/package\.json/).first(),
+    '终端卡展开后无命令输出',
+  ).toBeVisible({ timeout: 5_000 })
+  await dumpStep(page, '15-tool-cards')
+
+  expect(pageErrors, 'pageerrors during tool cards').toEqual([])
+})
+
 /** 把聊天消息区滚回顶部（角标锚点文本回到视口）。 */
 async function scrollChatToTop(page: Page): Promise<void> {
   await page.evaluate(() => {

@@ -131,7 +131,13 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
 
   const onKeyDown = (event: KeyboardEvent): void => {
     const target = event.target
-    const inSeat = target instanceof HTMLTextAreaElement && target.closest('[data-composer-seat]') !== null
+    // 0.1.2 兼容（W00-send-intercept-012）：宿主 composer 从受控 <textarea>
+    // 重写为 Lexical contenteditable（div[data-composer-input]，Enter 走
+    // Lexical command 层）。识别面双兼容：新锚点 closest 优先，旧 textarea
+    // 回退；锚点 closest 天然覆盖内层 chip span/文本节点。
+    const inSeat = target instanceof HTMLElement
+      && (target.closest('[data-composer-input]') !== null || target instanceof HTMLTextAreaElement)
+      && target.closest('[data-composer-seat]') !== null
     if (!inSeat) return
     if (committing) {
       if (event.key === 'Enter') {

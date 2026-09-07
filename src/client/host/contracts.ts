@@ -180,6 +180,16 @@ export interface SessionBinding {
   session: SessionFace
 }
 
+/**
+ * 0.1.2 的会话内容读取面（off-face，惰性探测；权威：W00-fork-replay-012.md）。
+ * 0.1.2 拆包后 Session 快照只剩控制面，nodes/partial/runningCalls 移入
+ * uiConversation 服务 binding(source).target('chat') 快照的 .legacy 切片。
+ * binding() 对未知会话 throw（调用点必须 try/catch）。
+ */
+export interface UiConversationLike {
+  binding(source: unknown): { target(name: string): { subscribe(fn: () => void): () => void; getSnapshot(): unknown } | undefined } | undefined
+}
+
 export interface SessionsService {
   list: ObservableSnapshot<SessionListSnapshot>
   fork(opts: ForkOptions): Promise<SessionId>

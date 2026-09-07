@@ -6,7 +6,7 @@
  * off-face 探测纪律：session.open()、store.update 均为运行时可达但契约不
  * 保证的面——就地 feature-check + 吞错降级，并登记进 host/probes.ts。
  */
-import type { Context, SessionFace } from '../host/contracts.ts'
+import type { Context, ConversationSnapshot, SessionBinding, SessionFace, UiConversationLike } from '../host/contracts.ts'
 import { parseSideChatMeta, type SideChatMeta } from './model.ts'
 import { readTab } from './open.ts'
 
@@ -91,4 +91,45 @@ export async function readModelName(ctx: Context, sessionId: string): Promise<st
   } catch {
     return null
   }
+}
+
+/** 会话内容读取源（0.1.1/0.1.2 双兼容，feature-check 优先链）。 */
+export interface ChatSource {
+  subscribe(fn: () => void): () => void
+  /** 当前内容快照（含 nodes/partial/runningCalls 的形态）；miss 时 null。 */
+  getLegacy(): ConversationSnapshot | null
+}
+
+/**
+ * 0.1.2 优先：`uiConversation` 服务 → binding(会话 binding) → target('chat')
+ * → 快照 .legacy 切片（0.1.2 把内容面从 Session 快照顶层拆到此处——
+ * 根因与证据见 reports/ux-review/W00-fork-replay-012.md）；0.1.1 回退
+ * Session 快照顶层（nodes 直接在）。均 miss 返回 undefined（面板维持
+ * 既有降级，不崩）。
+ */
+export function chatSourceOf(ctx: Context, binding: SessionBinding | undefined): ChatSource | undefined {
+  const session = binding?.session
+  if (session === undefined) return undefined
+  // 面 1（0.1.2+）：uiConversation.chat target。binding() 对未知会话 throw——必须 try/catch。
+  try {
+    const ui = ctx.get('uiConversation') as UiConversationLike | undefined
+    const target = ui?.binding?.(binding)?.target?.('chat')
+    if (target !== undefined && typeof target.getSnapshot === 'function' && typeof target.subscribe === 'function') {
+      return {
+        subscribe: (fn) => target.subscribe(fn),
+        getLegacy: () => {
+          const snap = target.getSnapshot() as { legacy?: ConversationSnapshot } | undefined
+          return snap?.legacy ?? null
+        },
+      }
+    }
+  } catch {
+    // 落面 2。
+  }
+  // 面 2（0.1.1）：Session 快照顶层自带 nodes。
+  const snap = session.getSnapshot() as ConversationSnapshot | null
+  if (snap !== null && Array.isArray(snap.nodes)) {
+    return { subscribe: (fn) => session.subscribe(fn), getLegacy: () => session.getSnapshot() }
+  }
+  return undefined
 }

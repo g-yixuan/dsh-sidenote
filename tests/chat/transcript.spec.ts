@@ -119,7 +119,15 @@ describe('transcriptOf', () => {
       { key: 'u:1', role: 'user', text: '问' },
       { key: 'a:2', role: 'assistant', text: '答' },
       { key: 'partial', role: 'assistant', text: '正在', streaming: true },
-      { key: 'rc:c1', role: 'tool', toolName: 'Bash', text: '', streaming: true },
+      {
+        key: 'rc:c1',
+        role: 'tool',
+        toolName: 'Bash',
+        text: '',
+        streaming: true,
+        // 无 callView → generic 兜底卡（cards.ts 纪律）。
+        card: { kind: 'generic', title: 'Bash', icon: 'other' },
+      },
     ])
   })
   it('时序归并：同 step 的 partial 文本排在自己的工具卡前（文本早于调用）', () => {

@@ -306,3 +306,37 @@
   padding: 1px 8px;
   user-select: none;
 }
+
+/* ── WI-01 工具卡 v2（DisclosureRow 壳 + 同源叶子块） ─────────────────────── */
+
+.toolCardV2 {
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-2);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+.toolGenericBody {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.toolBodyText {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--dsw-alias-font-mono, ui-monospace, monospace);
+}
+
+.toolLocations {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: pre-wrap;
+  word-break: break-all;
+}

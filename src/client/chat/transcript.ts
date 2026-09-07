@@ -10,6 +10,7 @@
  * runningCalls 承载在途流式输出。
  */
 import type { ConversationSnapshot } from '../host/contracts.ts'
+import { cardModelOf, type ToolCardModel } from './cards.ts'
 import { t } from '../locales.ts'
 
 /** 面板渲染用的消息视图（自绘；工具卡片等复杂节点降级为简洁块）。 */
@@ -29,6 +30,8 @@ export interface ChatMessage {
   streaming?: boolean
   /** 被打断冻结的 assistant 输出（渲染「已停止」标记）。 */
   interrupted?: boolean
+  /** tool 角色的渲染意图（card union 已映射为视图模型；缺省 = 纯文本卡）。 */
+  card?: ToolCardModel
 }
 
 /** 工具结果正文截断上限（面板是窄栏，超长输出不撑爆 DOM）。 */
@@ -107,11 +110,20 @@ export function nodeToMessage(node: unknown): ChatMessage | null {
       const toolName = typeof call?.name === 'string'
         ? call.name
         : typeof n.callId === 'string' ? n.callId : t('toolFallback')
+      const text = truncateText(contentTextOf(n.content), TOOL_TEXT_LIMIT)
       return {
         key: seqKey('t', n),
         role: 'tool',
         toolName,
-        text: truncateText(contentTextOf(n.content), TOOL_TEXT_LIMIT),
+        text,
+        // 渲染意图随行（宿主算好的 card union → 视图模型；未知卡种在
+        // cards.ts 内 default 降级 + warn-once）。
+        card: cardModelOf({
+          toolName,
+          callView: n.callView as never,
+          resultView: n.resultView as never,
+          rawText: text,
+        }),
         ...(n.isError === true ? { isError: true } : {}),
       }
     }
@@ -190,11 +202,12 @@ export function transcriptOf(snapshot: ConversationSnapshot | undefined | null):
     }
   }
 
-  // 在途工具调用（tool/call 已见、tool/result 未至）。
+  // 在途工具调用（tool/call 已见、tool/result 未至；callView 随行）。
   if (Array.isArray(snapshot.runningCalls)) {
     for (const call of snapshot.runningCalls) {
       if (typeof call !== 'object' || call === null) continue
-      const c = call as { callId?: unknown; name?: unknown; turn?: unknown; step?: unknown }
+      const c = call as { callId?: unknown; name?: unknown; turn?: unknown; step?: unknown; callView?: unknown }
+      const toolName = typeof c.name === 'string' ? c.name : t('toolFallback')
       inflight.push({
         turn: typeof c.turn === 'number' ? c.turn : Number.MAX_SAFE_INTEGER,
         step: typeof c.step === 'number' ? c.step : Number.MAX_SAFE_INTEGER,
@@ -202,9 +215,10 @@ export function transcriptOf(snapshot: ConversationSnapshot | undefined | null):
         message: {
           key: `rc:${typeof c.callId === 'string' ? c.callId : '?'}`,
           role: 'tool',
-          toolName: typeof c.name === 'string' ? c.name : t('toolFallback'),
+          toolName,
           text: '',
           streaming: true,
+          card: cardModelOf({ toolName, callView: c.callView as never, resultView: null }),
         },
       })
     }

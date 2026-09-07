@@ -166,10 +166,10 @@ export function cardModelOf(input: CardModelInput): ToolCardModel {
       }
       // 二级判别同样显式：未知 shape 降级 generic（不猜）。
       if (rc.shape === 'matches') {
-        return { kind: 'search', title: rc.title ?? input.toolName, shape: 'matches', files: rc.files, truncated: rc.truncated, total: rc.total }
+        return { kind: 'search', title: rc.title ?? call?.title ?? input.toolName, shape: 'matches', files: rc.files, truncated: rc.truncated, total: rc.total }
       }
       if (rc.shape === 'paths') {
-        return { kind: 'search', title: rc.title ?? input.toolName, shape: 'paths', paths: rc.paths, truncated: rc.truncated, total: rc.total }
+        return { kind: 'search', title: rc.title ?? call?.title ?? input.toolName, shape: 'paths', paths: rc.paths, truncated: rc.truncated, total: rc.total }
       }
       warnUnknownCard(`search/${String((rc as { shape?: unknown }).shape)}`)
       return genericModel(input, call, result)
@@ -179,7 +179,7 @@ export function cardModelOf(input: CardModelInput): ToolCardModel {
       if (rc === undefined) return genericModel(input, call, result)
       return {
         kind: 'read',
-        title: rc.title ?? input.toolName,
+        title: rc.title ?? call?.title ?? input.toolName,
         path: rc.path,
         lines: rc.lines,
         totalLines: rc.totalLines,
@@ -189,7 +189,7 @@ export function cardModelOf(input: CardModelInput): ToolCardModel {
     case 'web': {
       const rc = result?.card === 'web' ? result : undefined
       if (rc === undefined) return genericModel(input, call, result)
-      const base = { kind: 'web' as const, title: rc.title ?? input.toolName }
+      const base = { kind: 'web' as const, title: rc.title ?? call?.title ?? input.toolName }
       if (rc.kind === 'search') {
         const rs: WebSearchResultView = rc
         return { ...base, webKind: 'search' as const, sources: rs.sources, ...(rs.answer !== undefined ? { answer: rs.answer } : {}) }
