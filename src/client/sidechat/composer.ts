@@ -57,8 +57,8 @@ export interface Composer {
   setDraft(text: string): void
   /** 拼接一段外部文本（桥接注入的引文草稿）。 */
   appendDraft(text: string): void
-  /** 发送当前草稿（空草稿 no-op）。 */
-  submit(): void
+  /** 发送当前草稿（空草稿 no-op）。mode 缺省 = 机器/设置裁决（busy-Enter）。 */
+  submit(mode?: 'queue' | 'steer'): void
   /** 斜杠/@ 触发接线需要：机器相位 + 草稿版本号（缺机器时 undefined）。 */
   readonly phase: string | undefined
   readonly draftRev: number | undefined
@@ -136,18 +136,19 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
     [input],
   )
 
-  const submit = useCallback((): void => {
+  const submit = useCallback((mode?: 'queue' | 'steer'): void => {
     const text = draft.trim()
     if (text === '') return
     if (input !== null) {
       // 机器路径：草稿清空、发送失败回填、通知条全由机器/sink 负责。
-      input.submit()
+      // mode 缺省交给机器按宿主设置裁决（busy-Enter 偏好在机器内）。
+      input.submit(mode)
       return
     }
     if (session === undefined) return
     setLocalDraft('')
     setSendError(null)
-    session.prompt([{ type: 'text', text }], 'queue').then((result) => {
+    session.prompt([{ type: 'text', text }], mode ?? 'queue').then((result) => {
       // RpcResult 直接 ok 联合（无 .result 包装，镜像已收窄——见 contracts.ts）。
       if (result.ok === false) {
         // 仅在用户未另行输入时回填，不盖掉新草稿。

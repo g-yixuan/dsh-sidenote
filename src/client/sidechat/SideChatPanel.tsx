@@ -290,7 +290,9 @@ function ComposerBar(props: {
           if (event.key !== 'Enter' || event.shiftKey) return
           if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
           event.preventDefault()
-          composer.submit()
+          // busy-Enter：Cmd/Ctrl+Enter = steer（插队打断）；裸 Enter 由机器/
+          // 设置裁决（默认 queue——与主对话同语义）。
+          composer.submit(event.metaKey || event.ctrlKey ? 'steer' : undefined)
         }}
       />
       <div className={css.composerFoot}>

@@ -611,6 +611,24 @@ test('slash menu: 侧边 composer 斜杠菜单（inputTriggers 引擎接线 + /s
   // Escape 关闭。
   await page.keyboard.press('Escape')
   await expect(menu, 'Esc 未关闭菜单').toHaveCount(0)
+
+  // @ 引用同管线（guard 在 plain 时 '@' 活）：往 scratch 工作区放一个文件
+  // 让 @ 有候选。
+  const fs = await import('node:fs')
+  const path = await import('node:path')
+  const ws = process.env.DSH_E2E_WORKSPACE
+  if (ws !== undefined && ws !== '') {
+    fs.writeFileSync(path.join(ws, 'probe-note.txt'), 'probe')
+    // 清空残留 '/'——触发词要在词首（'/@' 的 '@' 跟在 '/' 后不构成触发位）。
+    await sideComposer.click()
+    await page.keyboard.press('ControlOrMeta+a')
+    await page.keyboard.press('Backspace')
+    await page.keyboard.type('@')
+    const refMenu = sidebar.locator('[role="listbox"]')
+    await expect(refMenu, '@ 引用菜单未打开').toBeVisible({ timeout: 10_000 })
+    await page.keyboard.press('Escape')
+    await expect(refMenu).toHaveCount(0)
+  }
   await dumpStep(page, '16-slash-menu-side')
 
   expect(pageErrors, 'pageerrors during slash menu').toEqual([])
