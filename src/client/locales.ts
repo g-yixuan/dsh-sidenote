@@ -126,6 +126,16 @@ export const en = {
   collapseAll: 'Collapse all',
   expandAll: 'Expand all',
   jumpToLatest: '↓ Jump to latest',
+
+  // 工具卡叶子块 labels（0.1.2 起必填——host/labels.ts）
+  readWindow: '{shown} of {total} lines',
+  searchPathsSummary: '{shown} of {total} paths',
+  searchMatchesSummary: '{shown} of {total} matches in {files} files',
+  searchNoResults: 'No results',
+  diffFiles: '{n} files',
+  webNoResults: 'No results',
+  webSourcesTruncated: 'Source list truncated',
+  webContentTruncated: 'Content truncated',
 }
 
 export type CopyKey = keyof typeof en
@@ -235,6 +245,15 @@ export const zh: Record<CopyKey, string> = {
   collapseAll: '全部折叠',
   expandAll: '全部展开',
   jumpToLatest: '↓ 跳到最新',
+
+  readWindow: '{shown}/{total} 行',
+  searchPathsSummary: '{shown}/{total} 个路径',
+  searchMatchesSummary: '{shown}/{total} 处匹配 · {files} 个文件',
+  searchNoResults: '无结果',
+  diffFiles: '{n} 个文件',
+  webNoResults: '无结果',
+  webSourcesTruncated: '来源列表已截断',
+  webContentTruncated: '内容已截断',
 }
 
 /** The DSH locale service face we consume (subset of LocaleRuntime). */

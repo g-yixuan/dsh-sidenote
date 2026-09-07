@@ -222,6 +222,15 @@ test('tool cards: fork 历史里的 read/bash 渲染为原生级工具卡（正�
     sidebar.getByText(/package\.json/).first(),
     '终端卡展开后无命令输出',
   ).toBeVisible({ timeout: 5_000 })
+
+  // read 卡展开 → ReadBlock 行号代码视图（0.1.2 的 primitives labels
+  // 无守卫读是同族风险——ReadBlock 展开实证覆盖）。
+  await sidebar.getByText(/Read README\.md/).first()
+    .locator('xpath=ancestor-or-self::*[@data-disclosure-row][1]').click()
+  await expect(
+    sidebar.getByText(/# dsh-sidenote/).first(),
+    'read 卡展开后无文件内容',
+  ).toBeVisible({ timeout: 5_000 })
   await dumpStep(page, '15-tool-cards')
 
   expect(pageErrors, 'pageerrors during tool cards').toEqual([])

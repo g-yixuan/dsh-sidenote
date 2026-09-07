@@ -20,7 +20,7 @@ import type { ComponentProps } from 'react'
 import type { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import { t } from '../locales.ts'
 
-interface MarkdownChrome {
+export interface MarkdownChrome {
   copyLabel: string
   copiedLabel: string
   code: { copyLabel: string; copiedLabel: string }

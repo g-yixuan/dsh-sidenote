@@ -28,6 +28,7 @@ import {
 import type { ToolCardModel, ToolCallKind } from './cards.ts'
 import type { FoldStore } from './viewState.ts'
 import { t } from '../locales.ts'
+import { diffLabels, readLabels, searchLabels, terminalLabels, webLabels } from '../host/labels.ts'
 import css from '../sidechat/sidechat.module.css'
 
 /** ToolCallKind → 图标（宿主 ui-tool 同族映射；primitives 图标全集见 icons/index.d.ts）。 */
@@ -79,28 +80,6 @@ export function ToolCard(props: { model: ToolCardModel; rowKey: string; fold: Fo
   )
 }
 
-/**
- * TerminalBlock 的全量 labels（**0.1.2 运行时不传会崩**——其复制按钮无守卫
- * 读 `labels.copy/copied`，W00 排障实证于 0.1.2-rc.1）。按调用点构建保持
- * 本地化新鲜；函数字段按 TerminalBlockLabels 契约。
- */
-function terminalLabels() {
-  return {
-    signal: (signal: string) => t('termSignal', { signal }),
-    exitCode: (code: number) => t('termExitCode', { code }),
-    running: t('running'),
-    failed: t('failed'),
-    done: t('termDone'),
-    copy: t('codeCopy'),
-    copied: t('codeCopied'),
-    noOutput: t('termNoOutput'),
-    collapseAria: t('termCollapseAria'),
-    collapse: t('termCollapse'),
-    expandAria: (n: number) => t('termExpandAria', { n }),
-    expand: (n: number) => t('termExpand', { n }),
-  }
-}
-
 function ToolCardBody({ model, streaming }: { model: ToolCardModel; streaming?: boolean }) {
   switch (model.kind) {
     case 'terminal':
@@ -116,11 +95,12 @@ function ToolCardBody({ model, streaming }: { model: ToolCardModel; streaming?: 
         />
       )
     case 'diff':
-      return <DiffBlock diffs={model.diffs.map(d => ({ path: d.path, oldText: d.oldText, newText: d.newText }))} />
+      return <DiffBlock {...({ labels: diffLabels() } as object)} diffs={model.diffs.map(d => ({ path: d.path, oldText: d.oldText, newText: d.newText }))} />
     case 'read':
       return (
         <ReadBlock
           label={model.path}
+          {...({ labels: readLabels() } as object)}
           lines={model.lines.map(l => ({ number: l.number, text: l.text }))}
           totalLines={model.totalLines}
           {...(model.lang !== undefined ? { lang: model.lang } : {})}
@@ -130,12 +110,12 @@ function ToolCardBody({ model, streaming }: { model: ToolCardModel; streaming?: 
       // SearchBlock 契约：kind ← 我们的 shape（cards.ts 已改名归一），
       // files/paths/truncated/total 形状同构直通。
       return model.shape === 'matches'
-        ? <SearchBlock kind="matches" files={[...(model.files ?? [])].map(f => ({ path: f.path, matches: [...f.matches] }))} truncated={model.truncated} total={model.total} />
-        : <SearchBlock kind="paths" paths={[...(model.paths ?? [])]} truncated={model.truncated} total={model.total} />
+        ? <SearchBlock {...({ labels: searchLabels() } as object)} kind="matches" files={[...(model.files ?? [])].map(f => ({ path: f.path, matches: [...f.matches] }))} truncated={model.truncated} total={model.total} />
+        : <SearchBlock {...({ labels: searchLabels() } as object)} kind="paths" paths={[...(model.paths ?? [])]} truncated={model.truncated} total={model.total} />
     case 'web':
       return model.webKind === 'search'
-        ? <WebBlock kind="search" sources={[...(model.sources ?? [])]} truncated={model.truncated === true} {...(model.answer !== undefined ? { answer: model.answer } : {})} />
-        : <WebBlock kind="fetch" url={model.url ?? ''} statusCode={model.statusCode ?? 0} truncated={model.truncated === true} />
+        ? <WebBlock {...({ labels: webLabels() } as object)} kind="search" sources={[...(model.sources ?? [])]} truncated={model.truncated === true} {...(model.answer !== undefined ? { answer: model.answer } : {})} />
+        : <WebBlock {...({ labels: webLabels() } as object)} kind="fetch" url={model.url ?? ''} statusCode={model.statusCode ?? 0} truncated={model.truncated === true} />
     default: {
       // generic（宿主默认卡形态的自绘：标题行在壳上，体 = rawInput/正文/文件列表）。
       const m = model
