@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import type { ConversationSnapshot } from '../../src/client/host/contracts.ts'
 import {
   contentTextOf,
+  partitionInherited,
   nodeToMessage,
   transcriptOf,
   truncateText,
@@ -41,7 +42,7 @@ describe('contentTextOf', () => {
 describe('nodeToMessage', () => {
   it('user 节点 → user 行', () => {
     expect(nodeToMessage({ kind: 'user', seq: 1, content: [{ type: 'text', text: '问题' }] })).toEqual({
-      key: 'u:1', role: 'user', text: '问题',
+      key: 'u:1', seq: 1, role: 'user', text: '问题',
     })
   })
   it('steering 节点 → user 行', () => {
@@ -56,7 +57,7 @@ describe('nodeToMessage', () => {
         { kind: 'reasoning', text: '想想' },
         { kind: 'text', text: '回答' },
       ],
-    })).toEqual({ key: 'a:3', role: 'assistant', text: '回答', reasoning: '想想', interrupted: true })
+    })).toEqual({ key: 'a:3', seq: 3, role: 'assistant', text: '回答', reasoning: '想想', interrupted: true })
   })
   it('assistant 节点：纯工具调用头不渲染（结果节点承载卡片）', () => {
     expect(nodeToMessage({ kind: 'assistant', seq: 4, blocks: [{ kind: 'tool-call', callId: 'c', name: 'Bash', argsRaw: '{}' }] })).toBeNull()
@@ -80,7 +81,7 @@ describe('nodeToMessage', () => {
     expect(nodeToMessage({ kind: 'tool-result', seq: 6, callId: 'c9', call: null, content: [] })?.toolName).toBe('c9')
   })
   it('turn-error → error 行', () => {
-    expect(nodeToMessage({ kind: 'turn-error', seq: 7, message: '炸了' })).toEqual({ key: 'e:7', role: 'error', text: '炸了' })
+    expect(nodeToMessage({ kind: 'turn-error', seq: 7, message: '炸了' })).toEqual({ key: 'e:7', seq: 7, role: 'error', text: '炸了' })
   })
   it('model-retry：已取消不渲染，其余为提示行', () => {
     expect(nodeToMessage({ kind: 'model-retry', seq: 8, retryState: 'cancelled' })).toBeNull()
@@ -116,8 +117,8 @@ describe('transcriptOf', () => {
       partial: { blocks: [{ kind: 'text', text: '正在' }] },
     } as unknown as ConversationSnapshot
     expect(transcriptOf(snapshot)).toEqual([
-      { key: 'u:1', role: 'user', text: '问' },
-      { key: 'a:2', role: 'assistant', text: '答' },
+      { key: 'u:1', seq: 1, role: 'user', text: '问' },
+      { key: 'a:2', seq: 2, role: 'assistant', text: '答' },
       { key: 'partial', role: 'assistant', text: '正在', streaming: true },
       {
         key: 'rc:c1',
@@ -166,5 +167,27 @@ describe('transcriptOf', () => {
   it('空 partial 渲染流式占位（正在输出）', () => {
     const snapshot = { nodes: [], partial: { blocks: [] } } as unknown as ConversationSnapshot
     expect(transcriptOf(snapshot)).toEqual([{ key: 'partial', role: 'assistant', text: '', streaming: true }])
+  })
+})
+
+describe('partitionInherited（D1 父历史折叠边界）', () => {
+  const msg = (seq: number | undefined, key = `k:${seq}`) =>
+    ({ key, ...(seq !== undefined ? { seq } : {}), role: 'assistant' as const, text: '' })
+
+  it('seq <= boundary 进继承区；其余（含无 seq 的在途项）进新鲜区', () => {
+    const { inherited, fresh } = partitionInherited([msg(1), msg(5), msg(9), msg(undefined, 'partial')], 5)
+    expect(inherited.map(m => m.key)).toEqual(['k:1', 'k:5'])
+    expect(fresh.map(m => m.key)).toEqual(['k:9', 'partial'])
+  })
+
+  it('boundary 缺省 = 全新鲜（老 Tab 行为不变）', () => {
+    const { inherited, fresh } = partitionInherited([msg(1), msg(2)], undefined)
+    expect(inherited).toEqual([])
+    expect(fresh).toHaveLength(2)
+  })
+
+  it('全在边界内 = 全折叠；空列表不炸', () => {
+    expect(partitionInherited([msg(1)], 9).fresh).toEqual([])
+    expect(partitionInherited([], 3)).toEqual({ inherited: [], fresh: [] })
   })
 })

@@ -118,6 +118,9 @@ export const en = {
   termCollapseAria: 'Collapse the output',
   termExpand: 'Show all ({n} hidden lines)',
   termExpandAria: 'Show all ({n} hidden lines)',
+
+  // D1 父历史折叠卡
+  inheritedLabel: 'Inherited from main session · up to the fork point · {n}',
 }
 
 export type CopyKey = keyof typeof en
@@ -221,6 +224,8 @@ export const zh: Record<CopyKey, string> = {
   termCollapseAria: '收起输出',
   termExpand: '展开全部（隐藏 {n} 行）',
   termExpandAria: '展开全部（隐藏 {n} 行）',
+
+  inheritedLabel: '继承自主会话 · 截至 fork 点 · {n} 条',
 }
 
 /** The DSH locale service face we consume (subset of LocaleRuntime). */

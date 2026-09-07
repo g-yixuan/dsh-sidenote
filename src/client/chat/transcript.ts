@@ -17,6 +17,8 @@ import { t } from '../locales.ts'
 export interface ChatMessage {
   /** React key（节点 seq / 在途 callId 派生，稳定）。 */
   key: string
+  /** 源节点 seq（D1 折叠边界判定的依据；在途项无）。 */
+  seq?: number
   role: 'user' | 'assistant' | 'tool' | 'notice' | 'error'
   /** markdown 正文（assistant）或纯文本（其他）。 */
   text: string
@@ -65,6 +67,11 @@ function seqKey(prefix: string, node: Record<string, unknown>): string {
   return `${prefix}:${typeof node.seq === 'number' ? node.seq : '?'}`
 }
 
+/** 节点 seq 随行（D1 折叠边界用；缺省不带）。 */
+function seqOf(node: Record<string, unknown>): { seq?: number } {
+  return typeof node.seq === 'number' ? { seq: node.seq } : {}
+}
+
 function assistantParts(blocks: unknown): { text: string; reasoning: string; hasToolCall: boolean } {
   const texts: string[] = []
   const reasonings: string[] = []
@@ -90,15 +97,16 @@ export function nodeToMessage(node: unknown): ChatMessage | null {
   const n = node as Record<string, unknown>
   switch (n.kind) {
     case 'user':
-      return { key: seqKey('u', n), role: 'user', text: contentTextOf(n.content) }
+      return { key: seqKey('u', n), ...seqOf(n), role: 'user', text: contentTextOf(n.content) }
     case 'steering':
-      return { key: seqKey('s', n), role: 'user', text: contentTextOf(n.content) }
+      return { key: seqKey('s', n), ...seqOf(n), role: 'user', text: contentTextOf(n.content) }
     case 'assistant': {
       const { text, reasoning, hasToolCall } = assistantParts(n.blocks)
       // 纯工具调用头的 assistant 节点不渲染（tool-result 节点承载工具卡片）。
       if (text === '' && reasoning === '' && hasToolCall) return null
       return {
         key: seqKey('a', n),
+        ...seqOf(n),
         role: 'assistant',
         text,
         ...(reasoning !== '' ? { reasoning } : {}),
@@ -128,6 +136,7 @@ export function nodeToMessage(node: unknown): ChatMessage | null {
           })
       return {
         key: seqKey('t', n),
+        ...seqOf(n),
         role: 'tool',
         toolName,
         text,
@@ -136,26 +145,27 @@ export function nodeToMessage(node: unknown): ChatMessage | null {
       }
     }
     case 'turn-error':
-      return { key: seqKey('e', n), role: 'error', text: typeof n.message === 'string' ? n.message : t('unknownError') }
+      return { key: seqKey('e', n), ...seqOf(n), role: 'error', text: typeof n.message === 'string' ? n.message : t('unknownError') }
     case 'model-retry': {
       if (n.retryState === 'cancelled') return null
       return {
         key: seqKey('r', n),
+        ...seqOf(n),
         role: 'notice',
         text: t(n.retryState === 'started' ? 'modelRetryStarted' : 'modelRetryWaiting'),
       }
     }
     case 'turn-max-tokens':
-      return { key: seqKey('m', n), role: 'notice', text: t('maxTokens') }
+      return { key: seqKey('m', n), ...seqOf(n), role: 'notice', text: t('maxTokens') }
     case 'command': {
       const name = typeof n.name === 'string' && n.name !== '' ? n.name : t('commandNameFallback')
       // args 数据源自带前导空格（「/goal x」形态），trimStart 后统一补一个空格，
       // 防止「/sidefoo」（缺分隔）或「/goal  x」（双空格）。
       const args = typeof n.args === 'string' ? n.args.trimStart() : ''
-      return { key: seqKey('c', n), role: 'notice', text: t('runCommand', { cmd: `/${name}${args === '' ? '' : ` ${args}`}` }) }
+      return { key: seqKey('c', n), ...seqOf(n), role: 'notice', text: t('runCommand', { cmd: `/${name}${args === '' ? '' : ` ${args}`}` }) }
     }
     case 'compaction':
-      return { key: seqKey('k', n), role: 'notice', text: t('compacted') }
+      return { key: seqKey('k', n), ...seqOf(n), role: 'notice', text: t('compacted') }
     default:
       // context（注入）/ unknown（未识面事件）：MVP 不渲染。
       return null
@@ -243,4 +253,23 @@ export function transcriptOf(snapshot: ConversationSnapshot | undefined | null):
   inflight.sort((a, b) => a.turn - b.turn || a.step - b.step || a.order - b.order)
   for (const item of inflight) out.push(item.message)
   return out
+}
+
+/**
+ * D1 父历史折叠的划分：seq <= boundarySeq 的消息为继承区（fork 时刻快照，
+ * 折叠进指示卡），其余（含在途项——无 seq）为新鲜区。boundarySeq 缺省 =
+ * 全新鲜（升级前老 Tab 的行为不变）。
+ */
+export function partitionInherited(
+  messages: readonly ChatMessage[],
+  boundarySeq: number | undefined,
+): { inherited: ChatMessage[]; fresh: ChatMessage[] } {
+  if (boundarySeq === undefined) return { inherited: [], fresh: [...messages] }
+  const inherited: ChatMessage[] = []
+  const fresh: ChatMessage[] = []
+  for (const message of messages) {
+    if (message.seq !== undefined && message.seq <= boundarySeq) inherited.push(message)
+    else fresh.push(message)
+  }
+  return { inherited, fresh }
 }

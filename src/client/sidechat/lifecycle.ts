@@ -17,11 +17,32 @@ import { readTab } from './open.ts'
  * @returns fork 出的子会话 id。
  */
 export async function forkAndRegister(ctx: Context, parentSessionId: string, tabId: string): Promise<string> {
+  // D1 折叠边界：fork 前读父会话当前最大节点 seq（fork 继承的内容到此为止）。
+  // 读取走 chatSourceOf 双兼容面（0.1.2 的 Session 快照已无 nodes 顶层字段，
+  // 内容在 uiConversation.legacy——直读 Session 会静默拿不到边界）。
+  let boundarySeq: number | undefined
+  try {
+    const source = chatSourceOf(ctx, ctx.sessions.binding(parentSessionId))
+    const snap = source?.getLegacy()
+    let max = -1
+    for (const node of snap?.nodes ?? []) {
+      const seq = (node as { seq?: unknown }).seq
+      if (typeof seq === 'number' && seq > max) max = seq
+    }
+    if (max >= 0) boundarySeq = max
+  } catch {
+    // 边界缺失不阻断 fork。
+  }
   const forked = await ctx.sessions.fork({ sessionId: parentSessionId })
   // meta 先行：fork resolve 后立即登记 childId（会话切换导致组件卸载时
   // updateTab 找不到 tab 也只是 no-op——否则 Tab 永远停在 forking 且下次
   // 挂载重复 fork 出孤儿会话）。
-  updateTabMeta(ctx, tabId, (current) => ({ ...current, childId: forked, parentSessionId }))
+  updateTabMeta(ctx, tabId, (current) => ({
+    ...current,
+    childId: forked,
+    parentSessionId,
+    ...(boundarySeq !== undefined ? { boundarySeq } : {}),
+  }))
   // 归档失败残留可见（无 unarchive API），不阻断面板。
   try {
     await ctx.workspaces.archiveSession(forked)

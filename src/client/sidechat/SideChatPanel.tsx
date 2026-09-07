@@ -17,10 +17,11 @@ import { IconCheckOutline16, IconNewChatOutline16, IconSendOutline16, IconShareO
 import type { Context, SessionFace, TabComponentProps } from '../host/contracts.ts'
 import { useComposer, type Composer } from './composer.ts'
 import { clearPendingDraft, pairQuestions, parseSideChatMeta, phaseOf } from './model.ts'
-import { transcriptOf, type ChatMessage } from '../chat/transcript.ts'
+import { partitionInherited, transcriptOf, type ChatMessage } from '../chat/transcript.ts'
 import { chatSourceOf, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, updateTabMeta } from './lifecycle.ts'
 import { ToolCard } from '../chat/ToolCard.tsx'
 import { ReasoningRow } from '../chat/ReasoningRow.tsx'
+import { FoldCard } from '../chat/FoldCard.tsx'
 import { createFoldStore, type FoldStore } from '../chat/viewState.ts'
 import { flattenReflowContent, splitProtocolPrefix } from '../annotate/format.ts'
 import { markdownTextProps } from '../host/markdown.ts'
@@ -181,7 +182,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
       <div ref={bodyRef} className={css.body}>
         {messages.length === 0 && !running
           ? <EmptyState />
-          : <MessageList messages={messages} fold={fold} reflow={props.reflow} parentSessionId={meta.parentSessionId} sideTitle={tab.title} />}
+          : <MessageList messages={messages} fold={fold} boundarySeq={meta.boundarySeq} reflow={props.reflow} parentSessionId={meta.parentSessionId} sideTitle={tab.title} />}
         {openFailed && <div className={css.errorRow}>{t('historyFailed')}</div>}
       </div>
       <ComposerBar ctx={ctx} session={session} composer={composer} running={running} visible={visible} modelName={modelName} />
@@ -214,18 +215,31 @@ function StateScreen(props: { title: string; detail?: string; hint?: string }) {
   )
 }
 
-function MessageList({ messages, fold, reflow, parentSessionId, sideTitle }: {
+function MessageList({ messages, fold, boundarySeq, reflow, parentSessionId, sideTitle }: {
   messages: readonly ChatMessage[]
   fold: FoldStore
+  boundarySeq: number | undefined
   reflow: ReflowStore
   parentSessionId: string | undefined
   sideTitle: string
 }) {
   // 问答成对：每条 assistant 消息配对它在回答的用户提问（回流时带上）。
   const questions = useMemo(() => pairQuestions(messages), [messages])
+  // D1：fork 继承区折叠为指示卡（默认折叠=密度默认态；展开态在同一张卡里，
+  // 内容走同一套 MessageRow——材质同源）。继承区默认不挂载（长 fork 历史的
+  // 性能护栏）。
+  const { inherited, fresh } = useMemo(() => partitionInherited(messages, boundarySeq), [messages, boundarySeq])
+  const renderRow = (message: ChatMessage) => (
+    <MessageRow key={message.key} message={message} question={questions.get(message.key)} fold={fold} reflow={reflow} parentSessionId={parentSessionId} sideTitle={sideTitle} />
+  )
   return (
     <div className={css.transcript}>
-      {messages.map(message => <MessageRow key={message.key} message={message} question={questions.get(message.key)} fold={fold} reflow={reflow} parentSessionId={parentSessionId} sideTitle={sideTitle} />)}
+      {inherited.length > 0 && (
+        <FoldCard count={inherited.length} rowKey="inherited" fold={fold}>
+          {inherited.map(renderRow)}
+        </FoldCard>
+      )}
+      {fresh.map(renderRow)}
     </div>
   )
 }

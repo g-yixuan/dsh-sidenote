@@ -340,3 +340,10 @@
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+/* D1 父历史折叠卡展开体：继承的消息区与新鲜区同流，左侧细线标示「快照」身份。 */
+.inheritedBody {
+  border-top: 1px dashed var(--dsw-alias-border-l2);
+  padding: 6px 0 2px;
+  opacity: 0.92;
+}

@@ -164,10 +164,11 @@ test('fork journey: 种子会话 → 侧边聊天 fork → 历史渲染 → 刷�
   // fork 出的历史渲染到面板（含 fork/加载等待）。
   const sidebar = page.locator('[data-dsh-better-sidebar]')
   await dumpStep(page, '04-side-chat-opened')
+  await expandInherited(page)
   await expect(
     sidebar.getByText(/full history snapshot/).first(),
-    '侧边聊天面板未渲染 fork 出的历史',
-  ).toBeVisible({ timeout: 60_000 })
+    '侧边聊天面板未渲染 fork 出的历史（折叠卡展开后）',
+  ).toBeVisible({ timeout: 15_000 })
 
   // 等布局持久化落定（better-sidebar 的 200ms 防抖写盘 + 余量）。
   await page.waitForTimeout(2_000)
@@ -178,10 +179,11 @@ test('fork journey: 种子会话 → 侧边聊天 fork → 历史渲染 → 刷�
   // 刷新：布局持久化恢复 Tab，历史重绑。
   await page.reload({ waitUntil: 'domcontentloaded' })
   await dismissOnboarding(page)
+  await expandInherited(page)
   await expect(
     sidebar.getByText(/full history snapshot/).first(),
-    '刷新后侧边聊天的 fork 历史未恢复',
-  ).toBeVisible({ timeout: 90_000 })
+    '刷新后侧边聊天的 fork 历史未恢复（折叠卡展开后）',
+  ).toBeVisible({ timeout: 15_000 })
   await dumpStep(page, '05-after-reload')
 
   expect(pageErrors, 'pageerrors during fork journey').toEqual([])
@@ -198,10 +200,7 @@ test('tool cards: fork 历史里的 read/bash 渲染为原生级工具卡（正�
   await page.getByRole('menuitem', { name: /Side chat/ }).first().click()
 
   const sidebar = page.locator('[data-dsh-better-sidebar]')
-  await expect(
-    sidebar.getByText(/full history snapshot/).first(),
-    '侧边聊天未渲染 fork 历史',
-  ).toBeVisible({ timeout: 60_000 })
+  await expandInherited(page)
 
   // 种子 turn 3：read README.md + bash `ls -1` 并行（presentationMeta fixture）。
   // 卡片默认折叠（密度于默认态）：标题行可见即渲染意图已生效；
@@ -227,6 +226,14 @@ test('tool cards: fork 历史里的 read/bash 渲染为原生级工具卡（正�
 
   expect(pageErrors, 'pageerrors during tool cards').toEqual([])
 })
+
+/** D1 折叠卡：等待并展开「继承自主会话」区（fork 历史默认折叠——密度默认态）。 */
+async function expandInherited(page: Page): Promise<void> {
+  const sidebar = page.locator('[data-dsh-better-sidebar]')
+  const card = sidebar.locator('[data-disclosure-row]', { hasText: /Inherited from main session|继承自主会话/ }).filter({ visible: true }).first()
+  await expect(card, 'D1 父历史折叠卡未出现').toBeVisible({ timeout: 60_000 })
+  await card.click()
+}
 
 /** 把聊天消息区滚回顶部（角标锚点文本回到视口）。 */
 async function scrollChatToTop(page: Page): Promise<void> {
@@ -421,10 +428,11 @@ test('linkage journey: 划选 → 在侧边聊天中提问 → 编辑器 → 侧
 
   // 侧边聊天 Tab 打开（fork 主会话），composer 草稿带「引用 + 注解」。
   const sidebar = page.locator('[data-dsh-better-sidebar]')
+  await expandInherited(page)
   await expect(
     sidebar.getByText(/full history snapshot/).first(),
-    '侧边聊天未打开或未渲染 fork 历史',
-  ).toBeVisible({ timeout: 60_000 })
+    '侧边聊天未打开或未渲染 fork 历史（折叠卡展开后）',
+  ).toBeVisible({ timeout: 15_000 })
   const sideComposer = sidebar.getByRole('textbox').first()
   const sideDraft = await sideComposer.evaluate((el) => (
     el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.value : (el.textContent ?? '')
@@ -452,17 +460,19 @@ test('multi-instance: 并存编号「侧边 N」+ 关闭互不影响', async ({ 
   // 开第一个侧边聊天
   await openPlusMenu(page)
   await page.getByRole('menuitem', { name: /Side chat/ }).first().click()
-  await expect(sidebar.getByText(/full history snapshot/).first()).toBeVisible({ timeout: 60_000 })
+  await expandInherited(page)
+  await expect(sidebar.getByText(/full history snapshot/).first()).toBeVisible({ timeout: 15_000 })
 
   // 开第二个：标题应为「侧边 2」（第一个 Tab 转为非激活，其内容隐藏——
   // 断言一律过滤 visible，避免命中非激活 Tab 的隐藏 DOM）。
   await openPlusMenu(page)
   await page.getByRole('menuitem', { name: /Side chat/ }).first().click()
   await expect(sidebar.getByText('Side 2', { exact: true }), '第二个侧边聊天未编号为「侧边 2」').toBeVisible({ timeout: 30_000 })
+  await expandInherited(page)
   await expect(
     sidebar.getByText(/full history snapshot/).filter({ visible: true }).first(),
-    '第二个侧边聊天未渲染 fork 历史',
-  ).toBeVisible({ timeout: 60_000 })
+    '第二个侧边聊天未渲染 fork 历史（折叠卡展开后）',
+  ).toBeVisible({ timeout: 15_000 })
   await dumpStep(page, '10-two-side-chats')
 
   // 关闭「侧边 2」：Tab 条上的 Close 按钮（同 tab 容器内）。
@@ -554,10 +564,11 @@ test('slash command: /side 出现在命令菜单且能打开侧边聊天', async
 
   // 侧边聊天 Tab 打开并渲染 fork 历史。
   const sidebar = page.locator('[data-dsh-better-sidebar]')
+  await expandInherited(page)
   await expect(
     sidebar.getByText(/full history snapshot/).filter({ visible: true }).first(),
-    '/side 未能打开带历史的侧边聊天',
-  ).toBeVisible({ timeout: 60_000 })
+    '/side 未能打开带历史的侧边聊天（折叠卡展开后）',
+  ).toBeVisible({ timeout: 15_000 })
   await dumpStep(page, '14-slash-opened')
 
   expect(pageErrors, 'pageerrors during slash command').toEqual([])

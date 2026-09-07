@@ -52,6 +52,9 @@ export interface SideChatMeta {
   parentSessionId?: string
   /** 桥接（WI-03 划选提问）写入的待注入草稿；面板应用后清除。 */
   pendingDraft?: string
+  /** D1 折叠边界：fork 时刻父会话的最大节点 seq（继承区 = seq ≤ 它）。
+   *  缺省（老 Tab）= 不折叠。 */
+  boundarySeq?: number
 }
 
 /**
@@ -65,6 +68,7 @@ export function parseSideChatMeta(meta: unknown): SideChatMeta {
   if (typeof raw.childId === 'string' && raw.childId !== '') out.childId = raw.childId
   if (typeof raw.parentSessionId === 'string' && raw.parentSessionId !== '') out.parentSessionId = raw.parentSessionId
   if (typeof raw.pendingDraft === 'string' && raw.pendingDraft !== '') out.pendingDraft = raw.pendingDraft
+  if (typeof raw.boundarySeq === 'number' && Number.isInteger(raw.boundarySeq)) out.boundarySeq = raw.boundarySeq
   return out
 }
 
