@@ -21,7 +21,9 @@ import {
   IconTrashOutline16,
   JsonTree,
   ReadBlock,
+  SearchBlock,
   TerminalBlock,
+  WebBlock,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ToolCardModel, ToolCallKind } from './cards.ts'
 import type { FoldStore } from './viewState.ts'
@@ -125,27 +127,15 @@ function ToolCardBody({ model, streaming }: { model: ToolCardModel; streaming?: 
         />
       )
     case 'search':
-      // interim：搜索卡专属渲染在后续 arm；先给结构化摘要（数据 cards.ts 已保全）。
-      return (
-        <div className={css.toolGenericBody}>
-          <pre className={css.toolBodyText}>
-            {model.shape === 'matches'
-              ? `${model.files?.length ?? 0} 个文件 / ${model.total} 处匹配${model.truncated ? '（已截断）' : ''}`
-              : `${model.paths?.length ?? 0} / ${model.total} 个路径${model.truncated ? '（已截断）' : ''}`}
-          </pre>
-        </div>
-      )
+      // SearchBlock 契约：kind ← 我们的 shape（cards.ts 已改名归一），
+      // files/paths/truncated/total 形状同构直通。
+      return model.shape === 'matches'
+        ? <SearchBlock kind="matches" files={[...(model.files ?? [])].map(f => ({ path: f.path, matches: [...f.matches] }))} truncated={model.truncated} total={model.total} />
+        : <SearchBlock kind="paths" paths={[...(model.paths ?? [])]} truncated={model.truncated} total={model.total} />
     case 'web':
-      return (
-        <div className={css.toolGenericBody}>
-          {model.webKind === 'search' && model.sources !== undefined && (
-            <pre className={css.toolBodyText}>{model.sources.map(s => `${s.title ?? ''}\n${s.url}`).join('\n\n')}</pre>
-          )}
-          {model.webKind === 'fetch' && (
-            <pre className={css.toolBodyText}>{`${model.url ?? ''} → ${model.statusCode ?? '?'}${model.truncated ? '（已截断）' : ''}`}</pre>
-          )}
-        </div>
-      )
+      return model.webKind === 'search'
+        ? <WebBlock kind="search" sources={[...(model.sources ?? [])]} truncated={model.truncated === true} {...(model.answer !== undefined ? { answer: model.answer } : {})} />
+        : <WebBlock kind="fetch" url={model.url ?? ''} statusCode={model.statusCode ?? 0} truncated={model.truncated === true} />
     default: {
       // generic（宿主默认卡形态的自绘：标题行在壳上，体 = rawInput/正文/文件列表）。
       const m = model

@@ -192,7 +192,7 @@ export function cardModelOf(input: CardModelInput): ToolCardModel {
       const base = { kind: 'web' as const, title: rc.title ?? call?.title ?? input.toolName }
       if (rc.kind === 'search') {
         const rs: WebSearchResultView = rc
-        return { ...base, webKind: 'search' as const, sources: rs.sources, ...(rs.answer !== undefined ? { answer: rs.answer } : {}) }
+        return { ...base, webKind: 'search' as const, sources: rs.sources, truncated: rs.truncated, ...(rs.answer !== undefined ? { answer: rs.answer } : {}) }
       }
       if (rc.kind === 'fetch') {
         const rf: WebFetchResultView = rc
