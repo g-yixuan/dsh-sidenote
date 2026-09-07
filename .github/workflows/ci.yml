@@ -66,9 +66,6 @@ jobs:
             bs-version: '0.18.0'
           - dsh-version: '0.1.2-rc.1'
             bs-version: '0.18.0'
-            # 已知失败中（fork 历史回放 + 发送拦截，W00-e2e-dual-protocol.md），
-            # 修复落地后移出 continue-on-error。
-            experimental: true
     continue-on-error: ${{ matrix.experimental || false }}
     env:
       DSH_TELEMETRY_DISABLED: '1'

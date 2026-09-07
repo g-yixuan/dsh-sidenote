@@ -10,7 +10,7 @@
  * runningCalls 承载在途流式输出。
  */
 import type { ConversationSnapshot } from '../host/contracts.ts'
-import { cardModelOf, type ToolCardModel } from './cards.ts'
+import { cardModelFromNode, cardModelOf, type ToolCardModel } from './cards.ts'
 import { t } from '../locales.ts'
 
 /** 面板渲染用的消息视图（自绘；工具卡片等复杂节点降级为简洁块）。 */
@@ -106,24 +106,32 @@ export function nodeToMessage(node: unknown): ChatMessage | null {
       }
     }
     case 'tool-result': {
-      const call = n.call as { name?: unknown } | null
+      const call = n.call as { name?: unknown; argsRaw?: unknown } | null
       const toolName = typeof call?.name === 'string'
         ? call.name
         : typeof n.callId === 'string' ? n.callId : t('toolFallback')
       const text = truncateText(contentTextOf(n.content), TOOL_TEXT_LIMIT)
+      // 双版本：0.1.1 节点带 callView/resultView（wire 渲染意图）走映射；
+      // 0.1.2 从节点移除（全包零命中实证）→ 客户端从原始字段+meta 推导。
+      const card = (n.callView ?? n.resultView) != null
+        ? cardModelOf({
+            toolName,
+            callView: n.callView as never,
+            resultView: n.resultView as never,
+            rawText: text,
+          })
+        : cardModelFromNode({
+            name: toolName,
+            argsRaw: typeof call?.argsRaw === 'string' ? call.argsRaw : undefined,
+            meta: n.meta,
+            rawText: text,
+          })
       return {
         key: seqKey('t', n),
         role: 'tool',
         toolName,
         text,
-        // 渲染意图随行（宿主算好的 card union → 视图模型；未知卡种在
-        // cards.ts 内 default 降级 + warn-once）。
-        card: cardModelOf({
-          toolName,
-          callView: n.callView as never,
-          resultView: n.resultView as never,
-          rawText: text,
-        }),
+        card,
         ...(n.isError === true ? { isError: true } : {}),
       }
     }
@@ -202,11 +210,12 @@ export function transcriptOf(snapshot: ConversationSnapshot | undefined | null):
     }
   }
 
-  // 在途工具调用（tool/call 已见、tool/result 未至；callView 随行）。
+  // 在途工具调用（tool/call 已见、tool/result 未至；0.1.1 callView 随行，
+  // 0.1.2 无 view → 从 name+argsRaw 推导）。
   if (Array.isArray(snapshot.runningCalls)) {
     for (const call of snapshot.runningCalls) {
       if (typeof call !== 'object' || call === null) continue
-      const c = call as { callId?: unknown; name?: unknown; turn?: unknown; step?: unknown; callView?: unknown }
+      const c = call as { callId?: unknown; name?: unknown; turn?: unknown; step?: unknown; callView?: unknown; argsRaw?: unknown }
       const toolName = typeof c.name === 'string' ? c.name : t('toolFallback')
       inflight.push({
         turn: typeof c.turn === 'number' ? c.turn : Number.MAX_SAFE_INTEGER,
@@ -218,7 +227,13 @@ export function transcriptOf(snapshot: ConversationSnapshot | undefined | null):
           toolName,
           text: '',
           streaming: true,
-          card: cardModelOf({ toolName, callView: c.callView as never, resultView: null }),
+          card: c.callView != null
+            ? cardModelOf({ toolName, callView: c.callView as never, resultView: null })
+            : cardModelFromNode({
+                name: toolName,
+                argsRaw: typeof c.argsRaw === 'string' ? c.argsRaw : undefined,
+                rawText: '',
+              }),
         },
       })
     }

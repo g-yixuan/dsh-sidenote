@@ -7,7 +7,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DSH_CMD="${DSH_CMD:-dsh}"
 BS_VERSION="${BS_VERSION:-0.16.1}"
 PORT="${PORT:-4177}"
-TARBALL="${TARBALL:-$(ls "$SCRIPT_DIR"/../dsh-sidenote-*.tgz 2>/dev/null | head -1 || true)}"
+TARBALL="${TARBALL:-}"
+if [ -z "$TARBALL" ]; then
+  # 按 package.json 版本精确选（字典序 head -1 会让残留旧版压过新版）。
+  TARBALL="$SCRIPT_DIR/../dsh-sidenote-$(node -p "require('$SCRIPT_DIR/../package.json').version").tgz"
+fi
 [ -n "$TARBALL" ] && [ -f "$TARBALL" ] || { echo "找不到 tarball——先 pnpm build && pnpm pack" >&2; exit 1; }
 TARBALL="$(cd "$(dirname "$TARBALL")" && pwd)/$(basename "$TARBALL")"
 

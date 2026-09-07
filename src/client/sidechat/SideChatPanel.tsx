@@ -20,6 +20,7 @@ import { clearPendingDraft, pairQuestions, parseSideChatMeta, phaseOf } from './
 import { transcriptOf, type ChatMessage } from '../chat/transcript.ts'
 import { chatSourceOf, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, updateTabMeta } from './lifecycle.ts'
 import { ToolCard } from '../chat/ToolCard.tsx'
+import { ReasoningRow } from '../chat/ReasoningRow.tsx'
 import { createFoldStore, type FoldStore } from '../chat/viewState.ts'
 import { flattenReflowContent, splitProtocolPrefix } from '../annotate/format.ts'
 import { markdownTextProps } from '../host/markdown.ts'
@@ -314,10 +315,12 @@ function MessageRow({ message, question, fold, reflow, parentSessionId, sideTitl
           )}
           <div className={css.assistantBody}>
             {message.reasoning !== undefined && message.reasoning !== '' && (
-              <details className={css.reasoning}>
-                <summary>{t('thinking')}</summary>
-                <div className={css.reasoningBody}>{message.reasoning}</div>
-              </details>
+              <ReasoningRow
+                text={message.reasoning}
+                rowKey={`${message.key}:thinking`}
+                fold={fold}
+                {...(message.streaming === true ? { streaming: true } : {})}
+              />
             )}
             {message.text !== ''
               ? <MarkdownText {...markdownTextProps(message.text, message.streaming)} />

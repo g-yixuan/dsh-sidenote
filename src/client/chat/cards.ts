@@ -225,3 +225,145 @@ function genericModel(
     ...(gc?.locations !== undefined ? { locations: gc.locations } : {}),
   }
 }
+
+// ── 0.1.2 推导路径（callView/resultView 在 0.1.2 从节点模型移除） ────────────
+//
+// 0.1.2 重构：工具卡从「wire 携带渲染意图（viewFor 现算）」改为「客户端从原始
+// 字段 + result.meta（presentationMeta，随日志持久化）推导」（证据：0.1.2-rc.1
+// 全包 grep callView 零命中；ui-tool models/*-card-model.d.ts 是纯客户端推导器）。
+// 下面是该推导的最小忠实复刻（只覆盖 P0 三卡 + 可判定回退）：
+//
+// - bash/pwsh：terminal 卡——命令取自 argsRaw.command；输出/exitCode 从结果
+//   正文剥尾标（`\n[exit code: N]` / `[killed by signal: X]`，宿主
+//   parseExitStatus 同款格式）。
+// - read：read 卡——meta 过 FsReadMeta 形状校验（readMetaFromMeta 的语义
+//   子集：offset 1-based、行号严格递增且不超 totalLines；违规降级 generic）。
+// - 其余（edit/write/grep/glob/web/未知）：generic 卡，标题尽力从 argsRaw
+//   的 file_path/command 提取（退化即工具名）。
+
+/** 结果正文尾标解析（宿主 parseExitStatus 的线格式）。 */
+function parseExitStatus(text: string): { output: string; exitCode?: number; signal?: string } {
+  const m = /\n\[(?:exit code: (\d+)|killed by signal: ([A-Z]+))\]\s*$/.exec(text)
+  if (m === null) return { output: text }
+  // 尾标前的空行一并剥掉（终端卡的输出体不带结尾空行）。
+  const output = text.slice(0, m.index).replace(/\n+$/, '')
+  if (m[1] !== undefined) return { output, exitCode: Number(m[1]) }
+  return { output, signal: m[2] }
+}
+
+/** FsReadMeta 形状+语义校验（readMetaFromMeta 的忠实子集）。 */
+function readMetaOf(meta: unknown): { path: string; lines: { number: number; text: string }[]; totalLines: number; lang?: string } | undefined {
+  if (typeof meta !== 'object' || meta === null) return undefined
+  const m = meta as Record<string, unknown>
+  if (typeof m.path !== 'string' || !Array.isArray(m.lines) || typeof m.totalLines !== 'number') return undefined
+  if (!Number.isInteger(m.totalLines) || m.totalLines < 0) return undefined
+  let prev = 0
+  const lines: { number: number; text: string }[] = []
+  for (const raw of m.lines) {
+    const l = raw as { number?: unknown; text?: unknown }
+    if (typeof l?.number !== 'number' || typeof l?.text !== 'string') return undefined
+    if (!Number.isInteger(l.number) || l.number <= prev || l.number > m.totalLines) return undefined
+    prev = l.number
+    lines.push({ number: l.number, text: l.text })
+  }
+  return {
+    path: m.path,
+    lines,
+    totalLines: m.totalLines,
+    ...(typeof m.lang === 'string' ? { lang: m.lang } : {}),
+  }
+}
+
+/** argsRaw（JSON 字符串）里尽力提取展示字段。 */
+function argsSummary(argsRaw: string | undefined): { command?: string; description?: string; path?: string } {
+  if (argsRaw === undefined || argsRaw === '') return {}
+  try {
+    const parsed: unknown = JSON.parse(argsRaw)
+    if (typeof parsed !== 'object' || parsed === null) return {}
+    const a = parsed as Record<string, unknown>
+    return {
+      ...(typeof a.command === 'string' ? { command: a.command } : {}),
+      ...(typeof a.description === 'string' ? { description: a.description } : {}),
+      ...(typeof a.file_path === 'string' ? { path: a.file_path } : typeof a.path === 'string' ? { path: a.path } : {}),
+    }
+  } catch {
+    return {}
+  }
+}
+
+export interface NodeCardInput {
+  /** wire 工具名（tool-result 节点的 call.name）。 */
+  name: string
+  /** 调用头参数原文（JSON 字符串）。 */
+  argsRaw?: string | undefined
+  /** 结果 meta（presentationMeta，0.1.2 起在节点上随行）。 */
+  meta?: unknown
+  /** 结果正文（已拼 text 块）。 */
+  rawText: string
+  cwdBase?: string | undefined
+}
+
+/**
+ * 0.1.2 推导路径：节点原始字段 → ToolCardModel。与 cardModelOf（0.1.1 wire
+ * 面）平级；选择点在 transcript 层（节点带不带 callView 一眼可分）。
+ */
+export function cardModelFromNode(input: NodeCardInput): ToolCardModel {
+  const args = argsSummary(input.argsRaw)
+  const name = input.name
+
+  // bash 家族 → terminal 卡（含 terminal_send 不在此列——那是另一个工具面）。
+  if (name === 'bash' || name === 'bash-persistent' || name === 'pwsh' || name === 'pwsh-persistent') {
+    const { output, exitCode, signal } = parseExitStatus(input.rawText)
+    return {
+      kind: 'terminal',
+      title: args.command ?? name,
+      ...(args.description !== undefined ? { description: args.description } : {}),
+      output,
+      ...(exitCode !== undefined ? { exitCode } : {}),
+      ...(signal !== undefined ? { signal } : {}),
+    }
+  }
+
+  // read → read 卡（meta 校验不过降级 generic）。
+  if (name === 'read') {
+    const meta = readMetaOf(input.meta)
+    if (meta !== undefined) {
+      return {
+        kind: 'read',
+        title: `Read ${meta.path}`,
+        path: meta.path,
+        lines: meta.lines,
+        totalLines: meta.totalLines,
+        ...(meta.lang !== undefined ? { lang: meta.lang } : {}),
+      }
+    }
+  }
+
+  // 其余：generic（标题尽力从参数提取可读形态）。
+  const title = args.path !== undefined
+    ? `${name} ${args.path}`
+    : args.command ?? name
+  return {
+    kind: 'generic',
+    title,
+    icon: KIND_BY_NAME[name] ?? 'other',
+    bodyText: input.rawText === '' ? undefined : input.rawText,
+  }
+}
+
+/** 工具名 → 图标类别的静态映射（0.1.2 没有 callView.kind 可用）。 */
+const KIND_BY_NAME: Record<string, ToolCallKind> = {
+  read: 'read',
+  write: 'edit',
+  edit: 'edit',
+  'str-replace-editor': 'edit',
+  bash: 'execute',
+  'bash-persistent': 'execute',
+  pwsh: 'execute',
+  'pwsh-persistent': 'execute',
+  grep: 'search',
+  glob: 'search',
+  web_search: 'fetch',
+  web_fetch: 'fetch',
+}
+

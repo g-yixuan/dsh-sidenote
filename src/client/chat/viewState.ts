@@ -9,6 +9,8 @@ export interface FoldStore {
   getSnapshot(): number
   subscribe(fn: () => void): () => void
   isOpen(key: string): boolean
+  /** 用户是否显式碰过该键（思考块「流式默认展开」要区分未触碰 vs 显式收起）。 */
+  has(key: string): boolean
   toggle(key: string): void
   /** 全部收起/展开（P1-4 密度管理「一键折叠工具流」）。keys = 当前可见键集。 */
   setAll(keys: readonly string[], open: boolean): void
@@ -29,6 +31,7 @@ export function createFoldStore(): FoldStore {
       return () => { listeners.delete(fn) }
     },
     isOpen: (key) => open.get(key) === true,
+    has: (key) => open.has(key),
     toggle(key) {
       open.set(key, open.get(key) !== true)
       notify()

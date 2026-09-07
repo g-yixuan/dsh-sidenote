@@ -77,12 +77,35 @@ export function ToolCard(props: { model: ToolCardModel; rowKey: string; fold: Fo
   )
 }
 
+/**
+ * TerminalBlock 的全量 labels（**0.1.2 运行时不传会崩**——其复制按钮无守卫
+ * 读 `labels.copy/copied`，W00 排障实证于 0.1.2-rc.1）。按调用点构建保持
+ * 本地化新鲜；函数字段按 TerminalBlockLabels 契约。
+ */
+function terminalLabels() {
+  return {
+    signal: (signal: string) => t('termSignal', { signal }),
+    exitCode: (code: number) => t('termExitCode', { code }),
+    running: t('running'),
+    failed: t('failed'),
+    done: t('termDone'),
+    copy: t('codeCopy'),
+    copied: t('codeCopied'),
+    noOutput: t('termNoOutput'),
+    collapseAria: t('termCollapseAria'),
+    collapse: t('termCollapse'),
+    expandAria: (n: number) => t('termExpandAria', { n }),
+    expand: (n: number) => t('termExpand', { n }),
+  }
+}
+
 function ToolCardBody({ model, streaming }: { model: ToolCardModel; streaming?: boolean }) {
   switch (model.kind) {
     case 'terminal':
       return (
         <TerminalBlock
           command={model.title}
+          labels={terminalLabels()}
           {...(model.cwd !== undefined ? { cwd: model.cwd } : {})}
           {...(model.output !== undefined ? { output: model.output } : {})}
           {...(model.exitCode !== undefined ? { exitCode: model.exitCode } : {})}

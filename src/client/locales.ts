@@ -108,6 +108,16 @@ export const en = {
   reflowReason: 'brought back from a side chat by the user',
   reflowBubbleLabel: 'Side-chat context',
   reflowRemoveTitle: 'Remove reflow',
+
+  // TerminalBlock labels（0.1.2 运行时不传 labels 会崩——W00 排障实证）
+  termSignal: 'Terminated ({signal})',
+  termExitCode: 'Exit code {code}',
+  termDone: 'done',
+  termNoOutput: '(no output)',
+  termCollapse: 'Collapse',
+  termCollapseAria: 'Collapse the output',
+  termExpand: 'Show all ({n} hidden lines)',
+  termExpandAria: 'Show all ({n} hidden lines)',
 }
 
 export type CopyKey = keyof typeof en
@@ -202,6 +212,15 @@ export const zh: Record<CopyKey, string> = {
   reflowReason: '用户选择从侧边聊天带回主线',
   reflowBubbleLabel: '含侧边回流上下文',
   reflowRemoveTitle: '移除回流',
+
+  termSignal: '已终止（{signal}）',
+  termExitCode: '退出码 {code}',
+  termDone: '完成',
+  termNoOutput: '（无输出）',
+  termCollapse: '收起',
+  termCollapseAria: '收起输出',
+  termExpand: '展开全部（隐藏 {n} 行）',
+  termExpandAria: '展开全部（隐藏 {n} 行）',
 }
 
 /** The DSH locale service face we consume (subset of LocaleRuntime). */

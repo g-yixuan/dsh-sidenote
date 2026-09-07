@@ -3,7 +3,7 @@
  * 未知卡 default 降级 + null 缺省 + cwd 解析。
  */
 import { describe, expect, it } from 'vitest'
-import { cardModelOf } from '../../src/client/chat/cards.ts'
+import { cardModelFromNode, cardModelOf } from '../../src/client/chat/cards.ts'
 
 describe('cardModelOf', () => {
   it('terminal：call 给标题/cwd/描述，result 给 output/exitCode（结果态覆盖标题）', () => {
@@ -116,5 +116,58 @@ describe('cardModelOf', () => {
     const weird = { card: 'search', shape: 'clusters', paths: [] }
     const model = cardModelOf({ toolName: 'grep', callView: null, resultView: weird as never, rawText: 'raw' })
     expect(model.kind).toBe('generic')
+  })
+})
+
+describe('cardModelFromNode（0.1.2 推导路径：callView 移除后的客户端推导）', () => {
+  it('bash：argsRaw.command 作标题，尾标剥成 output+exitCode', () => {
+    const model = cardModelFromNode({
+      name: 'bash',
+      argsRaw: '{"command":"ls -1","description":"列目录"}',
+      rawText: 'README.md\npackage.json\n\n[exit code: 0]',
+    })
+    expect(model).toEqual({
+      kind: 'terminal',
+      title: 'ls -1',
+      description: '列目录',
+      output: 'README.md\npackage.json',
+      exitCode: 0,
+    })
+  })
+
+  it('bash：signal 尾标与无尾标原样', () => {
+    expect(cardModelFromNode({ name: 'bash', argsRaw: '{"command":"x"}', rawText: 'partial\n[killed by signal: SIGTERM]' }))
+      .toMatchObject({ kind: 'terminal', output: 'partial', signal: 'SIGTERM' })
+    expect(cardModelFromNode({ name: 'bash', argsRaw: '{"command":"x"}', rawText: 'plain' }))
+      .toMatchObject({ kind: 'terminal', output: 'plain' })
+    expect(cardModelFromNode({ name: 'bash', argsRaw: '{"command":"x"}', rawText: 'plain' })).not.toHaveProperty('exitCode')
+  })
+
+  it('read：meta 过校验 → read 卡（标题 Read <path>）；meta 坏 → generic 降级', () => {
+    const good = cardModelFromNode({
+      name: 'read',
+      meta: { path: 'README.md', offset: 1, lines: [{ number: 1, text: '# x' }], totalLines: 3, lang: 'md' },
+      rawText: '<path>README.md</path>...',
+    })
+    expect(good).toMatchObject({ kind: 'read', title: 'Read README.md', totalLines: 3, lang: 'md' })
+    // 行号越界（>totalLines）→ 语义校验拒收 → 降级
+    const bad = cardModelFromNode({
+      name: 'read',
+      meta: { path: 'a.ts', offset: 1, lines: [{ number: 99, text: 'x' }], totalLines: 3 },
+      rawText: 'raw',
+    })
+    expect(bad.kind).toBe('generic')
+  })
+
+  it('edit：generic 卡 + 路径入标题；未知工具：名为题', () => {
+    expect(cardModelFromNode({ name: 'edit', argsRaw: '{"file_path":"a.ts"}', rawText: '' }))
+      .toMatchObject({ kind: 'generic', title: 'edit a.ts', icon: 'edit' })
+    expect(cardModelFromNode({ name: 'mystery', rawText: 'out' }))
+      .toMatchObject({ kind: 'generic', title: 'mystery', icon: 'other', bodyText: 'out' })
+  })
+
+  it('argsRaw 非 JSON / 缺字段不炸', () => {
+    expect(cardModelFromNode({ name: 'bash', argsRaw: 'not json', rawText: '' }).kind).toBe('terminal')
+    expect(cardModelFromNode({ name: 'bash', argsRaw: undefined, rawText: '' })).toMatchObject({ title: 'bash' })
   })
 })

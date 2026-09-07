@@ -216,7 +216,9 @@ test('tool cards: fork 历史里的 read/bash 渲染为原生级工具卡（正�
 
   // 展开终端卡 → TerminalBlock 输出（exit code 0 的输出正文，种子 fixture 已验证
   // 宿主投影产出 terminal 卡）。点击标题行展开（DisclosureRow expandOnRowClick）。
-  await terminalTitle.click()
+  // 点击 DisclosureRow 行容器（[data-disclosure-row]），不点文本——与
+  // jsdom 冒烟同姿势（文本节点的 click 目标在宿主合成事件下不稳定）。
+  await terminalTitle.locator('xpath=ancestor-or-self::*[@data-disclosure-row][1]').click()
   await expect(
     sidebar.getByText(/package\.json/).first(),
     '终端卡展开后无命令输出',
@@ -370,16 +372,16 @@ test('annotate journey: 划选 → 浮层 → 注解编辑器 → 角标 → chi
   await expect(overlay.getByText('1', { exact: true }).first(), '刷新后角标未恢复').toBeVisible({ timeout: 15_000 })
   await dumpStep(page, '08b-restored-after-reload')
 
-  // 发送拦截全链路（C2 P0/P1 回归）：带注释 Enter → 草稿拼入协议块 →
-  // 提交后草稿清空 → chip 消失（注释 sent）→ 新气泡协议区隐藏 +「1 annotated」标签。
+  // 发送拦截全链路（C2 P0/P1 回归）：带注释 Enter → 提交后草稿清空 →
+  // chip 消失（注释 sent）→ 新气泡协议区隐藏 +「1 annotated」标签。
+  // 注意：不轮询草稿中间态。0.1.2 的 Lexical 管线下 setDraft(协议块) 与
+  // submit 的乐观 commitSend 在同一渲染批次落 DOM（实证见
+  // reports/ux-review/W01-intercept-012-debug.md）——「协议块已拼入」的
+  // 可观察证据是终态：新气泡 DOM 含协议文本（隐藏区）+ 留痕标签。
+  // 0.1.1 的 textarea 管线中间态可见但窗口不定，统一改终态断言双兼容。
   await composer.click()
   await composer.pressSequentially('answer my notes')
   await page.keyboard.press('Enter')
-  await expect
-    .poll(async () => composer.evaluate((el) => (
-      el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.value : (el.textContent ?? '')
-    )), { timeout: 3_000 })
-    .toContain('<annotation id="1"')
   // 提交被宿主接受（无模型 → turn 会报错，但消息已入流）：草稿清空。
   await expect
     .poll(async () => composer.evaluate((el) => (
@@ -387,7 +389,7 @@ test('annotate journey: 划选 → 浮层 → 注解编辑器 → 角标 → chi
     )), { timeout: 8_000 })
     .toBe('')
   await expect(page.getByText('1 annotation').filter({ visible: true }), '发送后 chip 未消失').toHaveCount(0)
-  // 新发出的气泡：协议区隐藏 + 留痕标签。
+  // 新发出的气泡：协议区隐藏 + 留痕标签（协议块确实拼进了发送文本）。
   const sentBubble = page.locator('[data-chat-flow-kind="user"]', { hasText: 'answer my notes' })
   await expect(sentBubble.getByText('1 annotated'), '新气泡留痕标签未出现').toBeVisible({ timeout: 10_000 })
   await expect(sentBubble.getByText('<annotation', { exact: false }).first(), '新气泡协议区未隐藏').toBeHidden()
