@@ -101,6 +101,137 @@ const lines = [
   },
   { type: 'step/end', seq: 11, time: t0 + 12, data: { turn: 2, step: 1 } },
   { type: 'turn/end', seq: 12, time: t0 + 13, data: { turn: 2, reason: { kind: 'completed' } } },
+  // Turn 3：一次 Read + 一次 Bash 工具调用——Delivery_03 工具卡渲染（WI-01）
+  // 的 e2e 正样本 fixture。日志里只伪造 tool/call + tool/result 事件本身；
+  // callView/resultView 不落日志：宿主 api-proxy 在 history/session/event 帧上
+  // 现算（dsh-host-apiproxy viewFor：tool/call 走 `ctx.tools.get(name).presentCall
+  // (JSON.parse(arguments))`，tool/result 回扫同页 tool/call 配对后走
+  // `presentResult(call.args, { content, isError, meta })`），所以种子只需让
+  // presenter 各自的输入约束成立：
+  //  - read.presentCall（dsh-tool-fs）：args 只需 `file_path`（offset/limit 可选）。
+  //  - read.presentResult：result.content 必须是单个 text block 且匹配 envelope
+  //    `/^<path>[^\n]*<\/path>\n<type>file<\/type>\n<content>\n([\s\S]*)\n<\/content>$/`
+  //    （formatReadOutput 的产物）；`meta` 必须通过 readMetaFromMeta 语义校验
+  //    （offset≥1、行号严格递增且 ≤ totalLines、totalLines≥0）——即真实
+  //    `output.presentationMeta(args, value)` 投影出的 FsReadMeta 原样。
+  //  - bash.presentCall（dsh-tool-bash）：args 只需 `command`（description 可选、
+  //    workdir→cwd；run_in_background:true 会退化成 generic 卡，勿设）。
+  //  - bash.presentResult：content 单 text block，末尾 `\n[exit code: N]` 由
+  //    dsh-shell parseExitStatus 剥成 `{ output, exitCode }`；无标记则 exitCode: 0。
+  // 字段形状均对齐真实日志采样（read_3 / bash_5 会话，见报告 W00）。
+  { type: 'turn/start', seq: 13, time: t0 + 14, data: { turn: 3 } },
+  { type: 'step/start', seq: 14, time: t0 + 15, data: { turn: 3, step: 1 } },
+  {
+    type: 'user/message', seq: 15, time: t0 + 16,
+    data: {
+      content: [{ type: 'text', text: 'Quick check: read the README and list the workspace files.' }],
+      source: { kind: 'user', rpcId: 'e2e-seed-3', clientTimeZone: 'Asia/Shanghai' },
+      role: 'user', id: 'e2e-user-3',
+    },
+    surfaceOp: 'append',
+  },
+  {
+    // 模型请求两个并行工具调用：content 的 tool-call blocks（dsh-llm
+    // ToolCallBlock：type/id/name/arguments）与下方 tool/call 事件的
+    // callId/arguments 逐字一致——真实日志同构（03358b85 会话 seq 139/140）。
+    type: 'assistant/message', seq: 16, time: t0 + 17,
+    data: {
+      turn: 3, step: 1,
+      message: {
+        role: 'assistant',
+        id: 'e2e-assistant-3',
+        content: [
+          { type: 'text', text: 'Reading the README and listing the workspace files in parallel.' },
+          { type: 'tool-call', id: 'read_e2e_1', name: 'read', arguments: '{"file_path":"README.md","offset":1,"limit":3}' },
+          { type: 'tool-call', id: 'bash_e2e_1', name: 'bash', arguments: '{"command":"ls -1","description":"List workspace files"}' },
+        ],
+        source: { kind: 'model', provider: 'e2e', model: 'e2e' },
+      },
+    },
+    surfaceOp: 'append',
+  },
+  // tool/call 是 log-only 事件（非 SurfaceEventType），不带 surfaceOp。
+  {
+    type: 'tool/call', seq: 17, time: t0 + 18,
+    data: { turn: 3, step: 1, callId: 'read_e2e_1', name: 'read', arguments: '{"file_path":"README.md","offset":1,"limit":3}' },
+  },
+  {
+    type: 'tool/call', seq: 18, time: t0 + 19,
+    data: { turn: 3, step: 1, callId: 'bash_e2e_1', name: 'bash', arguments: '{"command":"ls -1","description":"List workspace files"}' },
+  },
+  // tool/result 是 surface 事件（surfaceOp 必带）；message 是 ToolResultMessage
+  // （role:'user'，content=[ToolResultBlock{type:'tool-result',toolCallId,content,
+  // isError}]，source={kind:'tool',callId}）；meta 即 presenter 的 presentationMeta。
+  {
+    type: 'tool/result', seq: 19, time: t0 + 20, surfaceOp: 'append', sourceEventSeqs: [17],
+    data: {
+      turn: 3, step: 1,
+      message: {
+        role: 'user',
+        id: 'e2e-tool-read-1',
+        source: { kind: 'tool', callId: 'read_e2e_1' },
+        content: [{
+          type: 'tool-result',
+          toolCallId: 'read_e2e_1',
+          isError: false,
+          // formatReadOutput envelope：presentResult 的 body 正则从这里剥出
+          // read 卡的 fallback content（无 read 卡能力的 UI 直接渲染这段）。
+          content: [{
+            type: 'text',
+            text: '<path>README.md</path>\n<type>file</type>\n<content>\n1: # dsh-sidenote\n2: \n3: A side-chat plugin for DSH.\n\n(End of file - total 3 lines)\n</content>',
+          }],
+        }],
+      },
+      // FsReadMeta（read 工具 output.presentationMeta 的产物原样）：lines 与
+      // 上面 envelope 的窗口一致；lang 由扩展名映射（.md → 'md'）。
+      meta: {
+        path: 'README.md',
+        offset: 1,
+        lines: [
+          { number: 1, text: '# dsh-sidenote' },
+          { number: 2, text: '' },
+          { number: 3, text: 'A side-chat plugin for DSH.' },
+        ],
+        totalLines: 3,
+        lang: 'md',
+      },
+    },
+  },
+  {
+    type: 'tool/result', seq: 20, time: t0 + 21, surfaceOp: 'append', sourceEventSeqs: [18],
+    data: {
+      turn: 3, step: 1,
+      message: {
+        role: 'user',
+        id: 'e2e-tool-bash-1',
+        source: { kind: 'tool', callId: 'bash_e2e_1' },
+        content: [{
+          type: 'tool-result',
+          toolCallId: 'bash_e2e_1',
+          isError: false,
+          // 末尾 exit-code 标记由 parseExitStatus 剥离 → { output, exitCode: 0 }。
+          content: [{ type: 'text', text: 'README.md\npackage.json\n\n[exit code: 0]' }],
+        }],
+      },
+    },
+  },
+  { type: 'step/end', seq: 21, time: t0 + 22, data: { turn: 3, step: 1 } },
+  { type: 'step/start', seq: 22, time: t0 + 23, data: { turn: 3, step: 2 } },
+  {
+    type: 'assistant/message', seq: 23, time: t0 + 24,
+    data: {
+      turn: 3, step: 2,
+      message: {
+        role: 'assistant',
+        id: 'e2e-assistant-4',
+        content: [{ type: 'text', text: 'The README describes this side-chat plugin, and the workspace holds README.md plus package.json. Nothing else to flag.' }],
+        source: { kind: 'model', provider: 'e2e', model: 'e2e' },
+      },
+    },
+    surfaceOp: 'append',
+  },
+  { type: 'step/end', seq: 24, time: t0 + 25, data: { turn: 3, step: 2 } },
+  { type: 'turn/end', seq: 25, time: t0 + 26, data: { turn: 3, reason: { kind: 'completed' } } },
 ]
 
 const dir = join(dshHome, 'sessions', projectKey(cwd), sessionId)
@@ -128,7 +259,8 @@ projcache.tables.sessions[sessionId] = {
   identity: { createdAt: t0, cwd },
   rows: {
     title: { ver: 1, seq: 6, val: 'Side chat plugin review' },
-    sessionListMetadata: { ver: 1, seq: 6, val: { blank: false, lastPromptAt: t0 + 4 } },
+    // lastPromptAt 跟随最后一个 user prompt（turn 3，seq 15）。
+    sessionListMetadata: { ver: 1, seq: 25, val: { blank: false, lastPromptAt: t0 + 16 } },
   },
 }
 writeFileSync(projcachePath, JSON.stringify(projcache))
