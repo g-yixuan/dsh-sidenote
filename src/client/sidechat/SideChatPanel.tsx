@@ -23,6 +23,7 @@ import type { Context, SessionFace, TabComponentProps } from '../../context-type
 import { useComposer, type Composer } from './composer.ts'
 import { clearPendingDraft, parseSideChatMeta, phaseOf, transcriptOf, type ChatMessage } from './model.ts'
 import { readTab } from './open.ts'
+import { splitProtocolPrefix } from '../annotate/format.ts'
 import type { ReflowStore } from '../reflow.ts'
 import { t, useLocaleTick } from '../locales.ts'
 import css from './sidechat.module.css'
@@ -307,12 +308,37 @@ function MessageRow({ message, reflow, parentSessionId, sideTitle }: {
 }) {
   useLocaleTick()
   switch (message.role) {
-    case 'user':
+    case 'user': {
+      // 带协议前缀的消息（注释/回流）在自绘面板同样留痕渲染：
+      // 标签 + 正文，协议区不进界面（与宿主气泡手术同语义）。
+      const proto = splitProtocolPrefix(message.text)
+      if (proto !== null) {
+        return (
+          <div className={css.userRow}>
+            <div className={css.userBubble}>
+              <span className={css.sentChipRow}>
+                {proto.annotations.length > 0 && (
+                  <span className={css.sentChip} title={proto.annotations.map(a => `${a.id}. 「${a.quote}」${a.note}`).join('\n')}>
+                    {t('sentChipLabel', { n: proto.annotations.length })}
+                  </span>
+                )}
+                {proto.reflows.length > 0 && (
+                  <span className={css.sentChip} title={proto.reflows.map(r => `${r.source}: ${r.content.slice(0, 200)}`).join('\n')}>
+                    {t('reflowBubbleLabel')}
+                  </span>
+                )}
+              </span>
+              {message.text.slice(proto.length)}
+            </div>
+          </div>
+        )
+      }
       return (
         <div className={css.userRow}>
           <div className={css.userBubble}>{message.text}</div>
         </div>
       )
+    }
     case 'assistant':
       return (
         <div className={css.assistantRow}>

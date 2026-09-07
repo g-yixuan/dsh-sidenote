@@ -1,6 +1,6 @@
 {
   "name": "dsh-sidenote",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "DSH web plugin: Codex-style side chat (fork the current session into a persistent side panel) + selection annotations with numbered badges and a composer chip. A thin consumer of dsh-better-sidebar. / Codex 风格侧边聊天 + 划选注释的 DSH 插件。",
   "type": "module",
   "license": "MIT",

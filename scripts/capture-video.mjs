@@ -84,6 +84,15 @@ await overlay.locator('button[aria-label="Save note"]').click()
 await page.getByText('1 annotation').first().waitFor({ state: 'visible', timeout: 10_000 })
 await pause(1500)
 
+// 发送携带：输入正文 → Enter → 协议块随消息发出、气泡收成「1 annotated」标签。
+const composer = page.getByRole('textbox', { name: /Message the agent|输入消息|随心输入/ }).first()
+await composer.click()
+await composer.pressSequentially('looks good to me', { delay: 30 })
+await pause(400)
+await page.keyboard.press('Enter')
+await page.getByText('1 annotated').first().waitFor({ state: 'visible', timeout: 10_000 })
+await pause(1500)
+
 // 侧边聊天
 const expand = page.getByRole('button', { name: /Expand sidebar/ }).first()
 if ((await expand.count()) > 0) { await expand.click(); await pause(800) }

@@ -4,17 +4,20 @@ A [DSH (DeepSeek Harness)](https://github.com/DeepSeek-ai) web plugin: Codex-sty
 
 English · [中文](README.md)
 
+<video src="https://raw.githubusercontent.com/g-yixuan/dsh-sidenote/main/docs/assets/demo.mp4" controls muted loop playsinline width="100%"></video>
+
 ## Features
 
 ### 💬 Side chat
 
 **Fork** the current main session (full history snapshot) into an independent side session that lives in a「侧边」tab of the right sidebar — keep the main thread moving while you chase side questions:
 
-- Open from the sidebar `+` menu →「侧边聊天」, or the `/side` slash command;
+- Three entries: the always-on「Side」pill in the session header, the sidebar `+` menu, or the `/side` slash command (`/侧边` works too);
 - The fork carries the full main-session context at fork time; afterwards the two sessions evolve independently;
 - Multiple side chats coexist («侧边», «侧边 2», …), each closable on its own;
 - The model follows the main session's current selection (synced at fork);
-- Persistent: restored with the layout across reloads/restarts; hidden from the session list (archived); only closing the tab removes it from the UI.
+- Persistent: restored with the layout across reloads/restarts; hidden from the session list (archived); only closing the tab removes it from the UI;
+- **Reflow**: send a side-chat conclusion back to the main session in one click — it lands as a controlled context chip above the main composer and rides your next message (Cursor-class capability; Codex has none).
 
 ![Side chat panel](docs/assets/04-side-chat-panel.png)
 
@@ -22,13 +25,18 @@ English · [中文](README.md)
 
 Select text in an assistant message and turn "quote + your note" into context for the model:
 
-- **Add to conversation**: the selection stays highlighted with a blue numbered badge, an annotation editor pops up (notes optional); the composer shows an「N 条注释」chip, and all live annotations ride along with your next message;
+- **Add to conversation**: the selection stays highlighted with a numbered badge in the right gutter; an annotation editor pops up (notes optional); the「N annotations」chip above the composer previews and removes each one;
 - **Ask in side chat**: after the note editor, the quote + note lands straight in a side chat's composer;
-- Click a badge to reopen the editor (edit/delete); numbers follow creation order and are never re-packed on delete; page-level lifecycle (gone on reload).
+- **Zero draft pollution**: annotations are controlled objects, never text in your composer; they're serialized into structured `<annotation>` XML blocks only at the moment you send (the most model-legible form);
+- **Traceable after send**: sent bubbles collapse to a「N annotated」label you can revisit; badges turn into outlined read-only state; **survives reloads** (persisted per session, re-anchored on return).
 
 | Selection popover | Annotation editor | Badge + chip |
 |---|---|---|
 | ![selection popover](docs/assets/01-selection-popover.png) | ![annotation editor](docs/assets/02-annotation-editor.png) | ![badge and chip](docs/assets/03-badge-and-chip.png) |
+
+| Sent-trace (bubble collapses to a label) | Side-chat reflow chip |
+|---|---|
+| ![sent trace](docs/assets/05-sent-trace.png) | ![reflow chip](docs/assets/06-reflow-chip.png) |
 
 ## Install
 

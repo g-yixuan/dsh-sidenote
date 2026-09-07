@@ -86,9 +86,31 @@ await shot('02-annotation-editor')
 // 3. 角标 + chip
 await overlay.locator('button[aria-label="Save note"]').click()
 await page.getByText('1 annotation').first().waitFor({ state: 'visible', timeout: 10_000 })
+// 角标在 gutter，滚到锚点可见
+await page.evaluate(() => {
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+  for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+    if ((n.textContent ?? '').includes('full history snapshot')) {
+      n.parentElement?.scrollIntoView({ block: 'center' })
+      return
+    }
+  }
+})
 await shot('03-badge-and-chip')
 
-// 4. 侧边聊天面板（fork 历史 + 独立 composer）
+// 4. 发送携带（Enter 拦截 → 协议块随消息发出 → 气泡留痕标签）。
+//    无模型环境 turn 会报错——只截气泡本体，避开下方的错误行。
+const composer = page.getByRole('textbox', { name: /Message the agent|输入消息|随心输入/ }).first()
+await composer.click()
+await composer.pressSequentially('looks good to me — ship it with these noted', { delay: 10 })
+await page.keyboard.press('Enter')
+const sentBubble = page.locator('[data-chat-flow-kind="user"]', { hasText: 'looks good to me' }).last()
+await sentBubble.waitFor({ state: 'visible', timeout: 10_000 })
+await page.waitForTimeout(400)
+await sentBubble.screenshot({ path: `${OUT}05-sent-trace.png` })
+console.log('captured 05-sent-trace')
+
+// 5. 侧边聊天面板（fork 历史 + 独立 composer）
 await ensureSidebarExpanded(page)
 const sidebar = page.locator('[data-dsh-better-sidebar]')
 await sidebar.getByRole('button', { name: /New tab/ }).first().click()
@@ -96,6 +118,16 @@ await page.getByRole('menuitem', { name: /Side chat/ }).first().click()
 await sidebar.getByText(/full history snapshot/).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: 60_000 })
 await page.waitForTimeout(1200)
 await shot('04-side-chat-panel')
+
+// 6. 回流：hover 侧边面板 assistant 消息 → 点回流 → 主输入框上方 chip。
+const sideMsg = sidebar.locator('[class*="_assistantRow"]').last()
+await sideMsg.hover()
+const reflowBtn = sidebar.locator('button[aria-label="Send back to main session"]').last()
+await reflowBtn.waitFor({ state: 'visible', timeout: 5_000 })
+await reflowBtn.click()
+await page.getByText(/side-chat reflow/).first().waitFor({ state: 'visible', timeout: 10_000 })
+await page.waitForTimeout(400)
+await shot('06-reflow-chip')
 
 await browser.close()
 console.log('demo assets written to docs/assets/')

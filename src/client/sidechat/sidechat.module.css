@@ -284,3 +284,25 @@
   background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
   color: var(--dsw-alias-label-primary, #1f2329);
 }
+
+/* 已发消息的留痕标签（与 annotate 模块同款样式，CSS Modules 不跨文件共享）。 */
+.sentChipRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 8px;
+}
+
+.sentChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.1));
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+  color: var(--dsw-alias-label-secondary, #3f454d);
+  font-size: 11px;
+  line-height: 16px;
+  padding: 1px 8px;
+  user-select: none;
+}
