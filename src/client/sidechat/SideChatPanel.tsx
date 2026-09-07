@@ -23,6 +23,7 @@ import { chatSourceOf, ensurePanelOpen, forkAndRegister, openSessionWindow, read
 import { ToolCard } from '../chat/ToolCard.tsx'
 import { ModelMenu } from './ModelMenu.tsx'
 import { PermissionChip } from './PermissionChip.tsx'
+import { arbitrateKeyOf, guardOf, resolveTriggerController, useSlashMenuState, SlashMenuView } from './composer/slash.tsx'
 import { ReasoningRow } from '../chat/ReasoningRow.tsx'
 import { FoldCard } from '../chat/FoldCard.tsx'
 import { createFoldStore } from '../chat/viewState.ts'
@@ -223,6 +224,15 @@ function ComposerBar(props: {
   const childIdForMenu = props.childId
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
+  // 斜杠/@ 触发菜单（WI-02）：官方 inputTriggers 控制器（公开契约面）+
+  // 自绘皮。控制器缺席（老宿主/解析失败）时全部行为静默回退现状。
+  const triggerCtl = useMemo(
+    () => resolveTriggerController(props.ctx, props.childId),
+    [props.ctx, props.childId],
+  )
+  const menuState = useSlashMenuState(triggerCtl)
+  const menuOpen = menuState?.open === true
+
   // 面板可见时预聚焦输入框（sidebar-qa AskPanel 同款）。
   useEffect(() => {
     if (visible) inputRef.current?.focus()
@@ -230,13 +240,36 @@ function ComposerBar(props: {
 
   return (
     <div className={css.composer}>
+      {menuOpen && menuState !== null && triggerCtl !== null && (
+        <SlashMenuView state={menuState} onPick={(source, index) => { triggerCtl.pick(source, index) }} />
+      )}
       <textarea
         ref={inputRef}
         className={css.input}
         placeholder={t('inputPlaceholder')}
         value={composer.draft}
-        onChange={(event) => { composer.setDraft(event.target.value) }}
+        onChange={(event) => {
+          composer.setDraft(event.target.value)
+          // 触发侦听（CAS 语义：带最新 draftRev，过期静默 no-op 由机器兜）。
+          triggerCtl?.track(
+            event.target.value,
+            event.target.selectionStart ?? event.target.value.length,
+            guardOf(composer.phase),
+            composer.draftRev ?? 0,
+          )
+        }}
         onKeyDown={(event) => {
+          // 菜单开着先仲裁（上下/Enter 选中/Esc 关闭归控制器）。
+          if (menuOpen && triggerCtl !== null) {
+            const arbKey = arbitrateKeyOf(event.key)
+            if (arbKey !== null) {
+              const outcome = triggerCtl.arbitrate(arbKey, event.nativeEvent.isComposing)
+              if (outcome !== 'pass') {
+                event.preventDefault()
+                return
+              }
+            }
+          }
           // IME 保护：组合中（候选窗未提交）的 Enter 属于输入法。
           if (event.key !== 'Enter' || event.shiftKey) return
           if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return

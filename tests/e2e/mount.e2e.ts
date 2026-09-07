@@ -583,3 +583,35 @@ test('slash command: /side 出现在命令菜单且能打开侧边聊天', async
   expect(pageErrors, 'pageerrors during slash command').toEqual([])
   expect(consoleErrors.filter((t) => PLUGIN_CONSOLE.test(t)), 'plugin console errors').toEqual([])
 })
+
+test('slash menu: 侧边 composer 斜杠菜单（inputTriggers 引擎接线 + /side 不可嵌套）', async ({ page }) => {
+  test.skip(!process.env.DSH_E2E_SEED_SESSION, 'no seeded session id')
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(String(error)))
+
+  await openSeedSession(page)
+  await openPlusMenu(page)
+  await page.getByRole('menuitem', { name: /Side chat/ }).first().click()
+
+  const sidebar = page.locator('[data-dsh-better-sidebar]')
+  await expandInherited(page)
+
+  // 侧边 composer 聚焦敲 '/'（我们自己的 textarea，role=textbox）。
+  const sideComposer = sidebar.getByRole('textbox').first()
+  await sideComposer.click()
+  await page.keyboard.type('/')
+
+  // 菜单开（自绘皮 listbox），候选出现；/side 被过滤（不可嵌套 P2-3）。
+  const menu = sidebar.locator('[role="listbox"]')
+  await expect(menu, '侧边斜杠菜单未打开').toBeVisible({ timeout: 10_000 })
+  const options = menu.getByRole('option')
+  await expect(options.first(), '菜单无候选').toBeVisible({ timeout: 10_000 })
+  await expect(options.filter({ hasText: /^\/side/ }), '侧边会话不应出现 /side（不可嵌套）').toHaveCount(0)
+
+  // Escape 关闭。
+  await page.keyboard.press('Escape')
+  await expect(menu, 'Esc 未关闭菜单').toHaveCount(0)
+  await dumpStep(page, '16-slash-menu-side')
+
+  expect(pageErrors, 'pageerrors during slash menu').toEqual([])
+})

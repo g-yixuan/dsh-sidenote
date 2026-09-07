@@ -58,6 +58,9 @@ export interface Composer {
   appendDraft(text: string): void
   /** 发送当前草稿（空草稿 no-op）。 */
   submit(): void
+  /** 斜杠/@ 触发接线需要：机器相位 + 草稿版本号（缺机器时 undefined）。 */
+  readonly phase: string | undefined
+  readonly draftRev: number | undefined
 }
 
 /**
@@ -73,13 +76,14 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
     [ctx, childId],
   )
 
-  const machineDraft = useSyncExternalStore(
+  const machineState = useSyncExternalStore(
     useCallback(
       (notify: () => void) => (input === null ? NOOP_UNSUBSCRIBE : input.state.subscribe(notify)),
       [input],
     ),
-    () => (input === null ? '' : readInputDraft(input)),
+    () => (input === null ? null : input.state.getSnapshot()),
   )
+  const machineDraft = machineState?.draft ?? ''
   const [localDraft, setLocalDraft] = useState('')
   const [sendError, setSendError] = useState<string | null>(null)
 
@@ -125,5 +129,14 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
     })
   }, [draft, input, session])
 
-  return { machine: input !== null, draft, sendError, setDraft, appendDraft, submit }
+  return {
+    machine: input !== null,
+    draft,
+    sendError,
+    setDraft,
+    appendDraft,
+    submit,
+    phase: machineState?.phase,
+    draftRev: machineState?.draftRev,
+  }
 }

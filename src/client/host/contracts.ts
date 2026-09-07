@@ -353,6 +353,8 @@ export interface InputStateSnapshot {
   readonly draft: string
   /** 输入机相位（权威：input/contract.d.ts InputState.phase 字面量联合）。 */
   readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting'
+  /** 单调草稿版本号（斜杠/@ 触发的 pick 时 CAS 用——input/contract.d.ts）。 */
+  readonly draftRev?: number
   readonly queue?: readonly unknown[]
 }
 

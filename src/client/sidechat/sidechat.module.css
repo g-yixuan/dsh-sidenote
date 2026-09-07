@@ -207,6 +207,7 @@
 
 /* ── composer ── */
 .composer {
+  position: relative; /* slashMenu 绝对定位的锚 */
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -422,4 +423,62 @@
   gap: 4px;
   min-width: 0;
   overflow: hidden;
+}
+
+/* ── WI-02 斜杠/@ 触发菜单皮（自绘；引擎是官方 inputTriggers 控制器） ── */
+.slashMenu {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 100%;
+  margin-bottom: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  z-index: 20;
+  padding: 4px;
+}
+
+.slashGroupTitle {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  padding: 4px 8px 2px;
+  text-transform: none;
+}
+
+.slashItem,
+.slashItemActive {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.slashItemActive,
+.slashItem:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.slashItemName {
+  font-weight: 500;
+  flex: none;
+}
+
+.slashItemDetail {
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
