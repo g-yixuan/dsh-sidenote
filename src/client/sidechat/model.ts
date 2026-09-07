@@ -9,7 +9,7 @@
  *   partial/runningCalls 承载在途流式输出（dsh-client-runtime
  *   lib/types/client/sessions/conversation.d.ts）。
  */
-import type { ConversationSnapshot, Context, SidebarTab } from '../../context-types.ts'
+import type { ConversationSnapshot, Context, SidebarTab } from '../host/contracts.ts'
 import { splitProtocolPrefix } from '../annotate/format.ts'
 import { t } from '../locales.ts'
 

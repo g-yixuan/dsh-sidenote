@@ -20,7 +20,7 @@
  * 回到 plain 而草稿未清 = 发送失败（宿主 notice + 留稿）→ 仅在草稿仍以
  * 我们拼的前缀开头时剥离回滚（C2 P2-3）；相位未到终态前绝不回滚。
  */
-import type { Context, ConversationService, SessionId, SessionInput } from '../../context-types.ts'
+import type { Context, ConversationService, SessionId, SessionInput } from '../host/contracts.ts'
 import { buildProtocolBlock } from './format.ts'
 import type { AnnotationStore } from './model.ts'
 import { buildReflowBlock, type ReflowStore } from '../reflow.ts'

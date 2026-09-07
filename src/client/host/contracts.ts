@@ -146,6 +146,14 @@ export interface ForkOptions {
 export type PromptContentPart = { type: 'text'; text: string } | { type: string; [key: string]: unknown }
 
 /**
+ * session.prompt 的返回（权威：contract/session.d.ts 的 RpcResult）——
+ * 直接的 ok 联合（**没有** .result 包装；那是 connection.api wire 面的
+ * RpcEnvelope，两者别混）。收窄动机：镜像过宽会让宿主演进时 typecheck
+ * 不红、e2e 假绿（arch-audit §4）。
+ */
+export type RpcResult<T> = { ok: true; value: T } | { ok: false; error: { message?: string } }
+
+/**
  * Conversation read model (subset). Extend from
  * dsh-client-runtime `lib/types/client/sessions/conversation.d.ts` as needed —
  * the real shape has chat/nodes/partial/queue/running and more.
@@ -159,7 +167,7 @@ export interface ConversationSnapshot {
 
 export interface ISession {
   readonly sessionId: SessionId
-  prompt(content: PromptContentPart[], mode: 'queue' | 'steer'): Promise<unknown>
+  prompt(content: PromptContentPart[], mode: 'queue' | 'steer'): Promise<RpcResult<{ accepted: true }>>
   cancel(): Promise<unknown>
   rename(title: string): Promise<unknown>
   loadOlder(): Promise<void>
@@ -296,7 +304,7 @@ export interface Context {
 
 /** Registration options subset passed to `ctx.slots.register` (same shape better-sidebar mirrors). */
 export interface SlotRegisterOptions {
-  name: string
+  name: KnownSlotKey
   key?: string
   id?: string
   order?: number
@@ -305,21 +313,31 @@ export interface SlotRegisterOptions {
   priority?: number
   locale?: string
   registrant?: string
-  inject?: (...args: any[]) => Record<string, unknown>
+  inject?: (...args: unknown[]) => Record<string, unknown>
   children?: Record<string, unknown>
 }
+
+/**
+ * 我们用到的 slot 键的字面量联合（真实类型是 keyof SlotMap & string）——
+ * 收窄为显式清单：拼错编译期即红；启用新槽位 = 先在这里加一行（刻意的
+ * 显式 opt-in，arch-audit §4.1-4 修法）。
+ */
+export type KnownSlotKey =
+  | 'conversation.input.dock'
+  | 'conversation.session.header.utilities'
 
 /** The client slots service face (register returns the disposer). */
 export interface SlotsService {
   register(options: SlotRegisterOptions, component: unknown): () => void
   /** Run a callback for each declaration lifetime of a slot (no-op while undeclared). */
-  inject(key: string, callback: () => (() => void) | void): () => void
+  inject(key: KnownSlotKey, callback: () => (() => void) | void): () => void
 }
 
 /** Published composer input state (subset of the real InputState). */
 export interface InputStateSnapshot {
   readonly draft: string
-  readonly phase: string
+  /** 输入机相位（权威：input/contract.d.ts InputState.phase 字面量联合）。 */
+  readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting'
   readonly queue?: readonly unknown[]
 }
 

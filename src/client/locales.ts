@@ -1,10 +1,9 @@
-import { useSyncExternalStore } from 'react'
-
 /**
  * dsh-sidenote 的双语层（zh/en），跟随 DSH 通用设置里的语言（`ctx.locale`，
  * Host-backed locale.preference，实时切换）。模式照 better-sidebar
  * `src/client/locales.ts`：attachLocale 挂服务，t() 读活动语言；
  * 服务缺失（独立组合/测试）时回退浏览器语言。
+ * 本文件保持 react-free（L0 可测）；唯一的 react 绑定点在 locale-tick.ts。
  */
 
 export const LOCALE_NS = 'dsh-sidenote'
@@ -230,6 +229,11 @@ function activeLocale(): string {
     ?? 'en'
 }
 
+/** uSES 快照源（locale-tick.ts 专用出口）：语言字符串本身即快照。 */
+export function localeSnapshot(): string {
+  return localeService?.getSnapshot().active ?? 'en'
+}
+
 /** Translate a copy key; `{name}` placeholders interpolate from `params`. */
 export function t(key: CopyKey, params?: Record<string, string | number>): string {
   const dict = activeLocale().toLowerCase().startsWith('zh') ? zh : en
@@ -240,9 +244,4 @@ export function t(key: CopyKey, params?: Record<string, string | number>): strin
     }
   }
   return text
-}
-
-/** 语言切换时驱动组件重渲（useSyncExternalStore 标准接法）。 */
-export function useLocaleTick(): void {
-  useSyncExternalStore(subscribeLocale, () => localeService?.getSnapshot().active ?? 'en')
 }

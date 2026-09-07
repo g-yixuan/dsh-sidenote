@@ -1,48 +1,31 @@
 /**
- * 侧边聊天 Tab 面板：fork 编排（首开）/ 绑定恢复（刷新后）/ 消息流 / composer。
+ * 侧边聊天 Tab 面板（L2 薄视图）：相位编排 + 消息流 + composer。
+ * 宿主接线（fork/archive/模型同步/Tab meta/窗口打开）全部在 lifecycle.ts（L3）——
+ * 本文件无直接宿主调用（WI-00 分层纪律）。
  *
  * 打开流程（design.md 详细方案 2）：组件挂载时 tab.meta 无 childId →
- * ctx.sessions.fork({ sessionId: scope.sessionId })（fork 时刻全量历史快照）
- * → ctx.workspaces.archiveSession(childId)（durable 隐藏出会话列表）
- * → ctx.betterSidebar.updateTab(tab.id, { meta: { childId, parentSessionId } })
- * （Tab meta 即注册表，随布局持久化，刷新/重启后恢复）。
- * fork 失败（blank 会话无已完成 turn 等）→ 中文错误态 + 关闭指引，不崩页面。
- *
+ * lifecycle.forkAndRegister（fork 全量快照 → 归档隐藏 → meta 登记 → 模型同步）。
  * 恢复流程：有 meta.childId → ctx.sessions.binding(childId) 直接绑定；
  * 列表就绪后仍不在列 → 「会话已不存在」态。
  *
  * 消息流：binding.session 快照订阅（useSyncExternalStore），visible=false 时
- * 暂停订阅。已知偏差（记录于此）：client-runtime 只为 staged（当前选中）会话
- * 打开事件窗口，非 staged 会话 openState 停留 'cold' 且 acceptLiveEvent 丢弃
- * 事件 —— 因此绑定后对该会话调一次 concrete Session 的 open()（off-face、
- * feature-check、幂等），否则消息流永远为空。
+ * 暂停订阅。非 staged 会话需 off-face open() 开窗（lifecycle.openSessionWindow），
+ * 否则消息流永远为空（client-runtime 只为 staged 会话开窗的已知偏差）。
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { IconCheckOutline16, IconNewChatOutline16, IconSendOutline16, IconShareOutline16, IconStopFill16, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { Context, SessionFace, TabComponentProps } from '../../context-types.ts'
+import type { Context, SessionFace, TabComponentProps } from '../host/contracts.ts'
 import { useComposer, type Composer } from './composer.ts'
 import { clearPendingDraft, pairQuestions, parseSideChatMeta, phaseOf, transcriptOf, type ChatMessage } from './model.ts'
-import { readTab } from './open.ts'
+import { ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, updateTabMeta } from './lifecycle.ts'
 import { flattenReflowContent, splitProtocolPrefix } from '../annotate/format.ts'
-import { markdownTextProps } from '../markdown.ts'
+import { markdownTextProps } from '../host/markdown.ts'
 import type { ReflowStore } from '../reflow.ts'
-import { t, useLocaleTick } from '../locales.ts'
+import { t } from '../locales.ts'
+import { useLocaleTick } from '../locale-tick.ts'
 import css from './sidechat.module.css'
 
 const NOOP_UNSUBSCRIBE = (): void => {}
-
-/**
- * 打开非 staged 会话的事件窗口（off-face：open() 在 concrete Session 上是
- * public 且幂等，但不在 SessionFace 契约上 —— 契约面只有 staged 会话会被
- * 运行时自动 open）。feature-check + 吞错，运行时若移除则降级为只发不收。
- */
-function openSessionWindow(session: SessionFace | undefined): void {
-  const openable = session as unknown as { open?: () => Promise<void> } | undefined
-  if (typeof openable?.open !== 'function') return
-  openable.open().catch((error: unknown) => {
-    console.warn('[dsh-sidenote] 会话窗口打开失败:', error)
-  })
-}
 
 export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }) {
   useLocaleTick()
@@ -52,67 +35,22 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
   const [forkError, setForkError] = useState<string | null>(null)
   const forkStarted = useRef(false)
 
-  // 程序化入口（/side、bridge 划选提问）打开 Tab 时面板可能处于折叠态——
-  // 类型型 openTab 不自动展开（better-sidebar 只对 path/url 内容型打开展开），
-  // 用户会看不见刚开的侧边聊天。面板组件在折叠时也挂载（visible=false），
-  // 挂载即幂等展开（store.update 是 SidebarStore 的公开 mutator 面；
-  // feature-check + 吞错）。
+  // 程序化入口（/side、bridge 划选提问）打开 Tab 时面板可能处于折叠态，
+  // 挂载即幂等展开（编排细节在 lifecycle.ts）。
   const { store } = props
   useEffect(() => {
-    const mutable = store as { update?: (mutate: (state: { panelOpen?: boolean }) => void) => void } | undefined
-    try {
-      mutable?.update?.((state) => {
-        if (state.panelOpen === false) state.panelOpen = true
-      })
-    } catch {
-      // 面板折叠兜底失败不影响功能——用户手动展开即可。
-    }
+    ensurePanelOpen(store)
   }, [store])
 
-  // ── 首开：fork → archive → 登记 meta（注册表写进布局，随其持久化） ──
+  // ── 首开：fork → archive → 登记 meta（编排细节在 lifecycle.ts） ──
   useEffect(() => {
     if (childId !== undefined || forkStarted.current) return
     forkStarted.current = true
     let cancelled = false
-    void (async () => {
-      try {
-        const forked = await ctx.sessions.fork({ sessionId: scope.sessionId })
-        // meta 先行：fork resolve 后立即登记 childId（会话切换导致组件卸载
-        // 时 updateTab 找不到 tab 也只是 no-op，绝不丢登记——否则该 Tab 永远
-        // 停在 forking 且下次挂载会重复 fork 出孤儿会话）。归档与模型同步
-        // 都是 best-effort 后手。
-        const current = parseSideChatMeta(readTab(ctx, tab.id)?.meta)
-        ctx.betterSidebar.updateTab(tab.id, {
-          meta: { ...current, childId: forked, parentSessionId: scope.sessionId },
-        })
-        // 隐藏出会话列表（durable KV，刷新/重启后仍生效）。归档失败不阻断
-        // 面板（会话已 fork 出来），只告警 —— 无 unarchive API，失败残留可见。
-        try {
-          await ctx.workspaces.archiveSession(forked)
-        } catch (error) {
-          console.warn('[dsh-sidenote] 归档侧边会话失败（会话列表可能短暂可见）:', error)
-        }
-        // 模型跟随主会话：fork 继承 agent preset 但不继承模型选择——读主会话
-        // 当前模型（session.models.current）并 selectModel 到子会话（best-effort，
-        // 失败则子会话用宿主默认模型，面板标签如实回退）。
-        try {
-          const parentModels = await ctx.connection.api.sessions.models({ sessionId: scope.sessionId })
-          if (parentModels.result.ok) {
-            const current = parentModels.result.value.current
-            await ctx.connection.api.sessions.selectModel({
-              sessionId: forked,
-              provider: current.provider,
-              model: current.model,
-              ...(current.reasoningEffort !== undefined ? { reasoningEffort: current.reasoningEffort } : {}),
-            })
-          }
-        } catch (error) {
-          console.warn('[dsh-sidenote] 同步主会话模型失败（子会话用默认模型）:', error)
-        }
-      } catch (error) {
+    forkAndRegister(ctx, scope.sessionId, tab.id)
+      .catch((error) => {
         if (!cancelled) setForkError(error instanceof Error ? error.message : String(error))
-      }
-    })()
+      })
     return () => { cancelled = true }
   }, [ctx, scope.sessionId, tab.id, childId])
 
@@ -156,11 +94,9 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
   useEffect(() => {
     if (childId === undefined || session === undefined) return
     let cancelled = false
-    void ctx.connection.api.sessions.models({ sessionId: childId })
-      .then((res) => {
-        if (!cancelled && res.result.ok) setModelName(res.result.value.current.model)
-      })
-      .catch(() => {})
+    void readModelName(ctx, childId).then((name) => {
+      if (!cancelled && name !== null) setModelName(name)
+    })
     return () => { cancelled = true }
   }, [ctx, childId, session])
 
@@ -170,8 +106,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
   useEffect(() => {
     if (pendingDraft === undefined || pendingDraft === '' || phase !== 'chat') return
     composer.appendDraft(pendingDraft)
-    const current = parseSideChatMeta(readTab(ctx, tab.id)?.meta)
-    ctx.betterSidebar.updateTab(tab.id, { meta: clearPendingDraft(current) })
+    updateTabMeta(ctx, tab.id, clearPendingDraft)
     // 划选提问的落点体验：草稿注入后焦点直达输入框，用户接着打字即可。
     // visible 预聚焦 effect 只在可见性跳变时跑，已可见的 tab 覆盖不到。
     requestAnimationFrame(() => { rootRef.current?.querySelector('textarea')?.focus() })

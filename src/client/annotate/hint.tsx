@@ -6,7 +6,8 @@
  */
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { t, useLocaleTick } from '../locales.ts'
+import { t } from '../locales.ts'
+import { useLocaleTick } from '../locale-tick.ts'
 import css from './annotate.module.css'
 
 const HINT_KEY = 'dsh-sidenote:hint:v1'

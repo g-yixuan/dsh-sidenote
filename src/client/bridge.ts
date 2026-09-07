@@ -5,7 +5,7 @@
  * it when present. Module-level singleton by design: exactly one sidechat
  * module and one annotate module exist per activation.
  */
-import type { SessionId } from '../context-types.ts'
+import type { SessionId } from './host/contracts.ts'
 
 export interface SideChatBridge {
   /**

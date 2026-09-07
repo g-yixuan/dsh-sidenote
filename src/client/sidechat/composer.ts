@@ -13,7 +13,7 @@
  * resident shell —— 任何一步失败都降级，绝不崩面板。
  */
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
-import type { Context, ConversationService, SessionFace, SessionInput } from '../../context-types.ts'
+import type { Context, ConversationService, SessionFace, SessionInput } from '../host/contracts.ts'
 import { appendDraftText } from './model.ts'
 
 const NOOP_UNSUBSCRIBE = (): void => {}
@@ -113,11 +113,11 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
     setLocalDraft('')
     setSendError(null)
     session.prompt([{ type: 'text', text }], 'queue').then((result) => {
-      const r = result as { ok?: boolean; error?: { message?: string } } | undefined
-      if (r !== undefined && r.ok === false) {
+      // RpcResult 直接 ok 联合（无 .result 包装，镜像已收窄——见 contracts.ts）。
+      if (result.ok === false) {
         // 仅在用户未另行输入时回填，不盖掉新草稿。
         setLocalDraft(d => (d === '' ? text : d))
-        setSendError(r.error?.message ?? '发送失败')
+        setSendError(result.error?.message ?? '发送失败')
       }
     }).catch((error: unknown) => {
       setLocalDraft(d => (d === '' ? text : d))

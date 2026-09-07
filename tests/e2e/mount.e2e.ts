@@ -1,9 +1,14 @@
 /**
  * dsh-sidenote headless mount lane. The server is NOT started here —
  * scripts/e2e-mount.sh boots `dsh web` (better-sidebar from npm + our tarball
- * via the official `dsh plugin add` channel), plants a fabricated session
- * with one completed turn (scripts/seed-session.mjs), and registers the
- * scratch workspace through the host RPC.
+ * via the official `dsh plugin add` channel) and plants a fabricated session
+ * with one completed turn (scripts/seed-session.mjs); the scratch workspace
+ * is registered through the host RPC in beforeAll below.
+ *
+ * Host transport (0.1.1 bare origin vs 0.1.2 one-time-token URL + cookie +
+ * slash endpoints) is centralized in ./host.ts — ported from
+ * dsh-better-sidebar's verified dual-dialect adapter; no lane here talks to
+ * the host transport directly.
  *
  * Lanes:
  *  1. mount: shell + better-sidebar mount, the + menu lists 「侧边聊天」
@@ -18,11 +23,7 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { test, expect, type Page } from '@playwright/test'
-
-const BASE_URL = process.env.DSH_E2E_URL
-if (!BASE_URL) {
-  throw new Error('DSH_E2E_URL is not set — run via scripts/e2e-mount.sh')
-}
+import { createHostApi, gotoPage, hostRpc } from './host'
 
 const PLUGIN_CONSOLE = /dsh-sidenote|Unhandled/
 
@@ -83,8 +84,25 @@ async function ensureSidebarExpanded(page: Page): Promise<void> {
   }
 }
 
+// 注册 scratch 工作区（种子会话的 cwd 挂在它下面才会进 GUI 列表）。
+// 经 ./host 的双方言 RPC：0.1.1 点式端点优先、0.1.2 斜杠端点 404 回退
+// （+ 首个请求先用启动 token 换 cookie）——之前 shell 里那手裸 curl 点式
+// 调用在 0.1.2 上 404/401，已从 e2e-mount.sh 移到这里统一处理。注册失败
+// 对整条 lane 是致命的（5/7 个测试依赖会话列表），直接在 beforeAll 抛错
+// 比 5 个 lane 各自 90s 超时好诊断。
+test.beforeAll(async () => {
+  const workspace = process.env.DSH_E2E_WORKSPACE
+  if (!workspace) {
+    throw new Error('DSH_E2E_WORKSPACE is not set — run via scripts/e2e-mount.sh')
+  }
+  const api = await createHostApi()
+  await hostRpc(api, 'workspace.create', { path: workspace })
+})
+
 test.beforeEach(async ({ page }) => {
-  await page.goto(BASE_URL!, { waitUntil: 'domcontentloaded' })
+  // 0.1.2 宿主：goto 前先种鉴权 cookie（token 换取，进程内一次）；
+  // 0.1.1 宿主：裸 origin 直达。首屏 401/超时的双方言差异都收在这里。
+  await gotoPage(page)
   await expect(page.locator('#root > *')).not.toHaveCount(0, { timeout: 90_000 })
   await dismissOnboarding(page)
 })

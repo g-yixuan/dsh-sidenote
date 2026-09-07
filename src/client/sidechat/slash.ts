@@ -10,7 +10,7 @@
  * 中文别名「侧边」：宿主命令过滤只匹配命令名、不匹配描述（B1 实测中文用户
  * 输「/侧边」候选直接清空）——注册双名让中文关键词直达。
  */
-import type { Context } from '../../context-types.ts'
+import type { Context } from '../host/contracts.ts'
 import { canForkFrom, collectSideTabs } from './model.ts'
 import { createSideChat } from './open.ts'
 import { t } from '../locales.ts'

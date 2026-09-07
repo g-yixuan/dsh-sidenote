@@ -10,10 +10,11 @@
 import { useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { IconNewChatOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { Context } from '../../context-types.ts'
+import type { Context } from '../host/contracts.ts'
 import { canForkFrom } from './model.ts'
 import { openOrFocusSideChat } from './open.ts'
-import { t, useLocaleTick } from '../locales.ts'
+import { t } from '../locales.ts'
+import { useLocaleTick } from '../locale-tick.ts'
 import css from './sidechat.module.css'
 
 function HeaderSideButton({ ctx }: { ctx: Context }): ReactNode {

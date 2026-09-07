@@ -48,7 +48,8 @@
     "watch": "tsdown --watch",
     "test": "vitest run",
     "test:mount": "bash scripts/e2e-mount.sh",
-    "pretest:mount": "pnpm build && pnpm pack"
+    "pretest:mount": "pnpm build && pnpm pack",
+    "check:arch": "node scripts/check-arch.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-client-ui-primitives": ">=0.1.0-rc.6 <0.2.0",
@@ -63,6 +64,7 @@
     }
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-api-remotes": "0.1.1-rc.2",
     "@deepseek-ai/dsh-client-ui-primitives": "0.1.1-rc.2",
     "@playwright/test": "^1.50.0",
     "@types/node": "^24.0.0",

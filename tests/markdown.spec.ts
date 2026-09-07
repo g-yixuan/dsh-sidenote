@@ -3,7 +3,7 @@
  * chrome 引用稳定（流式缓存对 labels 身份敏感）。
  */
 import { describe, expect, it } from 'vitest'
-import { markdownChrome, markdownTextProps } from '../src/client/markdown.ts'
+import { markdownChrome, markdownTextProps } from '../src/client/host/markdown.ts'
 
 describe('markdownTextProps（0.1.1/0.1.2 双形状）', () => {
   it('codeLabels 与 labels 同参承载，嵌套 code 形状齐备', () => {

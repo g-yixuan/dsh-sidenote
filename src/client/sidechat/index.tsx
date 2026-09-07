@@ -16,7 +16,7 @@
  * 斜杠命令（spike，popupSelect 形态，不可行时降级为只有 Tab 入口）。
  */
 import { IconNewChatOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { Context } from '../../context-types.ts'
+import type { Context } from '../host/contracts.ts'
 import { sideChatBridge } from '../bridge.ts'
 import type { ReflowStore } from '../reflow.ts'
 import { SideChatPanel } from './SideChatPanel.tsx'

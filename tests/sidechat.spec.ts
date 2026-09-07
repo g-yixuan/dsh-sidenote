@@ -3,7 +3,7 @@
  * fork 准入、面板相位、消息流折叠。全部无副作用，不挂 DOM。
  */
 import { describe, expect, it } from 'vitest'
-import type { Context, ConversationSnapshot, SidebarState } from '../src/context-types.ts'
+import type { Context, ConversationSnapshot, SidebarState } from '../src/client/host/contracts.ts'
 import {
   SIDE_TAB_TYPE,
   appendDraftText,

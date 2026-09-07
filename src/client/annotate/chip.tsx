@@ -11,10 +11,11 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { IconCloseOutline16, IconListPenOutline16, IconShareOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InputZone } from '../../context-types.ts'
+import type { InputZone } from '../host/contracts.ts'
 import type { AnnotationStore } from './model.ts'
 import type { ReflowStore } from '../reflow.ts'
-import { t, useLocaleTick } from '../locales.ts'
+import { t } from '../locales.ts'
+import { useLocaleTick } from '../locale-tick.ts'
 import { AnnotateErrorBoundary } from './overlay.tsx'
 import css from './annotate.module.css'
 

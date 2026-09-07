@@ -13,7 +13,7 @@
  * 的 disposer 由 cordis 服务代理路由进调用方 fiber，无需手动回收。
  */
 import { createRoot } from 'react-dom/client'
-import type { Context } from '../../context-types.ts'
+import type { Context } from '../host/contracts.ts'
 import { createAnnotationStore } from './model.ts'
 import { createSelectionController } from './selection.ts'
 import { AnnotateOverlay } from './overlay.tsx'
