@@ -22,6 +22,7 @@ import { EmptyState, MessageList, StateScreen } from './rows.tsx'
 import { chatSourceOf, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, updateTabMeta } from './lifecycle.ts'
 import { ToolCard } from '../chat/ToolCard.tsx'
 import { ModelMenu } from './ModelMenu.tsx'
+import { PermissionChip } from './PermissionChip.tsx'
 import { ReasoningRow } from '../chat/ReasoningRow.tsx'
 import { FoldCard } from '../chat/FoldCard.tsx'
 import { createFoldStore } from '../chat/viewState.ts'
@@ -245,7 +246,12 @@ function ComposerBar(props: {
       />
       <div className={css.composerFoot}>
         {childIdForMenu !== undefined
-          ? <ModelMenu ctx={props.ctx} sessionId={childIdForMenu} modelName={props.modelName} onSwitched={props.onModelSwitched} />
+          ? (
+            <span className={css.composerChips}>
+              <PermissionChip session={session} />
+              <ModelMenu ctx={props.ctx} sessionId={childIdForMenu} modelName={props.modelName} onSwitched={props.onModelSwitched} />
+            </span>
+          )
           : <span className={css.modelLabel}>{t('modelLabel', { name: props.modelName ?? t('modelFollowsMain') })}</span>}
         {running
           ? (

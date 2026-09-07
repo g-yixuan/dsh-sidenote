@@ -414,3 +414,12 @@
   color: var(--dsw-alias-label-secondary);
   background: var(--dsw-alias-bg-layer-2);
 }
+
+/* composer 脚部 chip 组（权限 + 模型）。 */
+.composerChips {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
