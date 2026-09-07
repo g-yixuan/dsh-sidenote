@@ -472,3 +472,49 @@
   gap: 6px;
   margin: 0 0 6px;
 }
+
+/* W03 打磨包（M2 实测审美清单） */
+
+/* P1-2：chip 行加不透明底带——转录内容滚动经过 composer 渐隐区时不再
+   从药丸背后透出（对齐宿主 composerSeat 的遮挡语义）。 */
+.chipWrap {
+  background: var(--dsw-alias-bg-base, #ffffff);
+  padding: 2px 0;
+}
+
+/* P2-10：chip 展开面板加起源小三角（指向药丸）。 */
+.chipPanel::after {
+  content: "";
+  position: absolute;
+  bottom: -5px;
+  left: 18px;
+  width: 10px;
+  height: 10px;
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+  border-right: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
+  border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
+  transform: rotate(45deg);
+}
+
+/* P2-11：sent 角标用描边空心样式（filled=待发送 / outlined=已发送），
+   不再是「灰一坨」的禁用感。 */
+.badgeSent {
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+  color: var(--dsw-alias-label-tertiary, #8f959e);
+  border: 1.5px solid var(--dsw-alias-label-caption, #b0b5bb);
+  box-shadow: none;
+  opacity: 1;
+  line-height: 15px;
+}
+
+.badgeSent:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.04));
+  color: var(--dsw-alias-label-secondary, #3f454d);
+}
+
+/* P2-9：引导卡加毛玻璃、下移到 composer 渐隐区上缘，减少正文遮挡感。 */
+.hint {
+  bottom: 130px;
+  background: color-mix(in srgb, var(--dsw-alias-bg-layer-1, #ffffff) 88%, transparent);
+  backdrop-filter: blur(8px);
+}

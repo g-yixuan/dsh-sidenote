@@ -294,7 +294,7 @@ function SentViewer(props: {
   }, [])
 
   const width = 320
-  const left = Math.max(8, Math.min(window.innerWidth - width - 8, props.x + 16))
+  const left = popoverLeft(props.x, width)
   const top = Math.max(8, Math.min(window.innerHeight - 120, props.y - 20))
 
   return (
@@ -304,6 +304,24 @@ function SentViewer(props: {
       {props.annotation.note !== '' && <div className={css.sentCardNote}>{props.annotation.note}</div>}
     </div>
   )
+}
+
+
+/**
+ * 浮层水平落点（W03）：优先锚点右侧；右侧剩余空间不足（贴着展开的
+ * better-sidebar 面板时必然不足——角标 gutter 就在消息列右缘）翻到左侧。
+ * 右边界取面板左缘（[data-dsh-better-sidebar]，宿主 DOM 属性，查不到按视口）。
+ */
+function popoverLeft(x: number, width: number): number {
+  const panel = typeof document === 'undefined'
+    ? null
+    : document.querySelector('[data-dsh-better-sidebar]')?.getBoundingClientRect() ?? null
+  const rightBound = panel !== null && panel !== undefined && panel.width > 0
+    ? Math.min(window.innerWidth, panel.left)
+    : window.innerWidth
+  const preferRight = x + 16
+  if (preferRight + width + 8 <= rightBound) return preferRight
+  return Math.max(8, x - width - 16)
 }
 
 /** 「Ask in side chat」的注解编辑器（新建态同构：输入框 + ✓，允许空注解）。
@@ -344,7 +362,7 @@ function SideChatNoteEditor(props: {
   }, [])
 
   const width = 320
-  const left = Math.max(8, Math.min(window.innerWidth - width - 8, props.x + 16))
+  const left = popoverLeft(props.x, width)
   const top = Math.max(8, Math.min(window.innerHeight - 120, props.y - 20))
   const save = (): void => {
     // 失败保持打开并提示（草稿不丢）；成功由父组件关闭。
@@ -559,7 +577,7 @@ function AnnotationEditor(props: {
   }, [])
 
   const width = props.mode === 'new' ? 320 : 340
-  const left = Math.max(8, Math.min(window.innerWidth - width - 8, props.x + 16))
+  const left = popoverLeft(props.x, width)
   const top = Math.max(8, Math.min(window.innerHeight - 120, props.y - 20))
 
   const save = (): void => { props.onSave(note) }
