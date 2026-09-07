@@ -2,6 +2,7 @@
 
 > 名字未定稿前，文中一律用 `dsh-sidenote`；若改名，全局替换即可。
 > 所有版本都遵循：朴素陈述、不拉票、不求 star、接受批评。
+> 已更新至 v0.2.0 卖点（2026-09-07）：回流通道（问答成对）、发送后留痕、顶栏入口。
 
 ---
 
@@ -13,14 +14,15 @@
 
 > I built this because I kept losing my main thread when a side question came up mid-conversation with an AI coding assistant.
 >
-> dsh-sidenote is a plugin for DeepSeek Harness (built on dsh-better-sidebar's tab service) that does two things and ties them together:
+> dsh-sidenote is a plugin for DeepSeek Harness (built on dsh-better-sidebar's tab service) that does three things and ties them together:
 >
 > 1. **Side chat**: fork the current session into a persistent side panel — full history snapshot, no compression. It stays out of your session list, survives reloads, and you can run several at once.
-> 2. **Selection annotations**: select text in an assistant reply, attach a note, and every annotation rides along with your next message as quoted context. Or send quote+note straight into a side chat.
+> 2. **Selection annotations**: select text in an assistant reply, attach a note, and every annotation rides along with your next message as quoted context (XML blocks the model parses cleanly). Or send quote+note straight into a side chat.
+> 3. **Reflow**: bring a side-chat conclusion back to the main session as a controlled chip above the composer — it carries the question *and* the answer (Q&A pairs), so the model gets the full context, not an orphan conclusion. You preview and remove items before sending; nothing touches your draft text.
 >
-> The part I haven't seen elsewhere: annotations are the on-ramp to the side chat — annotate, then ask about it without derailing the main conversation.
+> The part I haven't seen elsewhere: annotations are the on-ramp to the side chat, and reflow is the off-ramp back — annotate, dig in the side lane, bring the finding home. The main thread never gets derailed.
 >
-> Tech notes: it's a thin client plugin (no DSH changes) — `ctx.sessions.fork` for the child session, `archiveSession` to keep the list clean, layout-persisted tab metadata for restore, and a document-level selection listener with a `Range.getClientRects()` badge overlay. The whole thing is MIT and I verified it with headless Playwright lanes against a real DSH boot (including a fabricated session log so the fork path runs without model credentials).
+> Tech notes: it's a thin client plugin (no DSH changes) — `ctx.sessions.fork` for the child session, `archiveSession` to keep the list clean, layout-persisted tab metadata for restore, the host's official input machine for sends, and a document-level selection listener with a `Range.getClientRects()` badge overlay. Annotations/reflows serialize as XML protocol prefixes that get surgically hidden from your own bubbles after sending (sent-trace labels stay). MIT, verified with headless Playwright lanes against a real DSH boot (fabricated session log so the fork path runs without model credentials).
 >
 > Happy to answer questions / take criticism.
 
@@ -37,7 +39,8 @@
 > 所以我写了 dsh-sidenote（DSH 插件，基于 dsh-better-sidebar 的 Tab 服务）：
 >
 > - **侧边聊天**：从当前会话 fork 出独立的侧边会话（全量历史快照，不是压缩摘要），在右侧栏开个「侧边」Tab 随便聊。可以多开，不进左侧会话列表，刷新/重启都还在，手动关掉才消失。
-> - **划选注释**：在 assistant 的回复里划一段 → 写个注解 → 输入框出现「N 条注释」chip，随下一条消息一起发给模型。也可以划完直接「在侧边聊天中提问」。
+> - **划选注释**：在 assistant 的回复里划一段 → 写个注解 → 输入框出现「N 条注释」chip，随下一条消息一起发给模型（XML 协议块，模型读起来比引用符号更稳）。也可以划完直接「在侧边聊天中提问」。
+> - **回流**：侧边聊出结论后，点一下把它带回主会话——而且是**问答成对**地带（问题和答案一起回，模型拿到的不是没头没尾的结论）。发送前在输入框上方的 chip 里能预览、能逐条撤。发出后自己的气泡折叠成一条「含侧边回流上下文」留痕，协议块不占屏。
 >
 > 演示：[GIF/视频]
 > 安装：`dsh plugin --profile web add dsh-sidenote`
@@ -61,9 +64,9 @@
 >
 > 1. 侧边聊天 = 真 fork（带全部历史）的独立会话挂在右侧栏，多开、归档不进会话列表、刷新不掉；
 > 2. 划选注释 = 选中 assistant 的话 → 编号角标 + 注解 → 「N 条注释」chip 随消息发出；
-> 3. 两个是打通的：注释一键进侧边聊天提问。
+> 3. 两个是打通的：注释一键进侧边聊天提问，侧边的结论一键**回流**主会话（问答成对、受控 chip、可预览可撤）。
 >
-> 跟同类比：sidechain 也是真 fork 但没注释，dsh-annotation 只做注释没侧聊，sidebar-qa 是摘要压缩路线（有损）。我们这条是「注释 ⇄ 侧聊」闭环。
+> 跟同类比：sidechain 也是真 fork 但没注释；dsh-annotation 只做注释没侧聊；sidebar-qa 是摘要压缩路线（有损）；heartmove/super-cabbage 有带回但方向是文本复制。我们这条是「注释 ⇄ 侧聊 ⇄ 回流」全闭环，且回流带问题上下文（问答成对）。
 >
 > 安装：`dsh plugin --profile web add dsh-sidenote`（需要先装 dsh-better-sidebar）
 > 仓库：[GitHub 链接]
@@ -74,7 +77,7 @@
 
 ## 4. 即刻（中文短动态）
 
-> 给 DSH 写了个插件：主对话里划一句话就能挂个注解，攒几条一起发给 AI；支线问题可以 fork 出一个侧边小窗单独聊，不打断主线，刷新也不丢。
+> 给 DSH 写了个插件：主对话里划一句话就能挂个注解，攒几条一起发给 AI；支线问题 fork 出一个侧边小窗单独聊，聊完结论一键带回主线（问答一起带，不是光带结论）。不打断主线，刷新也不丢。
 >
 > 起名废物，先叫 dsh-sidenote。开源 MIT，一行命令装：[链接]
 >
@@ -84,7 +87,9 @@
 
 ## 5. X/Twitter（英文）
 
-> Built a thing for DeepSeek Harness: side chat (fork the session into a persistent side panel) + selection annotations (quote + note → rides your next message). Annotate → ask in the side chat without derailing the main thread.
+> Built a thing for DeepSeek Harness: side chat (fork into a persistent side panel) + selection annotations (quote + note → rides your next message) + reflow (bring side findings back as Q&A pairs, previewable chips).
+>
+> Annotate → dig in the side lane → bring it home. Main thread never derails.
 >
 > MIT, one-line install. [link]
 >
@@ -97,8 +102,8 @@
 ## FAQ（评论区高频问题预案）
 
 - **Q: 和 dsh-sidebar-qa / dsh-sidechain / dsh-annotation 有什么区别？**
-  A: sidechain 同是真 fork 但无注释、无归档隐藏；sidebar-qa 是摘要压缩（轻但有损）；dsh-annotation 只做注释。我们是注释⇄侧聊闭环 + 归档隐藏 + 多实例。
-- **Q: 侧边会话占资源吗？** A: 每个侧边聊天是真实会话，开着不跑模型就不花 token；关闭 Tab 即从界面消失（jsonl 留盘不可见，后续会出真删除）。
-- **Q: 注释刷新就没了？** A: 当前是页面级生命周期（设计如此，快记快用）；跨轮持久化在路线图上。
-- **Q: 装不上/没反应？** A: 确认先装了 dsh-better-sidebar；插件挂在它的侧边栏 `+` 菜单里。
-- **Q: 模型怎么选？** A: fork 时跟随主会话当前模型；侧边独立切换在路线图上。
+  A: sidechain 同是真 fork 但无注释、无归档隐藏；sidebar-qa 是摘要压缩（轻但有损）；dsh-annotation 只做注释。我们是注释⇄侧聊⇄回流全闭环 + 归档隐藏 + 多实例。
+- **Q: 侧边会话占资源吗？** A: 每个侧边聊天是真实会话，开着不跑模型就不花 token；关闭 Tab 即从界面消失（会话本体归档留盘，后续会出恢复/真删除入口）。
+- **Q: 注释刷新就没了？** A: 不会——localStorage 按会话持久化，刷新/重启都恢复；发送后注释转成气泡上的「批注 ×N」留痕（只读可回看）。
+- **Q: 装不上/没反应？** A: 确认先装了 dsh-better-sidebar；插件挂在它的侧边栏 `+` 菜单和主对话顶栏的「侧边」按钮里，也有 `/side` 斜杠命令。
+- **Q: 模型怎么选？** A: fork 时跟随主会话当前模型；侧边独立切换在路线图上（下一个大版本的主题就是侧边面板与主对话全对齐）。
