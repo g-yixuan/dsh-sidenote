@@ -15,6 +15,7 @@
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import type { Context, ConversationService, SessionFace, SessionInput } from '../host/contracts.ts'
 import { appendDraftText } from './model.ts'
+import { attachFiles, resolveAttachmentApis } from './composer/attach.ts'
 
 const NOOP_UNSUBSCRIBE = (): void => {}
 
@@ -61,6 +62,16 @@ export interface Composer {
   /** 斜杠/@ 触发接线需要：机器相位 + 草稿版本号（缺机器时 undefined）。 */
   readonly phase: string | undefined
   readonly draftRev: number | undefined
+  /** 待发图片附件 id 列（附件 rail；缺机器时空）。 */
+  readonly imageIds: readonly string[]
+  /** 待发图片的预览（rail 渲染用；id + previewUrl）。 */
+  readonly imagePreviews: readonly { id: string; url: string }[]
+  /** 附件能力可用（机器在 + createDraftImages 面在）。 */
+  readonly canAttach: boolean
+  /** 选中文件挂为草稿图片；返回是否挂上。 */
+  attachImages(files: readonly File[]): boolean
+  /** 移除一张待发图片。 */
+  removeImage(id: string): void
 }
 
 /**
@@ -88,6 +99,26 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
   const [sendError, setSendError] = useState<string | null>(null)
 
   const draft = input === null ? localDraft : machineDraft
+
+  // 附件 API（off-face 探测；一次解析，会话生命周期内不变）。
+  const apis = useMemo(() => resolveAttachmentApis(ctx), [ctx])
+
+  const attachImages = useCallback(
+    (files: readonly File[]): boolean => {
+      if (input === null || apis === null) return false
+      return attachFiles(apis, input, files)
+    },
+    [input, apis],
+  )
+
+  const removeImage = useCallback(
+    (id: string): void => {
+      if (input === null || apis === null) return
+      input.removeImage(id)
+      apis.releaseDraftImage(id)
+    },
+    [input, apis],
+  )
 
   const setDraft = useCallback(
     (text: string): void => {
@@ -138,5 +169,18 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
     submit,
     phase: machineState?.phase,
     draftRev: machineState?.draftRev,
+    imageIds: machineState?.imageIds ?? [],
+    imagePreviews: (() => {
+      const ids = machineState?.imageIds ?? []
+      if (ids.length === 0 || apis === null) return []
+      try {
+        return apis.draftImages(ids).map(i => ({ id: i.id, url: i.previewUrl }))
+      } catch {
+        return []
+      }
+    })(),
+    canAttach: input !== null && apis !== null,
+    attachImages,
+    removeImage,
   }
 }

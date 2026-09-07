@@ -40,6 +40,8 @@ export const en = {
   stopReply: 'Stop',
   stopReplyTitle: 'Stop the current reply',
   send: 'Send',
+  attachTitle: 'Attach images',
+  attachRemove: 'Remove',
 
   // transcript fallbacks (node → message folding)
   imagePlaceholder: '[Image]',
@@ -174,6 +176,8 @@ export const zh: Record<CopyKey, string> = {
   stopReply: '停止',
   stopReplyTitle: '停止当前回复',
   send: '发送',
+  attachTitle: '添加图片附件',
+  attachRemove: '移除',
 
   imagePlaceholder: '[图片]',
   toolFallback: '工具',

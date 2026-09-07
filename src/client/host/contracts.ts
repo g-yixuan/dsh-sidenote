@@ -355,6 +355,8 @@ export interface InputStateSnapshot {
   readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting'
   /** 单调草稿版本号（斜杠/@ 触发的 pick 时 CAS 用——input/contract.d.ts）。 */
   readonly draftRev?: number
+  /** 待发图片附件 id 列（DraftAttachmentId——附件 rail 用）。 */
+  readonly imageIds?: readonly string[]
   readonly queue?: readonly unknown[]
 }
 
@@ -401,4 +403,7 @@ export interface SessionInput {
   readonly state: ObservableSnapshot<InputStateSnapshot>
   /** Spike-only mirror; see {@link ReferenceInsert}. Not called by annotate. */
   insertReference(ref: ReferenceInsert, span: TokenSpan): boolean
+  /** 图片附件（WI-02 附件 rail；busy 相位机器拒收返 false）。 */
+  addImages(ids: readonly string[]): boolean
+  removeImage(id: string): void
 }

@@ -13,7 +13,7 @@
  * 否则消息流永远为空（client-runtime 只为 staged 会话开窗的已知偏差）。
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { IconNewChatOutline16, IconSendOutline16, IconStopFill16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconNewChatOutline16, IconPaperclipOutline16, IconSendOutline16, IconStopFill16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context, SessionFace, TabComponentProps } from '../host/contracts.ts'
 import { useComposer, type Composer } from './composer.ts'
 import { clearPendingDraft, parseSideChatMeta, phaseOf } from './model.ts'
@@ -223,6 +223,7 @@ function ComposerBar(props: {
   const { session, composer, running, visible } = props
   const childIdForMenu = props.childId
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // 斜杠/@ 触发菜单（WI-02）：官方 inputTriggers 控制器（公开契约面）+
   // 自绘皮。控制器缺席（老宿主/解析失败）时全部行为静默回退现状。
@@ -242,6 +243,21 @@ function ComposerBar(props: {
     <div className={css.composer}>
       {menuOpen && menuState !== null && triggerCtl !== null && (
         <SlashMenuView state={menuState} onPick={(source, index) => { triggerCtl.pick(source, index) }} />
+      )}
+      {composer.imagePreviews.length > 0 && (
+        <div className={css.attachRail}>
+          {composer.imagePreviews.map(img => (
+            <span key={img.id} className={css.attachThumb}>
+              <img src={img.url} alt="" className={css.attachImg} />
+              <button
+                type="button"
+                className={css.attachRemove}
+                aria-label={t('attachRemove')}
+                onClick={() => { composer.removeImage(img.id) }}
+              >×</button>
+            </span>
+          ))}
+        </div>
       )}
       <textarea
         ref={inputRef}
@@ -278,6 +294,29 @@ function ComposerBar(props: {
         }}
       />
       <div className={css.composerFoot}>
+        {composer.canAttach && (
+          <button
+            type="button"
+            className={css.attachButton}
+            title={t('attachTitle')}
+            aria-label={t('attachTitle')}
+            onClick={() => { fileInputRef.current?.click() }}
+          >
+            <IconPaperclipOutline16 size={14} />
+          </button>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(event) => {
+            const files = [...(event.target.files ?? [])]
+            if (files.length > 0) composer.attachImages(files)
+            event.target.value = ''
+          }}
+        />
         {childIdForMenu !== undefined
           ? (
             <span className={css.composerChips}>
