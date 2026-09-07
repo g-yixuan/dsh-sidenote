@@ -99,7 +99,12 @@ if ((await expand.count()) > 0) { await expand.click(); await pause(800) }
 const sidebar = page.locator('[data-dsh-better-sidebar]')
 await sidebar.getByRole('button', { name: /New tab/ }).first().click()
 await page.getByRole('menuitem', { name: /Side chat/ }).first().click()
-await sidebar.getByText(/full history snapshot/).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: 60_000 })
+// D1 折叠卡先亮相（默认折叠 = 新 UI 的卖点之一），再展开历史。
+const foldCard = sidebar.locator('[data-disclosure-row]', { hasText: /Inherited from main session|继承自主会话/ }).filter({ visible: true }).first()
+await foldCard.waitFor({ state: 'visible', timeout: 60_000 })
+await pause(1200)
+await foldCard.click()
+await sidebar.getByText(/full history snapshot/).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: 15_000 })
 await pause(1500)
 
 await context.close()

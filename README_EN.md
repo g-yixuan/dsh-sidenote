@@ -13,13 +13,20 @@ English · [中文](README.md)
 **Fork** the current main session (full history snapshot) into an independent side session that lives in a「侧边」tab of the right sidebar — keep the main thread moving while you chase side questions:
 
 - Three entries: the always-on「Side」pill in the session header, the sidebar `+` menu, or the `/side` slash command (`/侧边` works too);
-- The fork carries the full main-session context at fork time; afterwards the two sessions evolve independently;
+- The fork carries the full main-session context at fork time; afterwards the two sessions evolve independently; **inherited history collapses by default** into an「Inherited from main session · N items」card (click to expand);
 - Multiple side chats coexist («侧边», «侧边 2», …), each closable on its own;
-- The model follows the main session's current selection (synced at fork);
-- Persistent: restored with the layout across reloads/restarts; hidden from the session list (archived); only closing the tab removes it from the UI;
-- **Reflow**: send a side-chat conclusion back to the main session in one click — it lands as a controlled context chip above the main composer and rides your next message (Cursor-class capability; Codex has none).
+- **Native-grade rendering**: tool cards (terminal/diff/read/search/web/generic — same leaf components as the main chat), collapsible thinking rows, smart scroll-follow;
+- **Composer parity**: model picker (two-level menu), permission chip, `/` commands, `@` references, image attachments, `Cmd/Ctrl+Enter` to steer;
+- **Main session status always visible** on top of the panel (running / awaiting approval / idle); `Alt+J` jumps focus between main and side;
+- Zero state loss: fold/scroll state persists per session across reloads;
+- **Reflow**: send a conclusion back to the main session in one click (Q&A paired — the question travels with the answer) or reflow the whole thread — a controlled context chip above the main composer rides your next message (Cursor-class capability; Codex has none); `@`-mention a side chat right from the main composer;
+- **Lifecycle**: 「Save as session」promotes a side chat into the session list; recently closed side chats reopen from the `/side` popup.
 
 ![Side chat panel](docs/assets/04-side-chat-panel.png)
+
+| Collapsed (inheritance card + action row + chips) | Side slash menu |
+|---|---|
+| ![collapsed](docs/assets/04a-side-chat-collapsed.png) | ![slash menu](docs/assets/04b-side-slash-menu.png) |
 
 ### 🗒️ Selection annotations
 
