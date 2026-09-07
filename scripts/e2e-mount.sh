@@ -30,12 +30,18 @@ die()  { printf '\033[31m[e2e-mount]\033[0m %s\n' "$*" >&2; exit 1; }
 command -v node >/dev/null 2>&1 || die "未找到 node"
 command -v pnpm >/dev/null 2>&1 || die "未找到 pnpm"
 
-if ! command -v "$DSH_CMD" >/dev/null 2>&1; then
+# DSH_CMD 允许是带参数的命令串（矩阵档钉版：`npx -y --package
+# @deepseek-ai/dsh@0.1.2-rc.1 dsh`）。command -v 对多词串必然失败并触发
+# 下面的 npx 回退——回退会丢掉版本钉、静默改测 latest（dist-tag 漂移后
+# 矩阵档就测错宿主；今天 latest 恰为 0.1.2-rc.1 纯属巧合），所以只校验
+# 首个词可执行，参数原样透传给后续 `$DSH_CMD …` 调用。
+DSH_BIN="${DSH_CMD%% *}"
+if ! command -v "$DSH_BIN" >/dev/null 2>&1; then
   if command -v npx >/dev/null 2>&1; then
-    say "PATH 上无 $DSH_CMD，回退 npx -y --package @deepseek-ai/dsh"
+    say "PATH 上无 ${DSH_BIN}，回退 npx -y --package @deepseek-ai/dsh"
     DSH_CMD="npx -y --package @deepseek-ai/dsh dsh"
   else
-    die "未找到 $DSH_CMD 或 npx"
+    die "未找到 $DSH_BIN 或 npx"
   fi
 fi
 
@@ -130,6 +136,12 @@ say "启动 dsh web（port=${PORT}）..."
 $DSH_CMD web --port "$PORT" > "$WEB_LOG" 2>&1 &
 SERVER_PID=$!
 
+# 就绪行解析：DSH 0.1.2+ 打印的是带一次性 token 的鉴权 URL
+# （`dsh web: http://127.0.0.1:<port>/?token=<43字符>`，token 换浏览器
+# cookie 后才能访问页面与 /api；干净 URL 只会得到 401）；0.1.1-rc.x 及
+# 更早是裸 origin。正则必须延伸到空白（`[^ ]*`）——在 `/` 或端口处截断
+# 会丢掉 token，0.1.2 宿主上的整条 lane 都会挂在首屏 401（同
+# dsh-better-sidebar scripts/e2e-mount.sh 的已验证写法）。
 URL=""
 for _ in $(seq 1 120); do
   if ! kill -0 "$SERVER_PID" 2>/dev/null; then
@@ -137,7 +149,7 @@ for _ in $(seq 1 120); do
     tail -30 "$WEB_LOG" >&2 || true
     exit 1
   fi
-  if URL="$(grep -oE 'dsh web: http://127\.0\.0\.1:[0-9]+' "$WEB_LOG" | head -1 | awk '{print $3}')" && [ -n "$URL" ]; then
+  if URL="$(grep -oE 'dsh web: http://127\.0\.0\.1:[0-9]+[^ ]*' "$WEB_LOG" | head -1 | awk '{print $3}')" && [ -n "$URL" ]; then
     break
   fi
   sleep 1
@@ -145,10 +157,11 @@ done
 [ -n "$URL" ] || { echo "=== 120s 内未等到 dsh web 就绪，日志尾部 ===" >&2; tail -40 "$WEB_LOG" >&2 || true; exit 1; }
 say "dsh web 就绪：${URL}（pid ${SERVER_PID}）"
 
-# 步骤 4b：注册 scratch 工作区（伪造会话的 cwd 挂在它下面才会进 GUI 列表）
-curl -s "$URL/api/workspace.create" -X POST -H 'content-type: application/json' \
-  -d "{\"type\":\"client-request\",\"rpcId\":\"e2e-workspace\",\"method\":\"workspace.create\",\"payload\":{\"path\":\"$WORKSPACE_DIR\"}}" \
-  | grep -q '"ok":true' && say "工作区已注册: $WORKSPACE_DIR" || warn "workspace.create 未确认（继续，测试内会再试）"
+# 工作区注册（workspace.create）不再在这里 curl：0.1.2 起宿主要求
+# ① 先用启动 token 换 cookie、② 点式端点改为斜杠 `/api/workspace/create`
+# + `{args:{request:...}}` 包装——shell 里做双方言探测 + token 交换太脆，
+# 统一移进 tests/e2e/host.ts 的 createHostApi()/hostRpc()（lane beforeAll
+# 调用），0.1.1/0.1.2 双方言自动选择。
 
 # 步骤 5：Playwright 无头渲染 lane
 say "运行 Playwright 无头渲染 lane..."

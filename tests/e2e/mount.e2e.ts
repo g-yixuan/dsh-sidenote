@@ -312,7 +312,10 @@ test('annotate journey: 划选 → 浮层 → 注解编辑器 → 角标 → chi
 
   // 受控架构（Delivery_02）：草稿**不被污染**（注释不进草稿文本流）。
   // 主 composer 可能是 textarea 或 contenteditable，两种读法都试。
-  const composer = page.getByRole('textbox', { name: /Message the agent|输入消息|随心输入/ }).first()
+  // aria-label 随宿主版本漂移：0.1.1 "Message the agent"、0.1.2
+  // "Message or run a task... / commands, @ files or sessions"（实证于
+  // 0.1.2-rc.1 档的 09-linkage 步骤快照）——正则双文案通吃。
+  const composer = page.getByRole('textbox', { name: /Message the agent|Message or run a task|输入消息|随心输入/ }).first()
   const draft = await composer.evaluate((el) => (
     el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.value : (el.textContent ?? '')
   ))
@@ -493,7 +496,8 @@ test('slash command: /side 出现在命令菜单且能打开侧边聊天', async
   await openSeedSession(page)
 
   // 主输入框敲 / 打开命令菜单，找 /side（commandUi popupSelect 贡献）。
-  const composer = page.getByRole('textbox', { name: /Message the agent|输入消息|随心输入/ }).first()
+  // composer aria-label 双文案：0.1.1 / 0.1.2 宿主不同（见 annotate lane）。
+  const composer = page.getByRole('textbox', { name: /Message the agent|Message or run a task|输入消息|随心输入/ }).first()
   await composer.click()
   await page.keyboard.type('/')
   await dumpStep(page, '13-slash-menu')
