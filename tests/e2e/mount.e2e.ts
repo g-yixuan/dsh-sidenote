@@ -241,7 +241,8 @@ async function expandInherited(page: Page): Promise<void> {
   const sidebar = page.locator('[data-dsh-better-sidebar]')
   const card = sidebar.locator('[data-disclosure-row]', { hasText: /Inherited from main session|继承自主会话/ }).filter({ visible: true }).first()
   await expect(card, 'D1 父历史折叠卡未出现').toBeVisible({ timeout: 60_000 })
-  await card.click()
+  // 折叠态随刷新持久化（P0-2）——可能已是展开态，重复点击会收起。
+  if ((await card.getAttribute('aria-expanded')) !== 'true') await card.click()
 }
 
 /** 把聊天消息区滚回顶部（角标锚点文本回到视口）。 */

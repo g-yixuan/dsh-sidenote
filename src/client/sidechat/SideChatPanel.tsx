@@ -118,7 +118,20 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
   // 折叠态外置 store（P0-2 状态零丢失的架构约束）：Tab 切换/重挂不丢展开态。
   // 注意：必须在相位早退之前创建（hooks 纪律——forking/error 相位渲染的
   // hooks 数与 chat 相位必须一致，否则 React #310「Rendered more hooks」）。
-  const fold = useMemo(() => createFoldStore(), [])
+  const fold = useMemo(() => createFoldStore(childId === undefined ? undefined : `dsh-sidenote:fold:v1:${childId}`), [childId])
+
+  // P0-4：主会话（父）运行状态订阅——三态指示（跑着/等审批/空闲）。
+  // visible=false 暂停订阅（与消息流同纪律）。
+  const parentSession = meta.parentSessionId === undefined
+    ? undefined
+    : ctx.sessions.binding(meta.parentSessionId)?.session
+  const parentSnap = useSyncExternalStore(
+    useCallback(
+      (notify: () => void) => (visible && parentSession !== undefined ? parentSession.subscribe(notify) : NOOP_UNSUBSCRIBE),
+      [visible, parentSession],
+    ),
+    () => (parentSession === undefined ? null : parentSession.getSnapshot()),
+  )
   // D2 提示的消除态（hooks 纪律：必须在相位早退之前——#310 教训）。
   const [writeNoticeDismissed, setWriteNoticeDismissed] = useState(
     () => typeof localStorage !== 'undefined' && localStorage.getItem(WRITE_NOTICE_KEY) === '1',
@@ -152,6 +165,26 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
     // pendingDraft/相位变化时真正动作（清除后 pendingDraft 为 undefined，幂等）。
   }, [pendingDraft, phase, ctx, tab.id])
 
+  // P0-4 焦点切换：Alt+J 在主 ↔ 侧之间跳（code 判定而非 key——macOS
+  // Option 组合会产 '∆' 等变体字符，code 布局无关稳定）。
+  useEffect(() => {
+    if (!visible) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (!event.altKey || event.metaKey || event.ctrlKey || event.code !== 'KeyJ') return
+      event.preventDefault()
+      const inSide = rootRef.current?.contains(document.activeElement) === true
+      if (inSide) {
+        // 回主：聚焦主 composer（0.1.1 textarea / 0.1.2 contenteditable 双兼容）。
+        const main = document.querySelector<HTMLElement>('[data-composer-seat] textarea, [data-composer-seat] [contenteditable]')
+        main?.focus()
+      } else {
+        rootRef.current?.querySelector('textarea')?.focus()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('keydown', onKey) }
+  }, [visible])
+
   // 新消息自动跟滚：仅在用户本就在底部附近时跟（读历史时不被拽走——
   // Copilot #1167 滚动重置是用户恨点）；离开底部时浮「跳到最新」按钮。
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -161,16 +194,39 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
     const el = bodyRef.current
     if (el !== null && visible && nearBottom) el.scrollTop = el.scrollHeight
   }, [tailKey, visible, nearBottom])
+  // P0-2：滚动位置随会话持久化（刷新恢复）。
+  const scrollKey = childId === undefined ? undefined : `dsh-sidenote:scroll:v1:${childId}`
+  const scrollTimer = useRef(0)
   const onBodyScroll = useCallback(() => {
     const el = bodyRef.current
     if (el === null) return
     setNearBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80)
-  }, [])
+    if (scrollKey !== undefined) {
+      window.clearTimeout(scrollTimer.current)
+      scrollTimer.current = window.setTimeout(() => {
+        try { localStorage.setItem(scrollKey, String(el.scrollTop)) } catch { /* 隐私模式 */ }
+      }, 300)
+    }
+  }, [scrollKey])
   const jumpToLatest = useCallback(() => {
     const el = bodyRef.current
     if (el !== null) el.scrollTop = el.scrollHeight
     setNearBottom(true)
   }, [])
+
+  // 滚动恢复：消息首次非空渲染后回跳一次（之后归 onScroll/nearBottom 管）。
+  const scrollRestored = useRef(false)
+  useEffect(() => {
+    if (scrollRestored.current || scrollKey === undefined || messages.length === 0) return
+    scrollRestored.current = true
+    let saved: string | null = null
+    try { saved = localStorage.getItem(scrollKey) } catch { /* ignore */ }
+    if (saved !== null && bodyRef.current !== null) {
+      bodyRef.current.scrollTop = Number(saved)
+      const el = bodyRef.current
+      setNearBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80)
+    }
+  }, [messages.length, scrollKey])
 
   if (phase === 'fork-error') {
     return (
@@ -208,8 +264,24 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
     ?? []
   ).length
 
+  const parentPending = ((parentSnap as { pending?: readonly unknown[] } | null)?.pending ?? []).length
+  const parentState = parentSession === undefined
+    ? null
+    : parentPending > 0 ? 'pending' : parentSnap?.running === true ? 'running' : 'idle'
+
   return (
     <div ref={rootRef} className={css.root}>
+      {parentState !== null && meta.parentSessionId !== undefined && (
+        <button
+          type="button"
+          className={css.parentStrip}
+          title={t('parentStripTitle')}
+          onClick={() => { if (meta.parentSessionId !== undefined) ctx.sessions.open(meta.parentSessionId) }}
+        >
+          <span className={parentState === 'running' ? css.dotRunning : parentState === 'pending' ? css.dotPending : css.dotIdle} />
+          {t(parentState === 'running' ? 'parentRunning' : parentState === 'pending' ? 'parentPending' : 'parentIdle')}
+        </button>
+      )}
       <div ref={bodyRef} className={css.body} onScroll={onBodyScroll}>
         {messages.length === 0 && !running
           ? <EmptyState />

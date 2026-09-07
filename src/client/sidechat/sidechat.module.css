@@ -581,3 +581,50 @@
   font-size: 13px;
   padding: 0 4px;
 }
+
+/* WI-03 主线状态条（P0-4）：面板顶部一行，点击回主对话。 */
+.parentStrip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 12px;
+  border: none;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.parentStrip:hover {
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dotRunning,
+.dotPending,
+.dotIdle {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: none;
+}
+
+.dotRunning {
+  background: var(--dsw-alias-state-business-primary, #2f88ff);
+  animation: sidechat-pulse 1.2s ease-in-out infinite;
+}
+
+.dotPending {
+  background: var(--dsw-alias-state-warning-primary, #d4a017);
+}
+
+.dotIdle {
+  background: var(--dsw-alias-label-dimmed);
+}
+
+@keyframes sidechat-pulse {
+  50% { opacity: 0.45; }
+}

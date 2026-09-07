@@ -143,6 +143,12 @@ export const en = {
   webNoResults: 'No results',
   webSourcesTruncated: 'Source list truncated',
   webContentTruncated: 'Content truncated',
+
+  // WI-03 主线状态条（P0-4 三态）
+  parentStripTitle: '主线会话状态——点击回到主对话',
+  parentRunning: '主线：运行中',
+  parentPending: '主线：待审批',
+  parentIdle: '主线：空闲',
 }
 
 export type CopyKey = keyof typeof en
@@ -268,6 +274,11 @@ export const zh: Record<CopyKey, string> = {
   webNoResults: '无结果',
   webSourcesTruncated: '来源列表已截断',
   webContentTruncated: '内容已截断',
+
+  parentStripTitle: '主线会话状态——点击回到主对话',
+  parentRunning: '主线：运行中',
+  parentPending: '主线：待审批',
+  parentIdle: '主线：空闲',
 }
 
 /** The DSH locale service face we consume (subset of LocaleRuntime). */
