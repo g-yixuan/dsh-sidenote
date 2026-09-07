@@ -6,7 +6,7 @@
  * off-face 探测纪律：session.open()、store.update 均为运行时可达但契约不
  * 保证的面——就地 feature-check + 吞错降级，并登记进 host/probes.ts。
  */
-import type { Context, ConversationSnapshot, SessionBinding, SessionFace, UiConversationLike } from '../host/contracts.ts'
+import type { Context, ConversationSnapshot, SessionBinding, SessionFace, SessionModelsResult, UiConversationLike } from '../host/contracts.ts'
 import { parseSideChatMeta, type SideChatMeta } from './model.ts'
 import { readTab } from './open.ts'
 
@@ -153,4 +153,24 @@ export function chatSourceOf(ctx: Context, binding: SessionBinding | undefined):
     return { subscribe: (fn) => session.subscribe(fn), getLegacy: () => session.getSnapshot() }
   }
   return undefined
+}
+
+/** 拉会话模型目录（models RPC 容错；失败 null → 菜单保持只读标签态）。 */
+export async function listModels(ctx: Context, sessionId: string): Promise<SessionModelsResult | null> {
+  try {
+    const res = await ctx.connection.api.sessions.models({ sessionId })
+    return res.result.ok ? res.result.value : null
+  } catch {
+    return null
+  }
+}
+
+/** 切换子会话模型；成功返回新模型展示名，失败 null（best-effort）。 */
+export async function switchModel(ctx: Context, sessionId: string, provider: string, model: string): Promise<string | null> {
+  try {
+    const res = await ctx.connection.api.sessions.selectModel({ sessionId, provider, model })
+    return res.result.ok ? model : null
+  } catch {
+    return null
+  }
 }

@@ -230,7 +230,12 @@ export interface ModelSelection {
 export interface SessionModelsResult {
   current: ModelSelection
   routable: boolean
-  groups: readonly unknown[]
+  groups: readonly {
+    id: string
+    name: string
+    models: readonly { id: string; name: string; description?: string }[]
+  }[]
+  failures?: readonly unknown[]
 }
 
 export interface RpcEnvelope<T> {

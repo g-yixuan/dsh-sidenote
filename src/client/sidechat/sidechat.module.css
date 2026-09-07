@@ -394,3 +394,23 @@
 .jumpBottom:hover {
   background: var(--dsw-alias-bg-layer-2);
 }
+
+/* WI-02 模型选择 chip（点击弹 Menu）。 */
+.modelSelect {
+  font-size: 12px;
+  color: var(--dsw-alias-label-dimmed);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.modelSelect:hover {
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-2);
+}
