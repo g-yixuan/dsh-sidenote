@@ -24,14 +24,10 @@ import { useComposer, type Composer } from './composer.ts'
 import { clearPendingDraft, pairQuestions, parseSideChatMeta, phaseOf, transcriptOf, type ChatMessage } from './model.ts'
 import { readTab } from './open.ts'
 import { flattenReflowContent, splitProtocolPrefix } from '../annotate/format.ts'
+import { markdownTextProps } from '../markdown.ts'
 import type { ReflowStore } from '../reflow.ts'
 import { t, useLocaleTick } from '../locales.ts'
 import css from './sidechat.module.css'
-
-/** MarkdownText 代码块复制按钮文案（跟随 DSH 语言；函数内读取保持引用稳定）。 */
-function codeLabels() {
-  return { copyLabel: t('codeCopy'), copiedLabel: t('codeCopied') }
-}
 
 const NOOP_UNSUBSCRIBE = (): void => {}
 
@@ -360,7 +356,7 @@ function MessageRow({ message, question, reflow, parentSessionId, sideTitle }: {
               </details>
             )}
             {message.text !== ''
-              ? <MarkdownText text={message.text} streaming={message.streaming} codeLabels={codeLabels()} />
+              ? <MarkdownText {...markdownTextProps(message.text, message.streaming)} />
               : message.streaming === true && <div className={css.streamingHint}>{t('writing')}</div>}
             {message.interrupted === true && <div className={css.noticeRow}>{t('stopped')}</div>}
           </div>
