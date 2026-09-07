@@ -27,6 +27,7 @@ import { openOrFocusSideChat, sideChatTargetTitle } from './open.ts'
 import { t } from '../locales.ts'
 import { registerHeaderEntry } from './header.tsx'
 import { registerSideCommand } from './slash.ts'
+import { registerSideChatReferenceSource } from './referenceSource.ts'
 
 export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
   ctx.effect(
@@ -71,6 +72,8 @@ export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
   }, 'dsh-sidenote: annotate bridge')
 
   registerSideCommand(ctx)
+  // WI-04：主输入框 @ 引用侧边聊天（触发源 + codec 序列化）。
+  registerSideChatReferenceSource(ctx)
   // 顶栏「侧边」入口（发现性）：会话头部右上角常驻按钮。
   registerHeaderEntry(ctx)
 }

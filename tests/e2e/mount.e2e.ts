@@ -656,6 +656,23 @@ test('lifecycle: 整段回流 chip + 关闭后 /side 重开（D3 后悔药）', 
     '主会话未出现回流 chip',
   ).toBeVisible({ timeout: 10_000 })
 
+  // @ 引用侧边聊天（WI-04）：主 composer 敲 @ → 候选出现侧聊 → 选中后
+  // 草稿出现引用标记。
+  const mainComposer = page.getByRole('textbox', { name: /Message the agent|Message or run a task|输入消息|随心输入/ }).first()
+  await mainComposer.click()
+  await page.keyboard.type('@')
+  const sideRefOption = page.getByRole('option', { name: /侧边|Side/ }).first()
+  await expect(sideRefOption, '@ 菜单未出现侧边聊天候选').toBeVisible({ timeout: 10_000 })
+  await sideRefOption.click()
+  const draftAfterPick = await mainComposer.evaluate((el) => (
+    el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.value : (el.textContent ?? '')
+  ))
+  expect(draftAfterPick.length, '@ 引用未写入草稿').toBeGreaterThan(0)
+  // 清空草稿再走下一步（别污染后面的关闭流程）。
+  await mainComposer.click()
+  await page.keyboard.press('ControlOrMeta+a')
+  await page.keyboard.press('Backspace')
+
   // 关闭侧边 Tab → /side 弹层应出现「重开」项（D3 后悔药）。
   const sideTab = sidebar.getByText('Side', { exact: true }).first()
   await sideTab.locator('xpath=..').getByRole('button', { name: /Close|关闭/ }).first().click()
