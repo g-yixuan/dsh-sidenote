@@ -9,7 +9,8 @@
 import { describe, expect, it } from 'vitest'
 import { buildReflowBlock, createReflowStore } from '../src/client/reflow.ts'
 import { flattenReflowContent } from '../src/client/annotate/format.ts'
-import { pairQuestions, type ChatMessage } from '../src/client/sidechat/model.ts'
+import { pairQuestions } from '../src/client/sidechat/model.ts'
+import type { ChatMessage } from '../src/client/chat/transcript.ts'
 
 function memoryStorage() {
   const map = new Map<string, string>()
