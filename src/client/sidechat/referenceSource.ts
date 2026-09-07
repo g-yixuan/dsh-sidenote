@@ -66,9 +66,11 @@ export function registerSideChatReferenceSource(ctx: Context): void {
       name: SOURCE,
       order: 50,
       // 候选 = 当前会话已开启的侧边聊天（按 Tab 标题）。
-      candidates: (session: { sessionId: string }) => {
+      candidates: (session: { sessionId?: string } | undefined) => {
         try {
           const snapshot = ctx.betterSidebar.getSnapshot()
+          // 防御：0.1.2 的会话投影形状漂移（实证：session 可能 undefined）。
+          if (session?.sessionId === undefined) return Promise.resolve([])
           if (snapshot.sessionId !== session.sessionId || snapshot.state === undefined) return Promise.resolve([])
           return Promise.resolve(
             collectSideTabs(snapshot.state).map(tab => ({
@@ -82,8 +84,9 @@ export function registerSideChatReferenceSource(ctx: Context): void {
         }
       },
       // pick → 插入引用 chip（ref = childId；label/clipboardText 供渲染与复制）。
-      onPick: (pick: { candidate: { name: string } }, session: { sessionId: string }) => {
+      onPick: (pick: { candidate: { name: string } }, session: { sessionId?: string } | undefined) => {
         const snapshot = ctx.betterSidebar.getSnapshot()
+        if (session?.sessionId === undefined) return undefined
         if (snapshot.sessionId !== session.sessionId || snapshot.state === undefined) return undefined
         const tab = collectSideTabs(snapshot.state).find(t => t.title === pick.candidate.name)
         const childId = tab === undefined ? undefined : parseSideChatMeta(tab.meta).childId
