@@ -140,7 +140,9 @@ export function SlashMenuView(props: {
                   props.onPick(group.source, index)
                 }}
               >
-                <span className={css.slashItemName}>{item.icon !== undefined && item.icon !== '' ? `${item.icon} ` : ''}{item.name}</span>
+                {/* icon 仅文本时渲染——文件类候选的 icon 是对象（宿主差异），
+                    对象直接渲染会出 [object Object]（W234 实测 P2）。 */}
+                <span className={css.slashItemName}>{typeof item.icon === 'string' && item.icon !== '' ? `${item.icon} ` : ''}{item.name}</span>
                 {item.description !== undefined && item.description !== '' && (
                   <span className={css.slashItemDetail}>{item.description}</span>
                 )}

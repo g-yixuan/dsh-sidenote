@@ -365,7 +365,7 @@
 
 .densityToggle {
   font-size: 11px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   background: none;
   border: none;
   cursor: pointer;
@@ -400,7 +400,7 @@
 /* WI-02 模型选择 chip（点击弹 Menu）。 */
 .modelSelect {
   font-size: 12px;
-  color: var(--dsw-alias-label-dimmed);
+  color: var(--dsw-alias-label-secondary);
   background: none;
   border: none;
   cursor: pointer;
@@ -593,7 +593,7 @@
   border: none;
   border-bottom: 1px solid var(--dsw-alias-border-l2);
   background: var(--dsw-alias-bg-layer-1);
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font-size: 11px;
   cursor: pointer;
   text-align: left;
