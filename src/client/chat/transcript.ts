@@ -143,11 +143,14 @@ export function nodeToMessage(node: unknown): ChatMessage | null {
 }
 
 /**
- * ConversationSnapshot → 渲染消息列表：终态节点 + 在途工具调用 + 流式部分。
+ * ConversationSnapshot → 渲染消息列表：终态节点 + 在途项（按 turn/step 归并）。
  * 快照缺省（未绑定）时为空列表。
  *
- * 已知缺陷（WI-01 时序归并的待修项）：runningCalls/partial 恒追加尾部，
- * turn 内「文本→工具→文本」交错时序错乱（D3-adversarial-tech B-2）。
+ * 时序归并（WI-01）：在途项不再恒追加尾部——真实交错是「partial 文本 → 它
+ * 自己 step 发出的工具卡」：partial 与同 step 的 runningCall 并存时必须文本
+ * 在前（原文早于调用），不同 step 按 (turn, step) 升序；并行多 call 保持
+ * 宿主 dispatch 序（同 turn/step 内稳定）。终态节点自带 seq 全序，不参与
+ * 归并（在途项永远属于当前 turn 的前沿，尾部插入点天然正确）。
  */
 export function transcriptOf(snapshot: ConversationSnapshot | undefined | null): ChatMessage[] {
   if (snapshot === undefined || snapshot === null) return []
@@ -156,33 +159,59 @@ export function transcriptOf(snapshot: ConversationSnapshot | undefined | null):
     const message = nodeToMessage(node)
     if (message !== null) out.push(message)
   }
+
+  // ── 在途项收集（带 turn/step 排序键）──
+  interface InFlight {
+    turn: number
+    step: number
+    /** 同 (turn,step) 时 partial 先于 tool（文本先于它发出的调用）。 */
+    order: 0 | 1
+    message: ChatMessage
+  }
+  const inflight: InFlight[] = []
+
+  // 流式中的 assistant 部分输出（partial 缺 turn/step 时按最新处理——排在在途尾）。
+  const partial = snapshot.partial as { blocks?: unknown; turn?: unknown; step?: unknown } | null | undefined
+  if (partial !== undefined && partial !== null) {
+    const { text, reasoning, hasToolCall } = assistantParts(partial.blocks)
+    if (text !== '' || reasoning !== '' || !hasToolCall) {
+      inflight.push({
+        turn: typeof partial.turn === 'number' ? partial.turn : Number.MAX_SAFE_INTEGER,
+        step: typeof partial.step === 'number' ? partial.step : Number.MAX_SAFE_INTEGER,
+        order: 0,
+        message: {
+          key: 'partial',
+          role: 'assistant',
+          text,
+          ...(reasoning !== '' ? { reasoning } : {}),
+          streaming: true,
+        },
+      })
+    }
+  }
+
   // 在途工具调用（tool/call 已见、tool/result 未至）。
   if (Array.isArray(snapshot.runningCalls)) {
     for (const call of snapshot.runningCalls) {
       if (typeof call !== 'object' || call === null) continue
-      const c = call as { callId?: unknown; name?: unknown }
-      out.push({
-        key: `rc:${typeof c.callId === 'string' ? c.callId : '?'}`,
-        role: 'tool',
-        toolName: typeof c.name === 'string' ? c.name : t('toolFallback'),
-        text: '',
-        streaming: true,
+      const c = call as { callId?: unknown; name?: unknown; turn?: unknown; step?: unknown }
+      inflight.push({
+        turn: typeof c.turn === 'number' ? c.turn : Number.MAX_SAFE_INTEGER,
+        step: typeof c.step === 'number' ? c.step : Number.MAX_SAFE_INTEGER,
+        order: 1,
+        message: {
+          key: `rc:${typeof c.callId === 'string' ? c.callId : '?'}`,
+          role: 'tool',
+          toolName: typeof c.name === 'string' ? c.name : t('toolFallback'),
+          text: '',
+          streaming: true,
+        },
       })
     }
   }
-  // 流式中的 assistant 部分输出。
-  const partial = snapshot.partial as { blocks?: unknown } | null | undefined
-  if (partial !== undefined && partial !== null) {
-    const { text, reasoning, hasToolCall } = assistantParts(partial.blocks)
-    if (text !== '' || reasoning !== '' || !hasToolCall) {
-      out.push({
-        key: 'partial',
-        role: 'assistant',
-        text,
-        ...(reasoning !== '' ? { reasoning } : {}),
-        streaming: true,
-      })
-    }
-  }
+
+  // 稳定排序（同键保持收集序 = 宿主 dispatch 序）。
+  inflight.sort((a, b) => a.turn - b.turn || a.step - b.step || a.order - b.order)
+  for (const item of inflight) out.push(item.message)
   return out
 }

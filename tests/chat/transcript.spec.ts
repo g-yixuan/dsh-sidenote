@@ -118,9 +118,35 @@ describe('transcriptOf', () => {
     expect(transcriptOf(snapshot)).toEqual([
       { key: 'u:1', role: 'user', text: '问' },
       { key: 'a:2', role: 'assistant', text: '答' },
-      { key: 'rc:c1', role: 'tool', toolName: 'Bash', text: '', streaming: true },
       { key: 'partial', role: 'assistant', text: '正在', streaming: true },
+      { key: 'rc:c1', role: 'tool', toolName: 'Bash', text: '', streaming: true },
     ])
+  })
+  it('时序归并：同 step 的 partial 文本排在自己的工具卡前（文本早于调用）', () => {
+    const snapshot = {
+      nodes: [{ kind: 'user', seq: 1, content: [{ type: 'text', text: '问' }] }],
+      runningCalls: [{ callId: 'c1', name: 'Read', turn: 2, step: 3 }],
+      partial: { turn: 2, step: 3, blocks: [{ kind: 'text', text: '先看文件' }] },
+    } as unknown as ConversationSnapshot
+    expect(transcriptOf(snapshot).map(m => m.key)).toEqual(['u:1', 'partial', 'rc:c1'])
+  })
+  it('时序归并：早 step 的工具卡排在晚 step 的 partial 前', () => {
+    const snapshot = {
+      nodes: [],
+      runningCalls: [{ callId: 'c1', name: 'Bash', turn: 2, step: 1 }],
+      partial: { turn: 2, step: 2, blocks: [{ kind: 'text', text: '工具跑完接着说' }] },
+    } as unknown as ConversationSnapshot
+    expect(transcriptOf(snapshot).map(m => m.key)).toEqual(['rc:c1', 'partial'])
+  })
+  it('时序归并：同 step 并行多 call 保持 dispatch 序（稳定排序）', () => {
+    const snapshot = {
+      nodes: [],
+      runningCalls: [
+        { callId: 'c2', name: 'Read', turn: 1, step: 2 },
+        { callId: 'c1', name: 'Bash', turn: 1, step: 2 },
+      ],
+    } as unknown as ConversationSnapshot
+    expect(transcriptOf(snapshot).map(m => m.key)).toEqual(['rc:c2', 'rc:c1'])
   })
   it('partial 只有工具调用头时不渲染空泡', () => {
     const snapshot = {
