@@ -39,6 +39,15 @@ async function ensureSidebarExpanded(p) {
   if ((await expand.count()) > 0) { await expand.click(); await p.waitForTimeout(800) }
 }
 
+/** D1 折叠卡展开（WI-01 起 fork 历史默认折叠）。 */
+async function expandInherited(p) {
+  const sidebar = p.locator('[data-dsh-better-sidebar]')
+  const card = sidebar.locator('[data-disclosure-row]', { hasText: /Inherited from main session|继承自主会话/ }).filter({ visible: true }).first()
+  await card.waitFor({ state: 'visible', timeout: 60_000 })
+  if ((await card.getAttribute('aria-expanded')) !== 'true') await card.click()
+  await p.waitForTimeout(600)
+}
+
 await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(4000)
 await dismissOnboarding(page)
@@ -115,9 +124,25 @@ await ensureSidebarExpanded(page)
 const sidebar = page.locator('[data-dsh-better-sidebar]')
 await sidebar.getByRole('button', { name: /New tab/ }).first().click()
 await page.getByRole('menuitem', { name: /Side chat/ }).first().click()
-await sidebar.getByText(/full history snapshot/).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: 60_000 })
-await page.waitForTimeout(1200)
+// 折叠态：D1 卡 + 操作行 + composer 芯片组（权限/模型）
+await page.waitForTimeout(1500)
+await shot('04a-side-chat-collapsed')
+await expandInherited(page)
+// 展开一张工具卡（Bash 终端卡）
+const termRow = sidebar.locator('[data-disclosure-row]', { hasText: 'ls -1' }).first()
+if ((await termRow.count()) > 0) {
+  await termRow.click()
+  await page.waitForTimeout(600)
+}
 await shot('04-side-chat-panel')
+
+// 5b. 侧边 composer 斜杠菜单（WI-02）
+const sideComposer = sidebar.getByRole('textbox').first()
+await sideComposer.click()
+await page.keyboard.type('/')
+await page.waitForTimeout(800)
+await shot('04b-side-slash-menu')
+await page.keyboard.press('Escape')
 
 // 6. 回流：hover 侧边面板 assistant 消息 → 点回流 → 主输入框上方 chip。
 const sideMsg = sidebar.locator('[class*="_assistantRow"]').last()

@@ -152,10 +152,10 @@ export const en = {
   webContentTruncated: 'Content truncated',
 
   // WI-03 主线状态条（P0-4 三态）
-  parentStripTitle: '主线会话状态——点击回到主对话',
-  parentRunning: '主线：运行中',
-  parentPending: '主线：待审批',
-  parentIdle: '主线：空闲',
+  parentStripTitle: 'Main session status — click to jump back',
+  parentRunning: 'Main: running',
+  parentPending: 'Main: awaiting approval',
+  parentIdle: 'Main: idle',
 }
 
 export type CopyKey = keyof typeof en

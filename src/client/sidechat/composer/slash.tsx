@@ -24,8 +24,10 @@ export function guardOf(phase: string | undefined): 'plain' | 'claimed' | 'froze
   return 'frozen'
 }
 
-/** 侧边会话里要过滤的 source（不可嵌套 P2-3：侧聊里不再开侧聊）。 */
-const EXCLUDED_SOURCES = new Set(['side', '侧边'])
+/** 侧边会话里要过滤的候选名（不可嵌套 P2-3：侧聊里不再开侧聊）。
+ * 注意过滤粒度是**候选名**而非 source 组名——/side 是 commands 源里的一个
+ * 候选，组名是宿主命令源（过滤组名会误杀整组）。 */
+const EXCLUDED_NAMES = new Set(['side', '侧边'])
 
 /** MenuState 的最小镜像（input-trigger core/contract.d.ts）。 */
 export interface SlashMenuState {
@@ -36,6 +38,13 @@ export interface SlashMenuState {
     readonly items: readonly { readonly name: string; readonly description?: string; readonly icon?: string; readonly hint?: string }[]
   }[]
   readonly highlight: { readonly source: string; readonly index: number } | null
+}
+
+/** 可视分组（候选带**原始索引**——pick 的 CAS 要它；过滤挪位不改索引）。 */
+export interface VisibleGroup {
+  readonly source: string
+  readonly status: 'pending' | 'ready'
+  readonly items: readonly { readonly item: SlashMenuState['groups'][number]['items'][number]; readonly index: number }[]
 }
 
 /** 触发控制器镜像（公开契约面；技术审查 A3 实证非 off-face）。 */
@@ -76,10 +85,17 @@ export function useSlashMenuState(controller: TriggerController | null): SlashMe
   )
 }
 
-/** 过滤后的可视分组（排除不可嵌套源 + 空组）。 */
-export function visibleGroups(state: SlashMenuState | null): SlashMenuState['groups'] {
+/** 过滤后的可视分组（排除不可嵌套候选名 + 空组；候选保留原始索引供 pick）。 */
+export function visibleGroups(state: SlashMenuState | null): VisibleGroup[] {
   if (state === null || !state.open) return []
-  return state.groups.filter(g => !EXCLUDED_SOURCES.has(g.source) && g.items.length > 0)
+  return state.groups
+    .map(g => ({
+      ...g,
+      items: g.items
+        .map((item, index) => ({ item, index }))
+        .filter(entry => !EXCLUDED_NAMES.has(entry.item.name)),
+    }))
+    .filter(g => g.items.length > 0)
 }
 
 // ── 菜单皮（自绘，L2）──────────────────────────────────────────────────────
@@ -109,7 +125,7 @@ export function SlashMenuView(props: {
       {groups.map(group => (
         <div key={group.source}>
           <div className={css.slashGroupTitle}>{group.source}</div>
-          {group.items.map((item, index) => {
+          {group.items.map(({ item, index }) => {
             const active = highlight !== null && highlight.source === group.source && highlight.index === index
             return (
               <button

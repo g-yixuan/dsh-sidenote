@@ -607,7 +607,7 @@ test('slash menu: 侧边 composer 斜杠菜单（inputTriggers 引擎接线 + /s
   await expect(menu, '侧边斜杠菜单未打开').toBeVisible({ timeout: 10_000 })
   const options = menu.getByRole('option')
   await expect(options.first(), '菜单无候选').toBeVisible({ timeout: 10_000 })
-  await expect(options.filter({ hasText: /^\/side/ }), '侧边会话不应出现 /side（不可嵌套）').toHaveCount(0)
+  await expect(options.filter({ hasText: 'side' }), '侧边会话不应出现 side 候选（不可嵌套）').toHaveCount(0)
 
   // Escape 关闭。
   await page.keyboard.press('Escape')
