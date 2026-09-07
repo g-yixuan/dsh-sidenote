@@ -95,5 +95,6 @@
     "url": "https://github.com/g-yixuan/dsh-sidenote.git"
   },
   "bugs": "https://github.com/g-yixuan/dsh-sidenote/issues",
-  "author": "gyixuan"
+  "author": "gyixuan",
+  "packageManager": "pnpm@11.26.0"
 }

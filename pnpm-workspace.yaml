@@ -11,3 +11,8 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - vitest
   - '@vitest/*'
+  # jsdom 测试链传递依赖（tough-cookie / dom-selector 之下），不发版进产物——
+  # 与 vitest 同款豁免逻辑（2026-09-07 CI 连红实证：三者发布不足 24h 被拦）。
+  - tldts
+  - tldts-core
+  - bidi-js
