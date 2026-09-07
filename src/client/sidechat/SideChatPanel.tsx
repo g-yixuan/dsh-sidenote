@@ -34,6 +34,11 @@ import css from './sidechat.module.css'
 
 const NOOP_UNSUBSCRIBE = (): void => {}
 
+/** D2 写型工具名（无 diff 卡时的名字兜底）。 */
+const WRITE_TOOLS = new Set(['edit', 'write', 'str-replace-editor', 'str_replace_editor'])
+/** 首次写提示的一次性 localStorage 键。 */
+const WRITE_NOTICE_KEY = 'dsh-sidenote:write-notice:v1'
+
 export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }) {
   useLocaleTick()
   const { ctx, scope, tab, visible } = props
@@ -116,6 +121,10 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
   // 注意：必须在相位早退之前创建（hooks 纪律——forking/error 相位渲染的
   // hooks 数与 chat 相位必须一致，否则 React #310「Rendered more hooks」）。
   const fold = useMemo(() => createFoldStore(), [])
+  // D2 提示的消除态（hooks 纪律：必须在相位早退之前——#310 教训）。
+  const [writeNoticeDismissed, setWriteNoticeDismissed] = useState(
+    () => typeof localStorage !== 'undefined' && localStorage.getItem(WRITE_NOTICE_KEY) === '1',
+  )
 
   // ── composer（input 机器优先，降级本地草稿 + session.prompt） ──
   const composer = useComposer(ctx, session, childId)
@@ -189,6 +198,17 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
 
   const running = snapshot?.running === true
   const openFailed = snapshot?.openState === 'error'
+  // D2 补偿（同权语义）：侧聊首次出现写型工具（diff 卡 / edit·write 族）时
+  // 给一次性轻提示——用户要「一眼知道它能动我文件」。
+  const hasWriteTool = messages.some(m =>
+    m.role === 'tool' && (m.card?.kind === 'diff' || (m.toolName !== undefined && WRITE_TOOLS.has(m.toolName))))
+  // R8 审批提示条：pending 两版本分居（0.1.1 在 Session 快照顶层；0.1.2 在
+  // 控制面——legacy 切片不含）。两面都读，兼容缺席。
+  const pendingCount = (
+    ((snapshot as { pending?: readonly unknown[] } | null)?.pending)
+    ?? ((chatLegacy as { pending?: readonly unknown[] } | null)?.pending)
+    ?? []
+  ).length
 
   return (
     <div ref={rootRef} className={css.root}>
@@ -198,6 +218,29 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
           : <MessageList messages={messages} fold={fold} boundarySeq={meta.boundarySeq} reflow={props.reflow} parentSessionId={meta.parentSessionId} sideTitle={tab.title} />}
         {openFailed && <div className={css.errorRow}>{t('historyFailed')}</div>}
       </div>
+      {hasWriteTool && !writeNoticeDismissed && (
+        <div className={css.writeNotice}>
+          <span>{t('writeNotice')}</span>
+          <button
+            type="button"
+            className={css.writeNoticeClose}
+            aria-label={t('hintClose')}
+            onClick={() => {
+              setWriteNoticeDismissed(true)
+              try { localStorage.setItem(WRITE_NOTICE_KEY, '1') } catch { /* 隐私模式 */ }
+            }}
+          >×</button>
+        </div>
+      )}
+      {pendingCount > 0 && childId !== undefined && (
+        <button
+          type="button"
+          className={css.pendingBar}
+          onClick={() => { ctx.sessions.open(childId) }}
+        >
+          {t('pendingNotice')}
+        </button>
+      )}
       {!nearBottom && (
         <button type="button" className={css.jumpBottom} onClick={jumpToLatest}>
           {t('jumpToLatest')}

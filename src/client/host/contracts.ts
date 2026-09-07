@@ -291,6 +291,8 @@ export interface ConversationSnapshot {
   openState?: 'cold' | 'loading' | 'open' | 'error'
   partial?: unknown
   runningCalls?: readonly unknown[]
+  /** 待处理交互（审批/提问；R8 提示条用——原生接管链不渲染在侧栏）。 */
+  pending?: readonly unknown[]
 }
 
 /**
