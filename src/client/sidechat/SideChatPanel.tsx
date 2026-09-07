@@ -12,7 +12,7 @@
  * 暂停订阅。非 staged 会话需 off-face open() 开窗（lifecycle.openSessionWindow），
  * 否则消息流永远为空（client-runtime 只为 staged 会话开窗的已知偏差）。
  */
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { IconCheckOutline16, IconNewChatOutline16, IconSendOutline16, IconShareOutline16, IconStopFill16, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context, SessionFace, TabComponentProps } from '../host/contracts.ts'
 import { useComposer, type Composer } from './composer.ts'
@@ -314,14 +314,19 @@ function ReflowButton({ reflow, parentSessionId, sideTitle, text, question }: {
   )
 }
 
-function MessageRow({ message, question, fold, reflow, parentSessionId, sideTitle }: {
+// MessageRow 全族 memo（C-5 性能纪律）：transcriptOf 每次快照重建消息对象
+// （引用必变），比较器按字段值比；store 与回调引用稳定（fold/reflow 单例）。
+// 流式增长时只重渲变化的行（长 fork 历史的帧成本随列表长度摊平）。
+interface MessageRowProps {
   message: ChatMessage
   question?: string
   fold: FoldStore
   reflow: ReflowStore
   parentSessionId: string | undefined
   sideTitle: string
-}) {
+}
+
+const MessageRow = memo(function MessageRow({ message, question, fold, reflow, parentSessionId, sideTitle }: MessageRowProps) {
   useLocaleTick()
   switch (message.role) {
     case 'user': {
@@ -407,6 +412,21 @@ function MessageRow({ message, question, fold, reflow, parentSessionId, sideTitl
     case 'notice':
       return <div className={css.noticeRow}>{message.text}</div>
   }
+}, rowPropsEqual)
+
+/** memo 比较器：transcriptOf 每次快照重建消息对象（引用必变），按字段值比。 */
+function rowPropsEqual(prev: MessageRowProps, next: MessageRowProps): boolean {
+  if (prev.fold !== next.fold || prev.reflow !== next.reflow) return false
+  if (prev.parentSessionId !== next.parentSessionId || prev.sideTitle !== next.sideTitle) return false
+  if (prev.question !== next.question) return false
+  const a = prev.message
+  const b = next.message
+  return a === b || (
+    a.key === b.key && a.role === b.role && a.text === b.text
+    && a.reasoning === b.reasoning && a.streaming === b.streaming
+    && a.isError === b.isError && a.interrupted === b.interrupted
+    && a.toolName === b.toolName && a.card === b.card && a.seq === b.seq
+  )
 }
 
 /** 底部 composer：自绘输入框；模型标签显示子会话真实当前模型（fork 时同步主会话选择）。 */
