@@ -165,6 +165,21 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
     // pendingDraft/相位变化时真正动作（清除后 pendingDraft 为 undefined，幂等）。
   }, [pendingDraft, phase, ctx, tab.id])
 
+  // D3a 保存为正式会话：fork 子会话为独立主会话（无 unarchive API，
+  // fork 即转正——内置侧边对话同款路径）→ 主视图打开 → 关本 Tab。
+  const promote = useCallback(() => {
+    if (childId === undefined) return
+    void (async () => {
+      try {
+        const promoted = await ctx.sessions.fork({ sessionId: childId, increaseTitle: true })
+        ctx.sessions.open(promoted)
+        ctx.betterSidebar.closeTab(tab.id, { sessionId: scope.sessionId })
+      } catch (error) {
+        console.warn('[dsh-sidenote] 保存为正式会话失败:', error)
+      }
+    })()
+  }, [ctx, childId, tab.id, scope.sessionId])
+
   // P0-4 焦点切换：Alt+J 在主 ↔ 侧之间跳（code 判定而非 key——macOS
   // Option 组合会产 '∆' 等变体字符，code 布局无关稳定）。
   useEffect(() => {
@@ -285,7 +300,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
       <div ref={bodyRef} className={css.body} onScroll={onBodyScroll}>
         {messages.length === 0 && !running
           ? <EmptyState />
-          : <MessageList messages={messages} fold={fold} boundarySeq={meta.boundarySeq} reflow={props.reflow} parentSessionId={meta.parentSessionId} sideTitle={tab.title} />}
+          : <MessageList messages={messages} fold={fold} boundarySeq={meta.boundarySeq} reflow={props.reflow} parentSessionId={meta.parentSessionId} sideTitle={tab.title} onPromote={promote} />}
         {openFailed && <div className={css.errorRow}>{t('historyFailed')}</div>}
       </div>
       {hasWriteTool && !writeNoticeDismissed && (

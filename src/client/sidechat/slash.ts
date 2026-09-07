@@ -12,7 +12,8 @@
  */
 import type { Context } from '../host/contracts.ts'
 import { canForkFrom, collectSideTabs } from './model.ts'
-import { createSideChat } from './open.ts'
+import { createSideChat, reopenSideChat } from './open.ts'
+import { dropClosedSideChat, listClosedSideChats } from './recentClosed.ts'
 import { t } from '../locales.ts'
 
 /** dsh-client-ui-commands ClientSessionContext 的最小镜像（只有 sessionId）。 */
@@ -60,6 +61,10 @@ function makeContribution(ctx: Context, name: string) {
             options.push({ id: `focus:${tab.id}`, label: t('cmdFocus', { title: tab.title }), detail: t('cmdFocusDetail') })
           }
         }
+        // D3 后悔药：最近关闭的可重开（Cmd+Shift+T 心智）。
+        for (const entry of listClosedSideChats(session.sessionId)) {
+          options.push({ id: `reopen:${entry.childId}`, label: t('cmdReopen', { title: entry.title }), detail: t('cmdReopenDetail') })
+        }
         return Promise.resolve(options)
       },
       onSelect: (option: SelectOption, session: CommandSession) => {
@@ -71,6 +76,13 @@ function makeContribution(ctx: Context, name: string) {
         }
         if (option.id.startsWith('focus:')) {
           ctx.betterSidebar.activateTab(option.id.slice('focus:'.length), { sessionId: session.sessionId })
+          return
+        }
+        if (option.id.startsWith('reopen:')) {
+          const childId = option.id.slice('reopen:'.length)
+          if (reopenSideChat(ctx, session.sessionId, childId)) {
+            dropClosedSideChat(session.sessionId, childId)
+          }
         }
       },
     },

@@ -62,6 +62,8 @@ export const en = {
   cmdNewDetail: 'Forked from the current session; evolves independently',
   cmdFocus: 'Focus "{title}"',
   cmdFocusDetail: 'Existing side chat',
+  cmdReopen: 'Reopen "{title}"',
+  cmdReopenDetail: 'Recently closed side chat',
 
   // annotate overlay
   addToConversation: 'Add to conversation',
@@ -133,6 +135,11 @@ export const en = {
   collapseAll: 'Collapse all',
   expandAll: 'Expand all',
   jumpToLatest: '↓ Jump to latest',
+  reflowAll: 'Reflow all',
+  reflowAllTitle: 'Bring all Q&A pairs back to the main session',
+  reflowAllDone: 'Reflowed ✓',
+  promote: 'Save as session',
+  promoteTitle: 'Fork this side chat into a standalone session in the main list',
 
   // 工具卡叶子块 labels（0.1.2 起必填——host/labels.ts）
   readWindow: '{shown} of {total} lines',
@@ -204,6 +211,8 @@ export const zh: Record<CopyKey, string> = {
   cmdNewDetail: '从当前会话 fork，独立演进',
   cmdFocus: '聚焦「{title}」',
   cmdFocusDetail: '已存在的侧边聊天',
+  cmdReopen: '重开「{title}」',
+  cmdReopenDetail: '最近关闭的侧边聊天',
 
   addToConversation: '添加到对话',
   askInSideChat: '在侧边聊天中提问',
@@ -265,6 +274,11 @@ export const zh: Record<CopyKey, string> = {
   collapseAll: '全部折叠',
   expandAll: '全部展开',
   jumpToLatest: '↓ 跳到最新',
+  reflowAll: '整段回流',
+  reflowAllTitle: '把该侧聊全部问答对带回主会话（chip 可预览/逐条撤）',
+  reflowAllDone: '已回流 ✓',
+  promote: '保存为正式会话',
+  promoteTitle: '把侧边聊天转为会话列表里的正式会话',
 
   readWindow: '{shown}/{total} 行',
   searchPathsSummary: '{shown}/{total} 个路径',

@@ -634,3 +634,44 @@ test('slash menu: 侧边 composer 斜杠菜单（inputTriggers 引擎接线 + /s
 
   expect(pageErrors, 'pageerrors during slash menu').toEqual([])
 })
+
+test('lifecycle: 整段回流 chip + 关闭后 /side 重开（D3 后悔药）', async ({ page }) => {
+  test.skip(!process.env.DSH_E2E_SEED_SESSION, 'no seeded session id')
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(String(error)))
+
+  await openSeedSession(page)
+  await openPlusMenu(page)
+  await page.getByRole('menuitem', { name: /Side chat/ }).first().click()
+
+  const sidebar = page.locator('[data-dsh-better-sidebar]')
+  await expandInherited(page)
+
+  // 整段回流：点「整段回流」→ 主会话 composer 上方出现回流 chip。
+  const reflowAll = sidebar.getByText(/Reflow all|整段回流/).first()
+  await expect(reflowAll, '整段回流按钮未出现').toBeVisible({ timeout: 10_000 })
+  await reflowAll.click()
+  await expect(
+    page.getByText(/\d+ side-chat reflows?|\d+ 条侧边回流/).filter({ visible: true }).first(),
+    '主会话未出现回流 chip',
+  ).toBeVisible({ timeout: 10_000 })
+
+  // 关闭侧边 Tab → /side 弹层应出现「重开」项（D3 后悔药）。
+  const sideTab = sidebar.getByText('Side', { exact: true }).first()
+  await sideTab.locator('xpath=..').getByRole('button', { name: /Close|关闭/ }).first().click()
+  await page.waitForTimeout(500)
+
+  const composer = page.getByRole('textbox', { name: /Message the agent|Message or run a task|输入消息|随心输入/ }).first()
+  await composer.click()
+  await page.keyboard.type('/side')
+  const reopenOption = page.getByRole('option', { name: /side/i }).first()
+  await expect(reopenOption, '/side 命令未出现').toBeVisible({ timeout: 10_000 })
+  await reopenOption.click()
+  await expect(
+    page.getByText(/Reopen|重开/).filter({ visible: true }).first(),
+    '/side 弹层未出现「重开最近关闭」选项',
+  ).toBeVisible({ timeout: 10_000 })
+  await dumpStep(page, '17-reopen-option')
+
+  expect(pageErrors, 'pageerrors during lifecycle').toEqual([])
+})

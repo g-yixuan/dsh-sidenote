@@ -358,6 +358,7 @@
 /* P1-4 密度管理 */
 .densityRow {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   padding: 2px 2px 4px;
 }
@@ -627,4 +628,11 @@
 
 @keyframes sidechat-pulse {
   50% { opacity: 0.45; }
+}
+
+/* WI-04 操作行（整段回流/保存为正式会话 + 密度开关）。 */
+.actionGroup {
+  display: inline-flex;
+  gap: 2px;
+  margin-right: auto;
 }

@@ -21,6 +21,8 @@ import { sideChatBridge } from '../bridge.ts'
 import type { ReflowStore } from '../reflow.ts'
 import { SideChatPanel } from './SideChatPanel.tsx'
 import { SIDE_TAB_TYPE, canForkFrom, collectSideTabs, mintSideTabId, sideTabTitle } from './model.ts'
+import { parseSideChatMeta } from './model.ts'
+import { recordClosedSideChat } from './recentClosed.ts'
 import { openOrFocusSideChat, sideChatTargetTitle } from './open.ts'
 import { t } from '../locales.ts'
 import { registerHeaderEntry } from './header.tsx'
@@ -37,6 +39,18 @@ export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
       createTab: (state) => ({
         tab: { id: mintSideTabId(), type: SIDE_TAB_TYPE, title: sideTabTitle(collectSideTabs(state).map(tab => tab.title)) },
       }),
+      // × 即焚观感 + 后悔药：关 Tab 时登记「最近关闭」（会话本体仍归档在盘）。
+      onClose: (closedTab) => {
+        const meta = parseSideChatMeta(closedTab.meta)
+        if (meta.childId !== undefined && meta.parentSessionId !== undefined) {
+          recordClosedSideChat(meta.parentSessionId, {
+            childId: meta.childId,
+            parentSessionId: meta.parentSessionId,
+            title: closedTab.title,
+            closedAt: Date.now(),
+          })
+        }
+      },
       component: (props) => <SideChatPanel {...props} reflow={reflow} />,
     }),
     'dsh-sidenote: side chat tab',

@@ -44,14 +44,16 @@ export function StateScreen(props: { title: string; detail?: string; hint?: stri
   )
 }
 
-export function MessageList({ messages, fold, boundarySeq, reflow, parentSessionId, sideTitle }: {
+export function MessageList({ messages, fold, boundarySeq, reflow, parentSessionId, sideTitle, onPromote }: {
   messages: readonly ChatMessage[]
   fold: FoldStore
   boundarySeq: number | undefined
   reflow: ReflowStore
   parentSessionId: string | undefined
   sideTitle: string
+  onPromote: () => void
 }) {
+  const [reflowAllDone, setReflowAllDone] = useState(false)
   // 问答成对：每条 assistant 消息配对它在回答的用户提问（回流时带上）。
   const questions = useMemo(() => pairQuestions(messages), [messages])
   // D1：fork 继承区折叠为指示卡（默认折叠=密度默认态；展开态在同一张卡里，
@@ -76,11 +78,43 @@ export function MessageList({ messages, fold, boundarySeq, reflow, parentSession
   const anyOpen = foldableKeys.some(k => fold.isOpen(k))
   return (
     <div className={css.transcript}>
-      {foldableKeys.length >= 2 && (
+      {(foldableKeys.length >= 2 || (parentSessionId !== undefined && messages.length > 0)) && (
         <div className={css.densityRow}>
-          <button type="button" className={css.densityToggle} onClick={() => { fold.setAll(foldableKeys, !anyOpen) }}>
-            {anyOpen ? t('collapseAll') : t('expandAll')}
-          </button>
+          {parentSessionId !== undefined && messages.length > 0 && (
+            <span className={css.actionGroup}>
+              <button
+                type="button"
+                className={css.densityToggle}
+                title={t('reflowAllTitle')}
+                onClick={() => {
+                  // D4 整段带走：所有问答成对逐条入回流 store（受控对象，
+                  // 主输入框 chip 可预览/逐条撤；骨架=问答对，禁全量快照回灌）。
+                  let added = 0
+                  for (const m of messages) {
+                    if (m.role !== 'assistant' || m.text === '' || m.streaming === true) continue
+                    reflow.add(parentSessionId, sideTitle, m.text, questions.get(m.key))
+                    added += 1
+                  }
+                  if (added > 0) setReflowAllDone(true)
+                }}
+              >
+                {reflowAllDone ? t('reflowAllDone') : t('reflowAll')}
+              </button>
+              <button
+                type="button"
+                className={css.densityToggle}
+                title={t('promoteTitle')}
+                onClick={onPromote}
+              >
+                {t('promote')}
+              </button>
+            </span>
+          )}
+          {foldableKeys.length >= 2 && (
+            <button type="button" className={css.densityToggle} onClick={() => { fold.setAll(foldableKeys, !anyOpen) }}>
+              {anyOpen ? t('collapseAll') : t('expandAll')}
+            </button>
+          )}
         </div>
       )}
       {inherited.length > 0 && (

@@ -98,3 +98,28 @@ export function sideChatTargetTitle(ctx: Context, sessionId: string): string | u
     return undefined
   }
 }
+
+/**
+ * 重开最近关闭的侧边聊天（D3 后悔药）：开 Tab + meta 预置 childId/
+ * parentSessionId——面板挂载后走绑定恢复路径（不重新 fork）。
+ * 会话本体必须仍 archived 在列（若被清理，面板落「会话已不存在」态——
+ * 有现成错误态兜着）。
+ */
+export function reopenSideChat(ctx: Context, sessionId: string, childId: string, title?: string): boolean {
+  try {
+    const snapshot = ctx.betterSidebar.getSnapshot()
+    if (snapshot.sessionId !== sessionId || snapshot.state === undefined) return false
+    const before = new Set(collectTabs(snapshot.state).map(tab => tab.id))
+    ctx.betterSidebar.openTab({ type: SIDE_TAB_TYPE }, { sessionId })
+    const created = collectSideTabs(ctx.betterSidebar.getSnapshot().state).find(tab => !before.has(tab.id))
+    if (created === undefined) return false
+    ctx.betterSidebar.updateTab(created.id, {
+      ...(title !== undefined ? { title } : {}),
+      meta: { childId, parentSessionId: sessionId },
+    })
+    return true
+  } catch (error) {
+    console.warn('[dsh-sidenote] 重开侧边聊天失败:', error)
+    return false
+  }
+}
