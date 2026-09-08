@@ -1,12 +1,8 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/wordmark-dark.svg">
-    <img src="docs/assets/wordmark-light.svg" height="64" alt="dsh-sidenote">
-  </picture>
+  <img src="docs/assets/banner-en.png" alt="dsh-sidenote — side lanes for side questions, notes on any passage" width="100%">
 </p>
 
 <p align="center">
-  <b>Open a side lane for the question. Mark the passage with a note.</b><br/>
   A DSH (DeepSeek Harness) plugin — side questions never derail the main thread, and answers flow back home.
 </p>
 

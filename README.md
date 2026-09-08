@@ -1,12 +1,8 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/wordmark-dark.svg">
-    <img src="docs/assets/wordmark-light.svg" height="64" alt="dsh-sidenote">
-  </picture>
+  <img src="docs/assets/banner.png" alt="dsh-sidenote —— 侧边开一岔对话，划选留一条注释，主线永不被打断" width="100%">
 </p>
 
 <p align="center">
-  <b>侧边开一岔对话，划选留一条注释。</b><br/>
   DSH（DeepSeek Harness）插件——支线问题不打断主线，结论一键回流。
 </p>
 
