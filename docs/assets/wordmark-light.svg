@@ -1,0 +1,21 @@
+<svg width="640" height="96" viewBox="0 0 640 96" xmlns="http://www.w3.org/2000/svg">
+  <g transform="translate(0,8) scale(0.625)">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3B5BFD"/>
+      <stop offset="1" stop-color="#2743D8"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="none"/>
+  <!-- 主区：两行文本（主对话流）——垂直中心配平 -->
+  <rect x="24" y="42" width="46" height="9" rx="4.5" fill="#1f2329" opacity="0.92"/>
+  <rect x="24" y="59" width="36" height="9" rx="4.5" fill="#1f2329" opacity="0.5"/>
+  <!-- 侧栏分隔线 -->
+  <rect x="79" y="30" width="2.5" height="68" rx="1.25" fill="#1f2329" opacity="0.3"/>
+  <!-- 侧边气泡（侧边聊天）——尾巴与泡体一体成形 -->
+  <path d="M94.5 42 h12 a5.5 5.5 0 0 1 5.5 5.5 v6 a5.5 5.5 0 0 1 -5.5 5.5 h-7.5 l-4.5 6 v-6 a5.5 5.5 0 0 1 -5.5 -5.5 v-6 a5.5 5.5 0 0 1 5.5 -5.5 z" fill="#1f2329"/>
+  <!-- 侧栏次级行 -->
+  <rect x="89" y="70" width="15" height="7" rx="3.5" fill="#1f2329" opacity="0.5"/>
+</g>
+  <text x="76" y="62" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="44" font-weight="600" fill="#1f2329" letter-spacing="-1">dsh-sidenote</text>
+</svg>

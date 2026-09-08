@@ -1,74 +1,106 @@
-# dsh-sidenote
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/wordmark-dark.svg">
+    <img src="docs/assets/wordmark-light.svg" height="64" alt="dsh-sidenote">
+  </picture>
+</p>
 
-A [DSH (DeepSeek Harness)](https://github.com/DeepSeek-ai) web plugin: Codex-style **side chat** and **selection annotations**. A thin consumer of [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar), registering its sidebar tabs through the `ctx.betterSidebar` service.
+<p align="center">
+  <b>Open a side lane for the question. Mark the passage with a note.</b><br/>
+  A DSH (DeepSeek Harness) plugin — side questions never derail the main thread, and answers flow back home.
+</p>
 
-English · [中文](README.md)
+<p align="center">
+  <a href="https://www.npmjs.com/package/dsh-sidenote"><img src="https://img.shields.io/npm/v/dsh-sidenote" alt="npm version"></a>
+  <a href="https://github.com/g-yixuan/dsh-sidenote/actions/workflows/ci.yml"><img src="https://github.com/g-yixuan/dsh-sidenote/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/peer-dsh--better--sidebar-informational" alt="requires dsh-better-sidebar">
+</p>
 
-<video src="https://raw.githubusercontent.com/g-yixuan/dsh-sidenote/main/docs/assets/demo.mp4" controls muted loop playsinline width="100%"></video>
+<p align="center">
+  <b>English</b> · <a href="README.md">中文</a>
+</p>
 
-## Features
-
-### 💬 Side chat
-
-**Fork** the current main session (full history snapshot) into an independent side session that lives in a「侧边」tab of the right sidebar — keep the main thread moving while you chase side questions:
-
-- Three entries: the always-on「Side」pill in the session header, the sidebar `+` menu, or the `/side` slash command (`/侧边` works too);
-- The fork carries the full main-session context at fork time; afterwards the two sessions evolve independently; **inherited history collapses by default** into an「Inherited from main session · N items」card (click to expand);
-- Multiple side chats coexist («侧边», «侧边 2», …), each closable on its own;
-- **Native-grade rendering**: the same seamless row material as the main chat (chromeless DisclosureRow + six host-shared leaf families: terminal/diff/read/search/web/generic) plus task cards (todo_write → status-dot checklist); tool titles speak human (`Bash · List files`, not the raw command), collapsed thinking rows preview their first line; smart scroll-follow;
-- **Composer parity**: model picker (two-level menu), permission chip, `/` commands, `@` references, image attachments, `Cmd/Ctrl+Enter` to steer;
-- **Main session status always visible** on top of the panel (running / awaiting approval / idle); `Alt+J` jumps focus between main and side;
-- Zero state loss: fold/scroll state persists per session across reloads;
-- **Reflow**: send a conclusion back to the main session in one click (Q&A paired — the question travels with the answer) or reflow the whole thread — a controlled context chip above the main composer rides your next message (Cursor-class capability; Codex has none); `@`-mention a side chat right from the main composer;
-- **Lifecycle**: 「Save as session」promotes a side chat into the session list (with a global toast confirming where it went); recently closed side chats reopen from the `/side` popup.
-
-![Side chat panel](docs/assets/04-side-chat-panel.png)
-
-| Collapsed (inheritance card + action row + chips) | Side slash menu |
-|---|---|
-| ![collapsed](docs/assets/04a-side-chat-collapsed.png) | ![slash menu](docs/assets/04b-side-slash-menu.png) |
-
-### 🗒️ Selection annotations
-
-Select text in an assistant message and turn "quote + your note" into context for the model:
-
-- **Add to conversation**: the selection stays highlighted with a numbered badge in the right gutter; an annotation editor pops up (notes optional); the「N annotations」chip above the composer previews and removes each one;
-- **Ask in side chat**: after the note editor, the quote + note lands straight in a side chat's composer;
-- **Zero draft pollution**: annotations are controlled objects, never text in your composer; they're serialized into structured `<annotation>` XML blocks only at the moment you send (the most model-legible form);
-- **Traceable after send**: sent bubbles collapse to a「N annotated」label you can revisit; badges turn into outlined read-only state; **survives reloads** (persisted per session, re-anchored on return).
-
-| Selection popover | Annotation editor | Badge + chip |
-|---|---|---|
-| ![selection popover](docs/assets/01-selection-popover.png) | ![annotation editor](docs/assets/02-annotation-editor.png) | ![badge and chip](docs/assets/03-badge-and-chip.png) |
-
-| Sent-trace (bubble collapses to a label) | Side-chat reflow chip |
-|---|---|
-| ![sent trace](docs/assets/05-sent-trace.png) | ![reflow chip](docs/assets/06-reflow-chip.png) |
+![Demo: annotate a selection → dig in the side chat → reflow the answer home](docs/assets/demo.gif)
 
 ## Install
 
-Prerequisite: [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) installed (hard peer dependency).
+Prerequisite: [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) (hard dependency).
 
 ```bash
 dsh plugin --profile web add dsh-sidenote
 ```
 
-For local development: `dsh plugin --profile web add link:<path-to-this-repo>` (client changes hot-reload; host changes need a `dsh web` restart).
+Three steps: **①** install the dependency → **②** install this plugin → **③** click "Side" in the session header, or just select any reply text.
+
+For local development, mount with `dsh plugin --profile web add link:<repo path>` (client changes hot-reload; host changes need a `dsh web` restart).
+
+## Side chat — side questions never derail the main thread
+
+**Fork** the current session (full history snapshot, no compression) into an independent side session living in the right-hand panel:
+
+- Three entries — header "Side" button, the `+` menu, the `/side` slash command — and multiple instances side by side;
+- **The same rendering material as the main chat**: tool cards, thinking previews, task cards, model/permission switching, `@` references, image attachments;
+- Answer approvals and questions **right inside the panel** — no jumping back to the main view; a toast lets you know when a reply lands;
+- Inherited history folds into a summary card; fold and scroll state survive reloads; `Alt+J` hops focus between main and side.
+
+![The side chat panel: forked history + native-grade tool cards + a full-capability composer](docs/assets/04-side-chat-panel.png)
+
+## Selection annotations — turn "this bit is off" into model context
+
+- Select text in an assistant reply → popover → note editor, with numbered badges anchored at the right gutter;
+- Annotations are controlled objects (preview, remove individually) with **zero draft pollution** — they serialize into a model-readable structured protocol block only at send time;
+- Sent bubbles collapse into a "×N annotated" trace label; everything survives reloads.
+
+| Selection popover | Annotation editor |
+|---|---|
+| ![Selection popover](docs/assets/01-selection-popover.png) | ![Annotation editor](docs/assets/02-annotation-editor.png) |
+
+## Reflow — side-lane findings come home
+
+- One click sends a side-chat conclusion back to the main session as a **Q&A pair** (the answer *and* the question it answers) — a controlled chip above the main composer that rides along with your next message; `@`-mentioning a side chat works too;
+- "Save as session" promotes a side chat into the session list; recently closed ones reopen from the `/side` popup.
+
+![Reflow chip: a side-chat finding parked above the main composer](docs/assets/06-reflow-chip.png)
+
+<details>
+<summary><b>More screenshots</b></summary>
+
+| Collapsed state (inherited-history card + action row) | Side slash menu |
+|---|---|
+| ![Collapsed state](docs/assets/04a-side-chat-collapsed.png) | ![Slash menu](docs/assets/04b-side-slash-menu.png) |
+
+| Badge + annotation chip | Sent-message trace |
+|---|---|
+| ![Badge and chip](docs/assets/03-badge-and-chip.png) | ![Sent trace](docs/assets/05-sent-trace.png) |
+
+</details>
+
+## Compatibility
+
+| DSH | dsh-better-sidebar | Status |
+|---|---|---|
+| 0.1.1-rc.x | ≥ 0.12.3 | ✅ dual-lane CI matrix |
+| 0.1.2-rc.x | ≥ 0.18.0 | ✅ dual-lane CI matrix |
+
+A weekly canary tracks new host releases; when a host capability is absent, the plugin degrades by capability instead of crashing.
 
 ## Design notes
 
-- **Real fork, no compression**: a side chat is a real DSH session (full-history fork) with the same powers as the main session (tool calls, deeper dives, re-forking) — not a "compress-to-summary one-shot Q&A".
-- **List hygiene**: side sessions are archived out of the session list — the list stays clean.
-- **Accumulating annotation workflow**: multiple selections stack up as multiple annotations — edit, delete, and send them together; not a one-shot single quote.
+- **A real fork, not a summary**: the side session is a genuine DSH session (full history snapshot) with the same capabilities as the main one — not a one-shot Q&A.
+- **List hygiene**: side sessions are archived out of the session list; your list stays clean.
+- **An accumulative annotation workflow**: select repeatedly, stack notes, edit, remove, send them together — not a one-off quote.
 
 ## Development
 
 | Command | What it does |
 |---|---|
 | `pnpm typecheck` | tsc --noEmit |
-| `pnpm test` | vitest pure-function unit tests |
-| `pnpm build` | type declarations + tsdown (host ESM + client CJS bundle, purity gate) |
-| `pnpm test:mount` | mount smoke: scratch profile + fabricated session jsonl + real `dsh web` + Playwright journey lanes (set `BS_VERSION` to test against a different better-sidebar version) |
+| `pnpm test` | vitest unit tests (136 cases) |
+| `pnpm build` | type declarations + tsdown (host ESM + client CJS bundle, purity gates) |
+| `pnpm test:mount` | mount smoke: real `dsh web` + fabricated session log + ten Playwright journey lanes (`BS_VERSION`/`DSH_CMD` version matrix) |
+
+Issues and ideas are welcome in [Issues](https://github.com/g-yixuan/dsh-sidenote/issues).
 
 ## License
 
