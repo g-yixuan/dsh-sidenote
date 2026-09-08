@@ -15,12 +15,12 @@ English · [中文](README.md)
 - Three entries: the always-on「Side」pill in the session header, the sidebar `+` menu, or the `/side` slash command (`/侧边` works too);
 - The fork carries the full main-session context at fork time; afterwards the two sessions evolve independently; **inherited history collapses by default** into an「Inherited from main session · N items」card (click to expand);
 - Multiple side chats coexist («侧边», «侧边 2», …), each closable on its own;
-- **Native-grade rendering**: tool cards (terminal/diff/read/search/web/generic — same leaf components as the main chat), collapsible thinking rows, smart scroll-follow;
+- **Native-grade rendering**: the same seamless row material as the main chat (chromeless DisclosureRow + six host-shared leaf families: terminal/diff/read/search/web/generic) plus task cards (todo_write → status-dot checklist); tool titles speak human (`Bash · List files`, not the raw command), collapsed thinking rows preview their first line; smart scroll-follow;
 - **Composer parity**: model picker (two-level menu), permission chip, `/` commands, `@` references, image attachments, `Cmd/Ctrl+Enter` to steer;
 - **Main session status always visible** on top of the panel (running / awaiting approval / idle); `Alt+J` jumps focus between main and side;
 - Zero state loss: fold/scroll state persists per session across reloads;
 - **Reflow**: send a conclusion back to the main session in one click (Q&A paired — the question travels with the answer) or reflow the whole thread — a controlled context chip above the main composer rides your next message (Cursor-class capability; Codex has none); `@`-mention a side chat right from the main composer;
-- **Lifecycle**: 「Save as session」promotes a side chat into the session list; recently closed side chats reopen from the `/side` popup.
+- **Lifecycle**: 「Save as session」promotes a side chat into the session list (with a global toast confirming where it went); recently closed side chats reopen from the `/side` popup.
 
 ![Side chat panel](docs/assets/04-side-chat-panel.png)
 
