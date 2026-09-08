@@ -19,9 +19,11 @@ def wordmark(fg: str, out: Path) -> None:
     icon_inner = LOGO.split('>', 1)[1].rsplit('</svg>', 1)[0]
     # 图标去底色（wordmark 里只要白色图形族——浅底版用品牌蓝重着色）
     icon_inner = icon_inner.replace('fill="#fff"', f'fill="{fg}"').replace('fill="url(#bg)"', 'fill="none"')
+    # 图标收成 64×64（scale 0.5），与字标间留 24px 呼吸位（原 6px 太挤——
+    # 线上渲染实证气泡尾巴蹭到字标）。
     svg = f'''<svg width="640" height="96" viewBox="0 0 640 96" xmlns="http://www.w3.org/2000/svg">
-  <g transform="translate(0,8) scale(0.625)">{icon_inner}</g>
-  <text x="76" y="62" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="44" font-weight="600" fill="{fg}" letter-spacing="-1">dsh-sidenote</text>
+  <g transform="translate(4,16) scale(0.5)">{icon_inner}</g>
+  <text x="88" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="44" font-weight="600" fill="{fg}" letter-spacing="-1">dsh-sidenote</text>
 </svg>
 '''
     out.write_text(svg)
