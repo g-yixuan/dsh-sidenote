@@ -28,6 +28,7 @@ import { t } from '../locales.ts'
 import { registerHeaderEntry } from './header.tsx'
 import { registerSideCommand } from './slash.ts'
 import { registerSideChatReferenceSource } from './referenceSource.ts'
+import { registerToastHost } from './toast.tsx'
 
 export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
   ctx.effect(
@@ -76,4 +77,6 @@ export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
   registerSideChatReferenceSource(ctx)
   // 顶栏「侧边」入口（发现性）：会话头部右上角常驻按钮。
   registerHeaderEntry(ctx)
+  // 全局瞬态通知宿主（P4：转正确认等跨 Tab 寿命的反馈）。
+  registerToastHost(ctx)
 }

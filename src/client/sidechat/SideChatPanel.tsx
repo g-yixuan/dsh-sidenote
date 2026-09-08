@@ -26,6 +26,7 @@ import { ReasoningRow } from '../chat/ReasoningRow.tsx'
 import { FoldCard } from '../chat/FoldCard.tsx'
 import { createFoldStore } from '../chat/viewState.ts'
 import type { ReflowStore } from '../reflow.ts'
+import { showToast } from './toast.tsx'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
 import css from './sidechat.module.css'
@@ -166,7 +167,9 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
   }, [pendingDraft, phase, ctx, tab.id])
 
   // D3a 保存为正式会话：fork 子会话为独立主会话（无 unarchive API，
-  // fork 即转正——内置侧边对话同款路径）→ 主视图打开 → 关本 Tab。
+  // fork 即转正——内置侧边对话同款路径）→ 主视图打开 → 关本 Tab →
+  // 全局 toast 确认去向（P4：Tab 关闭后面板树卸载，toast 挂在 body 级
+  // 宿主上，寿命不受波及）。
   const promote = useCallback(() => {
     if (childId === undefined) return
     void (async () => {
@@ -174,6 +177,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
         const promoted = await ctx.sessions.fork({ sessionId: childId, increaseTitle: true })
         ctx.sessions.open(promoted)
         ctx.betterSidebar.closeTab(tab.id, { sessionId: scope.sessionId })
+        showToast(t('promoteDone'))
       } catch (error) {
         console.warn('[dsh-sidenote] 保存为正式会话失败:', error)
       }

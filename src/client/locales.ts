@@ -144,6 +144,7 @@ export const en = {
   reflowAllDone: 'Reflowed ✓',
   promote: 'Save as session',
   promoteTitle: 'Fork this side chat into a standalone session in the main list',
+  promoteDone: 'Saved as a regular session — it\'s open in the main view now',
 
   // 工具卡叶子块 labels（0.1.2 起必填——host/labels.ts）
   readWindow: '{shown} of {total} lines',
@@ -287,6 +288,7 @@ export const zh: Record<CopyKey, string> = {
   reflowAllDone: '已回流 ✓',
   promote: '保存为正式会话',
   promoteTitle: '把侧边聊天转为会话列表里的正式会话',
+  promoteDone: '已保存为正式会话——已在主视图打开',
 
   readWindow: '{shown}/{total} 行',
   searchPathsSummary: '{shown}/{total} 个路径',
