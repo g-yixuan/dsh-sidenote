@@ -33,12 +33,16 @@ describe('ToolCard render smoke（jsdom）', () => {
       resultView: { card: 'terminal', output: 'README.md\npackage.json', exitCode: 0 },
     })
     const host = renderCard(model)
-    expect(host.textContent).toContain('ls -1')
+    // 折叠态：标题 = 人话描述（「Bash · List files」），命令原文不露面。
+    expect(host.textContent).toContain('Bash · List files')
+    expect(host.textContent).not.toContain('ls -1')
     expect(host.textContent).not.toContain('package.json')
     // DisclosureRow 的行容器（data-disclosure-row + expandOnRowClick）。
     const row = host.querySelector('[data-disclosure-row]')!
     expect(row, 'DisclosureRow 行未渲染').not.toBeNull()
     act(() => { row.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    // 展开态：命令原文（TerminalBlock command）+ 输出都在。
+    expect(host.textContent).toContain('ls -1')
     expect(host.textContent).toContain('package.json')
   })
 

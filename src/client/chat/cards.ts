@@ -14,6 +14,7 @@
  * tools/connection/api-remotes 三处会漂移，钉这一个——architecture.md 第六节）。
  */
 import type { ToolCallView, ToolResultView } from '@deepseek-ai/dsh-api-remotes/client'
+import { t } from '../locales.ts'
 
 /**
  * 叶子类型不从 dsh-tools 直接拉（api-remotes 未再导出；三处影子会漂移）——
@@ -44,13 +45,22 @@ export type ToolCardModel =
     }
   | {
       kind: 'terminal'
+      /** 标题（有人话 description 时 = 「Bash · description」，否则 = 命令原文）。 */
       title: string
+      /** 命令原文（TerminalBlock 的 command——标题让位给 description 后命令仍随行）。 */
+      command: string
       description?: string
       /** 已解析的 cwd（相对路径已按 cwdBase 折成绝对；无 base 时原样）。 */
       cwd?: string
       output?: string
       exitCode?: number
       signal?: string
+    }
+  | {
+      kind: 'todo'
+      /** 标题（任务 · N 已完成 · N 进行中 · N 待处理，非零组才出现）。 */
+      title: string
+      items: readonly { content: string; status: string }[]
     }
   | { kind: 'diff'; title: string; diffs: readonly FileDiff[]; locations?: readonly FileLocation[] }
   | {
@@ -111,6 +121,62 @@ function resolveCwd(cwd: string | undefined, cwdBase: string | undefined): strin
   return `${cwdBase.replace(/\/+$/, '')}/${cwd}`
 }
 
+/**
+ * 展示态路径缩短：>3 段的绝对路径只保末 3 段（≈仓库相对形态，与主区
+ * 「Read · dsh-sidenote/scripts/x.sh」同款）。窄栏标题位只够放语义尾部。
+ */
+export function shortPath(p: string): string {
+  if (!p.startsWith('/')) return p
+  const segs = p.split('/').filter(s => s !== '')
+  return segs.length > 3 ? segs.slice(-3).join('/') : p
+}
+
+/**
+ * 标题整形：「Tool /abs/path」→「Tool · 末3段」（主区同名同款）；
+ * 裸绝对路径标题 → 末 3 段；不含路径的标题原样。
+ */
+export function displayTitle(title: string): string {
+  const m = /^([A-Za-z][\w-]*) (\/.+)$/.exec(title)
+  const name = m?.[1]
+  const path = m?.[2]
+  if (name !== undefined && path !== undefined) return `${name} · ${shortPath(path)}`
+  return title.startsWith('/') ? shortPath(title) : title
+}
+
+/** todo_write 入参形状校验（字段不齐即放弃 todo 卡）。两种数据源形状：
+ *  0.1.1 wire：callView.rawInput = todos 数组本身（dsh-tool-todo presentCall 实证）；
+ *  0.1.2 argsRaw：{ todos: [...] }。 */
+function todoItemsOf(raw: unknown): readonly { content: string; status: string }[] | undefined {
+  const list = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'object' && raw !== null ? (raw as { todos?: unknown }).todos : undefined
+  if (!Array.isArray(list) || list.length === 0) return undefined
+  const items: { content: string; status: string }[] = []
+  for (const it of list) {
+    const o = it as { content?: unknown; status?: unknown }
+    if (typeof o?.content !== 'string' || typeof o?.status !== 'string') return undefined
+    items.push({ content: o.content, status: o.status })
+  }
+  return items
+}
+
+/** todo 卡标题：任务 · 非零状态组计数（主区「任务 · N 已完成 · …」同款）。 */
+function todoTitleOf(items: readonly { content: string; status: string }[]): string {
+  let done = 0
+  let doing = 0
+  let pending = 0
+  for (const it of items) {
+    if (it.status === 'completed') done += 1
+    else if (it.status === 'in_progress') doing += 1
+    else pending += 1
+  }
+  const parts: string[] = []
+  if (done > 0) parts.push(t('todoDone', { n: done }))
+  if (doing > 0) parts.push(t('todoDoing', { n: doing }))
+  if (pending > 0) parts.push(t('todoPending', { n: pending }))
+  return parts.length === 0 ? t('todoTitle') : `${t('todoTitle')} · ${parts.join(' · ')}`
+}
+
 export interface CardModelInput {
   /** 工具名兜底（callView 缺失时的标题）。 */
   toolName: string
@@ -138,9 +204,13 @@ export function cardModelOf(input: CardModelInput): ToolCardModel {
     case 'terminal': {
       const rc = result?.card === 'terminal' ? result : undefined
       const cc = call?.card === 'terminal' ? call : undefined
+      // wire 的 title 即命令原文；有人话 description 时标题让位（主区
+      // 「Bash · 描述」同款），命令随行进 TerminalBlock。
+      const command = rc?.title ?? cc?.title ?? input.toolName
       return {
         kind: 'terminal',
-        title: rc?.title ?? cc?.title ?? input.toolName,
+        title: cc?.description !== undefined ? `${displayToolName(input.toolName)} · ${cc.description}` : command,
+        command,
         ...(cc?.description !== undefined ? { description: cc.description } : {}),
         ...(resolveCwd(cc?.cwd, input.cwdBase) !== undefined ? { cwd: resolveCwd(cc?.cwd, input.cwdBase) } : {}),
         ...(rc?.output !== undefined ? { output: rc.output } : {}),
@@ -153,7 +223,7 @@ export function cardModelOf(input: CardModelInput): ToolCardModel {
       const cc = call?.card === 'diff' ? call : undefined
       return {
         kind: 'diff',
-        title: rc?.title ?? cc?.title ?? input.toolName,
+        title: displayTitle(rc?.title ?? cc?.title ?? input.toolName),
         diffs: rc?.diffs ?? cc?.diffs ?? [],
         ...(cc?.locations !== undefined ? { locations: cc.locations } : {}),
       }
@@ -177,9 +247,11 @@ export function cardModelOf(input: CardModelInput): ToolCardModel {
     case 'read': {
       const rc = result?.card === 'read' ? result : undefined
       if (rc === undefined) return genericModel(input, call, result)
+      // 标题从 path 重建（「Read · 末3段」）——0.1.1 wire 的绝对路径标题与
+      // 0.1.2 推导路径统一到同一形态（主区「Read · 仓相对路径」同款）。
       return {
         kind: 'read',
-        title: rc.title ?? call?.title ?? input.toolName,
+        title: `Read · ${shortPath(rc.path)}`,
         path: rc.path,
         lines: rc.lines,
         totalLines: rc.totalLines,
@@ -216,14 +288,24 @@ function genericModel(
 ): ToolCardModel {
   const gc = call?.card === 'generic' ? call : undefined
   const gr = result?.card === 'generic' ? result : undefined
+  // todo_write → 任务卡（主区「任务 · N 已完成 · …」同款；rawInput 即 {todos}）。
+  if (input.toolName === 'todo_write') {
+    const items = todoItemsOf(gc?.rawInput)
+    if (items !== undefined) return { kind: 'todo', title: todoTitleOf(items), items }
+  }
   return {
     kind: 'generic',
-    title: gr?.title ?? gc?.title ?? input.toolName,
+    title: displayTitle(gr?.title ?? gc?.title ?? input.toolName),
     icon: gc?.kind ?? 'other',
     ...(gc?.rawInput !== undefined ? { rawInput: gc.rawInput } : {}),
     bodyText: blocksText(gr?.content) ?? blocksText(gc?.content) ?? input.rawText,
     ...(gc?.locations !== undefined ? { locations: gc.locations } : {}),
   }
+}
+
+/** 工具机器名 → 展示名（主区「Bash · …」的同款首字母大写）。 */
+function displayToolName(name: string): string {
+  return name.charAt(0).toUpperCase() + name.slice(1)
 }
 
 // ── 0.1.2 推导路径（callView/resultView 在 0.1.2 从节点模型移除） ────────────
@@ -275,7 +357,7 @@ function readMetaOf(meta: unknown): { path: string; lines: { number: number; tex
 }
 
 /** argsRaw（JSON 字符串）里尽力提取展示字段。 */
-function argsSummary(argsRaw: string | undefined): { command?: string; description?: string; path?: string } {
+function argsSummary(argsRaw: string | undefined): { command?: string; description?: string; path?: string; todos?: unknown } {
   if (argsRaw === undefined || argsRaw === '') return {}
   try {
     const parsed: unknown = JSON.parse(argsRaw)
@@ -285,6 +367,7 @@ function argsSummary(argsRaw: string | undefined): { command?: string; descripti
       ...(typeof a.command === 'string' ? { command: a.command } : {}),
       ...(typeof a.description === 'string' ? { description: a.description } : {}),
       ...(typeof a.file_path === 'string' ? { path: a.file_path } : typeof a.path === 'string' ? { path: a.path } : {}),
+      ...(Array.isArray(a.todos) ? { todos: a.todos } : {}),
     }
   } catch {
     return {}
@@ -312,11 +395,14 @@ export function cardModelFromNode(input: NodeCardInput): ToolCardModel {
   const name = input.name
 
   // bash 家族 → terminal 卡（含 terminal_send 不在此列——那是另一个工具面）。
+  // 标题让位给人话 description（主区「Bash · 描述」同款）；命令随行进 TerminalBlock。
   if (name === 'bash' || name === 'bash-persistent' || name === 'pwsh' || name === 'pwsh-persistent') {
     const { output, exitCode, signal } = parseExitStatus(input.rawText)
+    const command = args.command ?? name
     return {
       kind: 'terminal',
-      title: args.command ?? name,
+      title: args.description !== undefined ? `${displayToolName(name)} · ${args.description}` : command,
+      command,
       ...(args.description !== undefined ? { description: args.description } : {}),
       output,
       ...(exitCode !== undefined ? { exitCode } : {}),
@@ -330,7 +416,7 @@ export function cardModelFromNode(input: NodeCardInput): ToolCardModel {
     if (meta !== undefined) {
       return {
         kind: 'read',
-        title: `Read ${meta.path}`,
+        title: `Read · ${shortPath(meta.path)}`,
         path: meta.path,
         lines: meta.lines,
         totalLines: meta.totalLines,
@@ -339,9 +425,15 @@ export function cardModelFromNode(input: NodeCardInput): ToolCardModel {
     }
   }
 
+  // todo_write → 任务卡（标题带非零状态计数）。
+  if (name === 'todo_write') {
+    const items = todoItemsOf(args.todos)
+    if (items !== undefined) return { kind: 'todo', title: todoTitleOf(items), items }
+  }
+
   // 其余：generic（标题尽力从参数提取可读形态）。
   const title = args.path !== undefined
-    ? `${name} ${args.path}`
+    ? `${name} · ${shortPath(args.path)}`
     : args.command ?? name
   return {
     kind: 'generic',

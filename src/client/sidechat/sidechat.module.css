@@ -24,7 +24,7 @@
 .transcript {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 /* ── 空状态 / 整屏状态 ── */
@@ -214,23 +214,38 @@
   border-top: 1px solid var(--dsw-alias-border-l2);
 }
 
+/* 胶囊卡（主区 composer 同款形状语言：一体圆角容器承载输入区 + 脚部行，
+   焦点描边上移到容器）。 */
+.composerCard {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 14px;
+  background: var(--dsw-alias-bg-layer-2);
+  padding: 4px 6px 6px;
+  transition: border-color 120ms ease;
+}
+
+.composerCard:focus-within {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
 .input {
   width: 100%;
-  min-height: 40px;
+  min-height: 36px;
   max-height: 160px;
-  resize: vertical;
-  background: var(--dsw-alias-bg-layer-2);
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
+  resize: none; /* 胶囊内不设拖拽手柄（主区同款；draft 有持久化） */
+  background: transparent;
+  border: none;
   color: var(--dsw-alias-label-primary);
-  padding: 8px 10px;
+  padding: 6px 6px 2px;
   font: inherit;
   box-sizing: border-box;
 }
 
 .input:focus {
   outline: none;
-  border-color: var(--dsw-alias-state-business-primary);
 }
 
 .composerFoot {
@@ -238,6 +253,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  padding: 0 2px;
 }
 
 .modelLabel {
@@ -248,24 +264,26 @@
   white-space: nowrap;
 }
 
+/* 发送/停止：圆形图标钮（主区 composer 同款形状语言）。 */
 .sendButton,
 .stopButton {
   appearance: none;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  border: 1px solid var(--dsw-alias-state-business-primary);
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
   background: var(--dsw-alias-button-info-fill);
   color: #fff;
-  font-size: 13px;
-  padding: 6px 12px;
-  border-radius: 8px;
   cursor: pointer;
   flex: none;
 }
 
 .sendButton:disabled {
-  opacity: 0.55;
+  opacity: 0.45;
   cursor: default;
 }
 
@@ -320,6 +338,62 @@
    展开态的叶子块（TerminalBlock 等）自带镀铬，不需外壳。 */
 .flowRow {
   font-size: 12px;
+}
+
+/* 折叠态内联预览（DisclosureRow collapsedContent——思考行首行摘要）。
+   title 之后 flex:1 截断，弱化色阶。 */
+.rowPreview {
+  flex: 1;
+  min-width: 0;
+  margin-left: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--dsw-alias-label-dimmed);
+}
+
+/* 失败工具卡的标题色（主区错误行同款红）。 */
+.flowRowError {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* todo 卡体（任务清单：状态点 + 条目）。 */
+.todoBody {
+  padding: 2px 0 4px 22px; /* 与标题列对齐 */
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.todoItem {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.todoDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  transform: translateY(-1px);
+  background: var(--dsw-alias-label-dimmed);
+}
+
+.todoDot[data-status='completed'] {
+  background: var(--dsw-alias-state-success-primary, #34a853);
+}
+
+.todoDot[data-status='in_progress'] {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.todoText[data-status='completed'] {
+  color: var(--dsw-alias-label-dimmed);
 }
 
 .toolGenericBody {
@@ -397,17 +471,30 @@
 
 /* WI-02 模型选择 chip（点击弹 Menu）。 */
 .modelSelect {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   font-size: 12px;
   color: var(--dsw-alias-label-secondary);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 3px 6px;
+  border-radius: 6px;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 180px;
+}
+
+/* chip 内文本截断（flex 容器里 ellipsis 需要中间层）。 */
+.modelSelect > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modelSelect > svg {
+  flex: none;
+  color: var(--dsw-alias-label-dimmed);
 }
 
 .modelSelect:hover {

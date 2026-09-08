@@ -7,7 +7,7 @@
  * （selectModel 返回的 selected 为准）。
  */
 import { useState } from 'react'
-import { IconCheckOutline16, Menu, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCheckOutline16, IconChevronDownOutline14, Menu, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context, SessionModelsResult } from '../host/contracts.ts'
 import { listModels, switchModel } from './lifecycle.ts'
 import { t } from '../locales.ts'
@@ -62,7 +62,8 @@ export function ModelMenu(props: {
           title={t('modelSwitchTitle')}
           onClick={() => { open ? setOpen(false) : openMenu() }}
         >
-          {t('modelLabel', { name: props.modelName ?? t('modelFollowsMain') })}
+          <span>{t('modelLabel', { name: props.modelName ?? t('modelFollowsMain') })}</span>
+          <IconChevronDownOutline14 size={12} />
         </button>
       }
       items={items}

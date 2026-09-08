@@ -232,6 +232,50 @@ const lines = [
   },
   { type: 'step/end', seq: 24, time: t0 + 25, data: { turn: 3, step: 2 } },
   { type: 'turn/end', seq: 25, time: t0 + 26, data: { turn: 3, reason: { kind: 'completed' } } },
+  // Turn 4：todo_write 任务卡 + 思考块——todo 卡映射与思考行首行预览的确定性
+  // fixture（0.1.1 走 presentCall 的 rawInput=todos 数组；0.1.2 走 argsRaw 推导）。
+  { type: 'turn/start', seq: 26, time: t0 + 27, data: { turn: 4 } },
+  { type: 'step/start', seq: 27, time: t0 + 28, data: { turn: 4, step: 1 } },
+  {
+    type: 'assistant/message', seq: 28, time: t0 + 29,
+    data: {
+      turn: 4, step: 1,
+      message: {
+        role: 'assistant',
+        id: 'e2e-assistant-5',
+        content: [
+          { type: 'reasoning', text: 'Ship the todo card first, then verify the dual-lane e2e before publishing.' },
+          { type: 'tool-call', id: 'todo_e2e_1', name: 'todo_write', arguments: '{"todos":[{"content":"Draft the release notes","status":"completed"},{"content":"Verify the dual-lane e2e","status":"in_progress"},{"content":"Publish to npm","status":"pending"}]}' },
+        ],
+        source: { kind: 'model', provider: 'e2e', model: 'e2e' },
+      },
+    },
+    surfaceOp: 'append',
+  },
+  {
+    type: 'tool/call', seq: 29, time: t0 + 30,
+    data: { turn: 4, step: 1, callId: 'todo_e2e_1', name: 'todo_write', arguments: '{"todos":[{"content":"Draft the release notes","status":"completed"},{"content":"Verify the dual-lane e2e","status":"in_progress"},{"content":"Publish to npm","status":"pending"}]}' },
+  },
+  {
+    type: 'tool/result', seq: 30, time: t0 + 31, surfaceOp: 'append', sourceEventSeqs: [29],
+    data: {
+      turn: 4, step: 1,
+      message: {
+        role: 'user',
+        id: 'e2e-tool-todo-1',
+        source: { kind: 'tool', callId: 'todo_e2e_1' },
+        // dsh-tool-todo presenter 的结果正文格式（counts 顺序 pending→in progress→completed）。
+        content: [{
+          type: 'tool-result',
+          toolCallId: 'todo_e2e_1',
+          isError: false,
+          content: [{ type: 'text', text: 'Updated todo list: 1 pending, 1 in progress, 1 completed.' }],
+        }],
+      },
+    },
+  },
+  { type: 'step/end', seq: 31, time: t0 + 32, data: { turn: 4, step: 1 } },
+  { type: 'turn/end', seq: 32, time: t0 + 33, data: { turn: 4, reason: { kind: 'completed' } } },
 ]
 
 const dir = join(dshHome, 'sessions', projectKey(cwd), sessionId)
@@ -259,8 +303,8 @@ projcache.tables.sessions[sessionId] = {
   identity: { createdAt: t0, cwd },
   rows: {
     title: { ver: 1, seq: 6, val: 'Side chat plugin review' },
-    // lastPromptAt 跟随最后一个 user prompt（turn 3，seq 15）。
-    sessionListMetadata: { ver: 1, seq: 25, val: { blank: false, lastPromptAt: t0 + 16 } },
+    // lastPromptAt 跟随最后一个 user prompt（turn 3，seq 15）；seq 随行到日志尾。
+    sessionListMetadata: { ver: 1, seq: 32, val: { blank: false, lastPromptAt: t0 + 16 } },
   },
 }
 writeFileSync(projcachePath, JSON.stringify(projcache))

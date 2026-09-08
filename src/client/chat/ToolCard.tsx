@@ -10,6 +10,7 @@ import { useSyncExternalStore, type ReactNode } from 'react'
 import {
   DisclosureRow,
   DiffBlock,
+  IconChecklistOutline14,
   IconCodeOutline16,
   IconCordisPluginOutline14,
   IconEditOutline16,
@@ -53,7 +54,7 @@ function useFoldOpen(fold: FoldStore, rowKey: string): boolean {
   )
 }
 
-export function ToolCard(props: { model: ToolCardModel; rowKey: string; fold: FoldStore; streaming?: boolean }) {
+export function ToolCard(props: { model: ToolCardModel; rowKey: string; fold: FoldStore; streaming?: boolean; error?: boolean }) {
   const { model, rowKey, fold } = props
   const open = useFoldOpen(fold, rowKey)
   const icon = model.kind === 'terminal'
@@ -62,7 +63,9 @@ export function ToolCard(props: { model: ToolCardModel; rowKey: string; fold: Fo
       ? <IconEditOutline16 size={14} />
       : model.kind === 'read'
         ? <IconCodeOutline16 size={14} />
-        : model.kind === 'generic' ? kindIcon(model.icon) : <IconCordisPluginOutline14 size={14} />
+        : model.kind === 'todo'
+          ? <IconChecklistOutline14 size={14} />
+          : model.kind === 'generic' ? kindIcon(model.icon) : <IconCordisPluginOutline14 size={14} />
 
   return (
     <div className={css.flowRow}>
@@ -73,6 +76,7 @@ export function ToolCard(props: { model: ToolCardModel; rowKey: string; fold: Fo
         expandable
         expandOnRowClick
         previewChevron
+        {...(props.error === true ? { titleClassName: css.flowRowError } : {})}
         onToggle={() => { fold.toggle(rowKey) }}
       >
         <ToolCardBody model={model} streaming={props.streaming} />
@@ -86,7 +90,7 @@ function ToolCardBody({ model, streaming }: { model: ToolCardModel; streaming?: 
     case 'terminal':
       return (
         <TerminalBlock
-          command={model.title}
+          command={model.command}
           labels={terminalLabels()}
           {...(model.cwd !== undefined ? { cwd: model.cwd } : {})}
           {...(model.output !== undefined ? { output: model.output } : {})}
@@ -94,6 +98,17 @@ function ToolCardBody({ model, streaming }: { model: ToolCardModel; streaming?: 
           {...(model.signal !== undefined ? { signal: model.signal } : {})}
           {...(streaming === true ? { running: true } : {})}
         />
+      )
+    case 'todo':
+      return (
+        <div className={css.todoBody}>
+          {model.items.map((item, i) => (
+            <div key={i} className={css.todoItem}>
+              <span className={css.todoDot} data-status={item.status} />
+              <span className={css.todoText} data-status={item.status}>{item.content}</span>
+            </div>
+          ))}
+        </div>
       )
     case 'diff':
       return <DiffBlock {...({ labels: diffLabels() } as object)} diffs={model.diffs.map(d => ({ path: d.path, oldText: d.oldText, newText: d.newText }))} />

@@ -10,12 +10,22 @@ import type { FoldStore } from './viewState.ts'
 import { t } from '../locales.ts'
 import css from '../sidechat/sidechat.module.css'
 
+/** 首行非空文本（折叠态预览——主区「Think · 首行摘要」同款）。 */
+function firstLineOf(text: string): string {
+  for (const line of text.split('\n')) {
+    const s = line.trim()
+    if (s !== '') return s
+  }
+  return ''
+}
+
 export function ReasoningRow(props: { text: string; rowKey: string; fold: FoldStore; streaming?: boolean }) {
   const { rowKey, fold } = props
   const touched = useSyncExternalStore((fn) => fold.subscribe(fn), () => fold.has(rowKey))
   const stored = useSyncExternalStore((fn) => fold.subscribe(fn), () => fold.isOpen(rowKey))
   // 流式中且用户未触碰 → 默认展开；其余听 store。
   const open = stored || (props.streaming === true && !touched)
+  const preview = firstLineOf(props.text)
   return (
     <div className={css.flowRow}>
       <DisclosureRow
@@ -25,6 +35,7 @@ export function ReasoningRow(props: { text: string; rowKey: string; fold: FoldSt
         expandable
         expandOnRowClick
         previewChevron
+        {...(preview !== '' ? { collapsedContent: <span className={css.rowPreview}>{preview}</span> } : {})}
         onToggle={() => { fold.toggle(rowKey) }}
       >
         <div className={css.reasoningBody}>{props.text}</div>

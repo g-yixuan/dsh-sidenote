@@ -241,6 +241,7 @@ const MessageRow = memo(function MessageRow({ message, question, fold, reflow, p
             rowKey={message.key}
             fold={fold}
             {...(message.streaming === true ? { streaming: true } : {})}
+            {...(message.isError === true ? { error: true } : {})}
           />
         )
       }

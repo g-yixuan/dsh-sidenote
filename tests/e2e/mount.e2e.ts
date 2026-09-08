@@ -203,21 +203,23 @@ test('tool cards: fork 历史里的 read/bash 渲染为原生级工具卡（正�
   await expandInherited(page)
 
   // 种子 turn 3：read README.md + bash `ls -1` 并行（presentationMeta fixture）。
-  // 卡片默认折叠（密度于默认态）：标题行可见即渲染意图已生效；
-  // 卡种类正样本——终端卡的标题就是命令本身，read 卡的标题含文件路径。
-  const terminalTitle = sidebar.getByText('ls -1', { exact: true }).first()
+  // 卡片默认折叠（密度于默认态）：标题行可见即渲染意图已生效。
+  // 终端卡标题 = 人话描述（「Bash · …」，命令原文让位进 TerminalBlock）；
+  // read 卡标题统一为「Read · 路径末段」（0.1.1 wire 与 0.1.2 推导同形态）。
+  const terminalTitle = sidebar.getByText('Bash · List workspace files', { exact: true }).first()
   await expect(terminalTitle, '终端工具卡标题未出现（callView/resultView 未映射）').toBeVisible({ timeout: 15_000 })
-  // read 卡标题是宿主工具的 presentCall 产物（`Read <path>`，dsh-tool-fs 实证）。
   await expect(
-    sidebar.getByText(/Read README\.md/).first(),
+    sidebar.getByText(/Read · README\.md/).first(),
     'read 工具卡标题未出现',
   ).toBeVisible({ timeout: 15_000 })
 
-  // 展开终端卡 → TerminalBlock 输出（exit code 0 的输出正文，种子 fixture 已验证
-  // 宿主投影产出 terminal 卡）。点击标题行展开（DisclosureRow expandOnRowClick）。
-  // 点击 DisclosureRow 行容器（[data-disclosure-row]），不点文本——与
-  // jsdom 冒烟同姿势（文本节点的 click 目标在宿主合成事件下不稳定）。
+  // 展开终端卡 → TerminalBlock 命令原文 + 输出（标题让位 description 后命令
+  // 仍在展开体——数据面 command 字段的 e2e 钉）。
   await terminalTitle.locator('xpath=ancestor-or-self::*[@data-disclosure-row][1]').click()
+  await expect(
+    sidebar.getByText('ls -1', { exact: true }).first(),
+    '终端卡展开后无命令原文',
+  ).toBeVisible({ timeout: 5_000 })
   await expect(
     sidebar.getByText(/package\.json/).first(),
     '终端卡展开后无命令输出',
@@ -225,11 +227,25 @@ test('tool cards: fork 历史里的 read/bash 渲染为原生级工具卡（正�
 
   // read 卡展开 → ReadBlock 行号代码视图（0.1.2 的 primitives labels
   // 无守卫读是同族风险——ReadBlock 展开实证覆盖）。
-  await sidebar.getByText(/Read README\.md/).first()
+  await sidebar.getByText(/Read · README\.md/).first()
     .locator('xpath=ancestor-or-self::*[@data-disclosure-row][1]').click()
   await expect(
     sidebar.getByText(/# dsh-sidenote/).first(),
     'read 卡展开后无文件内容',
+  ).toBeVisible({ timeout: 5_000 })
+
+  // 种子 turn 4：todo_write → 任务卡（标题带非零状态计数，展开见条目）；
+  // 同 turn 的思考块 → 折叠行带首行预览（collapsedContent）。
+  const todoTitle = sidebar.getByText(/Tasks · 1 done · 1 in progress · 1 pending|任务 · 1 已完成 · 1 进行中 · 1 待处理/).first()
+  await expect(todoTitle, 'todo 任务卡标题未出现').toBeVisible({ timeout: 15_000 })
+  await expect(
+    sidebar.getByText(/Ship the todo card first/).first(),
+    '思考行首行预览未出现',
+  ).toBeVisible({ timeout: 15_000 })
+  await todoTitle.locator('xpath=ancestor-or-self::*[@data-disclosure-row][1]').click()
+  await expect(
+    sidebar.getByText('Draft the release notes').first(),
+    'todo 卡展开后无条目',
   ).toBeVisible({ timeout: 5_000 })
   await dumpStep(page, '15-tool-cards')
 

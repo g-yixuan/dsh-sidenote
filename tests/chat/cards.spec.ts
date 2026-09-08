@@ -15,12 +15,23 @@ describe('cardModelOf', () => {
     })
     expect(model).toEqual({
       kind: 'terminal',
-      title: 'ls -1',
+      // 有 description：标题让位人话（「Bash · 描述」），命令原文随 command 行进 TerminalBlock。
+      title: 'Bash · 列目录',
+      command: 'ls -1',
       description: '列目录',
       cwd: '/repo/src',
       output: 'a\nb',
       exitCode: 0,
     })
+  })
+
+  it('terminal：无 description 时标题 = 命令原文', () => {
+    const model = cardModelOf({
+      toolName: 'Bash',
+      callView: { card: 'terminal', title: 'ls -1' },
+      resultView: null,
+    })
+    expect(model).toMatchObject({ kind: 'terminal', title: 'ls -1', command: 'ls -1' })
   })
 
   it('terminal：绝对 cwd 不动；无 cwd 时用会话工作区；无 base 时相对原样', () => {
@@ -117,6 +128,26 @@ describe('cardModelOf', () => {
     const model = cardModelOf({ toolName: 'grep', callView: null, resultView: weird as never, rawText: 'raw' })
     expect(model.kind).toBe('generic')
   })
+
+  it('todo_write（wire 面）→ todo 卡：rawInput = todos 数组本身（dsh-tool-todo presentCall 实证形状）', () => {
+    const model = cardModelOf({
+      toolName: 'todo_write',
+      callView: { card: 'generic', title: 'Update todo list', kind: 'other', rawInput: [{ content: '甲', status: 'completed' }, { content: '乙', status: 'pending' }] },
+      resultView: null,
+    })
+    expect(model).toMatchObject({ kind: 'todo', title: 'Tasks · 1 done · 1 pending' })
+  })
+
+  it('displayTitle：「Tool /abs/path」→「Tool · 末3段」；裸路径/无路径原样', () => {
+    expect(cardModelOf({
+      toolName: 'read',
+      callView: null,
+      resultView: { card: 'read', title: 'Read /Users/x/a/b/c/d.ts', path: '/Users/x/a/b/c/d.ts', offset: 1, lines: [{ number: 1, text: 'x' }], totalLines: 1 },
+    })).toMatchObject({ title: 'Read · b/c/d.ts' })
+    // 不含路径的标题不动
+    expect(cardModelOf({ toolName: 'unknownTool', callView: null, resultView: null, rawText: 'r' }))
+      .toMatchObject({ title: 'unknownTool' })
+  })
 })
 
 describe('cardModelFromNode（0.1.2 推导路径：callView 移除后的客户端推导）', () => {
@@ -128,7 +159,8 @@ describe('cardModelFromNode（0.1.2 推导路径：callView 移除后的客户�
     })
     expect(model).toEqual({
       kind: 'terminal',
-      title: 'ls -1',
+      title: 'Bash · 列目录',
+      command: 'ls -1',
       description: '列目录',
       output: 'README.md\npackage.json',
       exitCode: 0,
@@ -149,7 +181,7 @@ describe('cardModelFromNode（0.1.2 推导路径：callView 移除后的客户�
       meta: { path: 'README.md', offset: 1, lines: [{ number: 1, text: '# x' }], totalLines: 3, lang: 'md' },
       rawText: '<path>README.md</path>...',
     })
-    expect(good).toMatchObject({ kind: 'read', title: 'Read README.md', totalLines: 3, lang: 'md' })
+    expect(good).toMatchObject({ kind: 'read', title: 'Read · README.md', totalLines: 3, lang: 'md' })
     // 行号越界（>totalLines）→ 语义校验拒收 → 降级
     const bad = cardModelFromNode({
       name: 'read',
@@ -161,7 +193,7 @@ describe('cardModelFromNode（0.1.2 推导路径：callView 移除后的客户�
 
   it('edit：generic 卡 + 路径入标题；未知工具：名为题', () => {
     expect(cardModelFromNode({ name: 'edit', argsRaw: '{"file_path":"a.ts"}', rawText: '' }))
-      .toMatchObject({ kind: 'generic', title: 'edit a.ts', icon: 'edit' })
+      .toMatchObject({ kind: 'generic', title: 'edit · a.ts', icon: 'edit' })
     expect(cardModelFromNode({ name: 'mystery', rawText: 'out' }))
       .toMatchObject({ kind: 'generic', title: 'mystery', icon: 'other', bodyText: 'out' })
   })
@@ -169,5 +201,29 @@ describe('cardModelFromNode（0.1.2 推导路径：callView 移除后的客户�
   it('argsRaw 非 JSON / 缺字段不炸', () => {
     expect(cardModelFromNode({ name: 'bash', argsRaw: 'not json', rawText: '' }).kind).toBe('terminal')
     expect(cardModelFromNode({ name: 'bash', argsRaw: undefined, rawText: '' })).toMatchObject({ title: 'bash' })
+  })
+
+  it('read：绝对路径标题缩短为末 3 段（主区「Read · 仓相对路径」同款）', () => {
+    const model = cardModelFromNode({
+      name: 'read',
+      meta: { path: '/Users/x/gyx_personal_files/dsh_project/dsh-sidenote/scripts/e2e-mount.sh', lines: [{ number: 1, text: 'x' }], totalLines: 1 },
+      rawText: 'x',
+    })
+    expect(model).toMatchObject({ kind: 'read', title: 'Read · dsh-sidenote/scripts/e2e-mount.sh' })
+  })
+
+  it('todo_write → todo 卡（标题带非零状态计数；node 环境词典 = en）', () => {
+    const model = cardModelFromNode({
+      name: 'todo_write',
+      argsRaw: '{"todos":[{"content":"a","status":"completed"},{"content":"b","status":"in_progress"},{"content":"c","status":"pending"},{"content":"d","status":"pending"}]}',
+      rawText: '',
+    })
+    expect(model).toMatchObject({
+      kind: 'todo',
+      title: 'Tasks · 1 done · 1 in progress · 2 pending',
+    })
+    expect(model.kind === 'todo' && model.items.length).toBe(4)
+    // 字段不齐 → 回退 generic，不炸
+    expect(cardModelFromNode({ name: 'todo_write', argsRaw: '{"todos":[{"x":1}]}', rawText: 'raw' }).kind).toBe('generic')
   })
 })
