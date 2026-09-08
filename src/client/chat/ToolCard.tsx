@@ -65,13 +65,14 @@ export function ToolCard(props: { model: ToolCardModel; rowKey: string; fold: Fo
         : model.kind === 'generic' ? kindIcon(model.icon) : <IconCordisPluginOutline14 size={14} />
 
   return (
-    <div className={css.toolCardV2}>
+    <div className={css.flowRow}>
       <DisclosureRow
         icon={icon}
         title={model.title}
         open={open}
         expandable
         expandOnRowClick
+        previewChevron
         onToggle={() => { fold.toggle(rowKey) }}
       >
         <ToolCardBody model={model} streaming={props.streaming} />

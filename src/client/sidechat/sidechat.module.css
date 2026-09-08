@@ -24,7 +24,7 @@
 .transcript {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 /* ── 空状态 / 整屏状态 ── */
@@ -146,29 +146,28 @@
 }
 
 .reasoningBody {
-  margin-top: 4px;
+  margin-top: 2px;
+  padding-left: 22px; /* 与 DisclosureRow 标题列对齐（16px 图标 + 6px 间距） */
+  padding-bottom: 2px;
   white-space: pre-wrap;
   word-break: break-word;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .streamingHint {
   color: var(--dsw-alias-label-dimmed);
 }
 
-/* 工具卡片（简洁自绘块：头部 = 工具名 + 状态徽标，正文 = 截断文本）。 */
+/* 工具调用回退行（无 card 数据的老快照：工具名 + 状态徽标 + 截断文本，
+   与流畅行同款无框材质）。 */
 .toolCard {
-  border: 1px solid var(--dsw-alias-border-l2);
-  background: var(--dsw-alias-bg-layer-2);
-  border-radius: 8px;
-  overflow: hidden;
+  font-size: 12px;
 }
 
 .toolHead {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 10px;
-  background: var(--dsw-alias-bg-layer-3);
   font-size: 12px;
   color: var(--dsw-alias-label-secondary);
 }
@@ -182,7 +181,7 @@
 }
 
 .toolBody {
-  padding: 8px 10px;
+  padding: 2px 0 2px 22px; /* 与 DisclosureRow 标题列对齐 */
   font-size: 12px;
   color: var(--dsw-alias-label-tertiary);
   white-space: pre-wrap;
@@ -314,18 +313,17 @@
   user-select: none;
 }
 
-/* ── WI-01 工具卡 v2（DisclosureRow 壳 + 同源叶子块） ─────────────────────── */
+/* ── WI-01 工具卡（DisclosureRow 壳 + 同源叶子块） ─────────────────────── */
 
-.toolCardV2 {
-  border: 1px solid var(--dsw-alias-border-l2);
-  background: var(--dsw-alias-bg-layer-2);
-  border-radius: 8px;
-  overflow: hidden;
+/* 流畅行（DisclosureRow 的 L2 共享壳）：无框、无底、无圆角——裸行直出，
+   与主区无缝列表同一材质（宿主 DisclosureRow 原生即无框 24px 行）。
+   展开态的叶子块（TerminalBlock 等）自带镀铬，不需外壳。 */
+.flowRow {
   font-size: 12px;
 }
 
 .toolGenericBody {
-  padding: 8px 10px;
+  padding: 4px 0 4px 22px; /* 与 DisclosureRow 标题列对齐（16px 图标 + 6px 间距） */
   display: flex;
   flex-direction: column;
   gap: 6px;

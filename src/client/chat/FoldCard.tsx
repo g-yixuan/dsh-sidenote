@@ -16,13 +16,14 @@ export function FoldCard(props: { count: number; rowKey: string; fold: FoldStore
   const { rowKey, fold } = props
   const open = useSyncExternalStore((fn) => fold.subscribe(fn), () => fold.isOpen(rowKey))
   return (
-    <div className={css.toolCardV2}>
+    <div className={css.flowRow}>
       <DisclosureRow
         icon={<IconBranchOutline16 size={14} />}
         title={t('inheritedLabel', { n: props.count })}
         open={open}
         expandable
         expandOnRowClick
+        previewChevron
         onToggle={() => { fold.toggle(rowKey) }}
       >
         <div className={css.inheritedBody}>{props.children}</div>

@@ -17,13 +17,14 @@ export function ReasoningRow(props: { text: string; rowKey: string; fold: FoldSt
   // 流式中且用户未触碰 → 默认展开；其余听 store。
   const open = stored || (props.streaming === true && !touched)
   return (
-    <div className={css.toolCardV2}>
+    <div className={css.flowRow}>
       <DisclosureRow
         icon={<IconThinkOutline16 size={14} />}
         title={t('thinking')}
         open={open}
         expandable
         expandOnRowClick
+        previewChevron
         onToggle={() => { fold.toggle(rowKey) }}
       >
         <div className={css.reasoningBody}>{props.text}</div>
