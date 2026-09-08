@@ -51,7 +51,8 @@ $DSH_CMD plugin --profile web add "dsh-better-sidebar@${BS_VERSION}"
 $DSH_CMD plugin --profile web add "file:$TARBALL"
 node "$SCRIPT_DIR/seed-session.mjs" "$DSH_HOME" "$WORKSPACE_DIR" >/dev/null
 
-$DSH_CMD web --port "$PORT" > "$SCRATCH/web.log" 2>&1 &
+# --no-open：验证用实例绝不能调起用户的真实浏览器（宿主默认 openBrowser=true）。
+$DSH_CMD web --port "$PORT" --no-open > "$SCRATCH/web.log" 2>&1 &
 SERVER_PID=$!
 trap 'kill "$SERVER_PID" 2>/dev/null || true; rm -rf "$SCRATCH"' EXIT
 

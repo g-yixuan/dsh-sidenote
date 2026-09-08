@@ -133,7 +133,9 @@ say "伪造会话: $SEED_SESSION_ID"
 
 # 步骤 4：启动 dsh web
 say "启动 dsh web（port=${PORT}）..."
-$DSH_CMD web --port "$PORT" > "$WEB_LOG" 2>&1 &
+# --no-open：宿主默认会调起系统默认浏览器（openBrowser=true）——验证用实例
+# 绝不能弹用户的真实浏览器窗口。
+$DSH_CMD web --port "$PORT" --no-open > "$WEB_LOG" 2>&1 &
 SERVER_PID=$!
 
 # 就绪行解析：DSH 0.1.2+ 打印的是带一次性 token 的鉴权 URL
