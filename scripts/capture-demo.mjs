@@ -63,7 +63,27 @@ await page.waitForTimeout(2000)
 const hintClose = page.locator('[role="note"] button').first()
 if ((await hintClose.count()) > 0) { await hintClose.click().catch(() => {}); await page.waitForTimeout(300) }
 
-// 1. 划选浮层
+// 提示气泡在消息渲染后才出现，开场那一次关闭可能竞态落空——划选前再关一次。
+const hintClose2 = page.locator('[role="note"] button').first()
+if ((await hintClose2.count()) > 0) { await hintClose2.click().catch(() => {}); await page.waitForTimeout(300) }
+
+// 1. 划选浮层——先把目标文本滚进视口中央再选（插件锚定 range 的实时矩形；
+// 文本在视口外时浮层会贴视口顶缘——录制事故的根因）。
+await page.evaluate(() => {
+  const messages = document.querySelectorAll('[data-chat-flow-kind="assistant-step"]')
+  for (const el of messages) {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const text = node.textContent ?? ''
+      const needle = 'full history snapshot'
+      const at = text.indexOf(needle)
+      if (at === -1) continue
+      ;(node.parentElement ?? el).scrollIntoView({ block: 'center' })
+      return
+    }
+  }
+})
+await page.waitForTimeout(800)
 await page.evaluate(() => {
   const messages = document.querySelectorAll('[data-chat-flow-kind="assistant-step"]')
   for (const el of messages) {
