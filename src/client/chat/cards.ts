@@ -356,8 +356,111 @@ function readMetaOf(meta: unknown): { path: string; lines: { number: number; tex
   }
 }
 
+/**
+ * FsDiffMeta 校验（0.1.2 diff 卡，dsh-tool-fs computeHunkDiffs 产物的忠实子集）。
+ * 返回值三态：{diffs 非空} / 'empty'（空数组——write create/同内容覆写是合法值，
+ * 客户端回退 args 整文件 diff）/ undefined（malformed——降级）。
+ * 逐项校验，一项违规整卡降级（官方 narrowDiffs 同款）。
+ */
+function diffMetaOf(meta: unknown): { diffs: readonly FileDiff[] } | 'empty' | undefined {
+  if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) return undefined
+  const m = meta as { diffs?: unknown }
+  if (!Array.isArray(m.diffs)) return undefined
+  if (m.diffs.length === 0) return 'empty'
+  const diffs: FileDiff[] = []
+  for (const raw of m.diffs) {
+    const d = raw as { path?: unknown; oldText?: unknown; newText?: unknown }
+    if (typeof d?.path !== 'string') return undefined
+    if (d.oldText !== null && typeof d.oldText !== 'string') return undefined
+    if (typeof d.newText !== 'string') return undefined
+    diffs.push({ path: d.path, oldText: d.oldText, newText: d.newText } as FileDiff)
+  }
+  return { diffs }
+}
+
+/** SearchMeta 校验（0.1.2 search 卡；truncated/total 是硬字段；空结果合法）。 */
+function searchMetaOf(meta: unknown):
+  | { shape: 'matches'; files: readonly { path: string; matches: readonly { lineNumber: number; line: string }[] }[]; truncated: boolean; total: number }
+  | { shape: 'paths'; paths: readonly string[]; truncated: boolean; total: number }
+  | undefined {
+  if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) return undefined
+  const m = meta as Record<string, unknown>
+  if (typeof m.truncated !== 'boolean') return undefined
+  if (typeof m.total !== 'number' || !Number.isInteger(m.total) || m.total < 0) return undefined
+  if (m.shape === 'matches') {
+    if (!Array.isArray(m.files)) return undefined
+    const files: { path: string; matches: { lineNumber: number; line: string }[] }[] = []
+    for (const rawF of m.files) {
+      const f = rawF as { path?: unknown; matches?: unknown }
+      if (typeof f?.path !== 'string' || !Array.isArray(f.matches)) return undefined
+      const matches: { lineNumber: number; line: string }[] = []
+      for (const rawM of f.matches) {
+        const mm = rawM as { lineNumber?: unknown; line?: unknown }
+        if (typeof mm?.lineNumber !== 'number' || !Number.isInteger(mm.lineNumber) || mm.lineNumber < 1) return undefined
+        if (typeof mm.line !== 'string') return undefined
+        matches.push({ lineNumber: mm.lineNumber, line: mm.line })
+      }
+      files.push({ path: f.path, matches })
+    }
+    return { shape: 'matches', files, truncated: m.truncated, total: m.total }
+  }
+  if (m.shape === 'paths') {
+    if (!Array.isArray(m.paths) || !m.paths.every(p => typeof p === 'string')) return undefined
+    return { shape: 'paths', paths: m.paths as readonly string[], truncated: m.truncated, total: m.total }
+  }
+  return undefined
+}
+
+/** WebSearchMeta 校验（sources 逐项 url 必填、title/snippet 可选；publishedAt 校验后丢弃）。 */
+function webSearchMetaOf(meta: unknown): { sources: readonly { url: string; title?: string; snippet?: string }[]; truncated: boolean; answer?: string } | undefined {
+  if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) return undefined
+  const m = meta as Record<string, unknown>
+  if (typeof m.truncated !== 'boolean') return undefined
+  if (!Array.isArray(m.sources)) return undefined
+  const sources: { url: string; title?: string; snippet?: string }[] = []
+  for (const raw of m.sources) {
+    const s = raw as { url?: unknown; title?: unknown; snippet?: unknown; publishedAt?: unknown }
+    if (typeof s?.url !== 'string') return undefined
+    if (s.title !== undefined && typeof s.title !== 'string') return undefined
+    if (s.snippet !== undefined && typeof s.snippet !== 'string') return undefined
+    if (s.publishedAt !== undefined && typeof s.publishedAt !== 'string') return undefined
+    sources.push({
+      url: s.url,
+      ...(s.title !== undefined ? { title: s.title as string } : {}),
+      ...(s.snippet !== undefined ? { snippet: s.snippet as string } : {}),
+    })
+  }
+  if (m.answer !== undefined && typeof m.answer !== 'string') return undefined
+  return { sources, truncated: m.truncated, ...(m.answer !== undefined ? { answer: m.answer as string } : {}) }
+}
+
+/** WebFetchMeta 校验（url + 整数 statusCode + truncated 硬字段）。 */
+function webFetchMetaOf(meta: unknown): { url: string; statusCode: number; truncated: boolean } | undefined {
+  if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) return undefined
+  const m = meta as Record<string, unknown>
+  if (typeof m.url !== 'string') return undefined
+  if (typeof m.statusCode !== 'number' || !Number.isInteger(m.statusCode)) return undefined
+  if (typeof m.truncated !== 'boolean') return undefined
+  return { url: m.url, statusCode: m.statusCode, truncated: m.truncated }
+}
+
 /** argsRaw（JSON 字符串）里尽力提取展示字段。 */
-function argsSummary(argsRaw: string | undefined): { command?: string; description?: string; path?: string; todos?: unknown } {
+function argsSummary(argsRaw: string | undefined): {
+  command?: string
+  description?: string
+  path?: string
+  todos?: unknown
+  /** diff 回退/标题：write 的 content、edit 的 old_string/new_string。 */
+  content?: string
+  oldString?: string
+  newString?: string
+  /** search 标题：pattern/include。 */
+  pattern?: string
+  include?: string
+  /** web 标题：queries（search）/ url（fetch）。 */
+  queries?: readonly string[]
+  url?: string
+} {
   if (argsRaw === undefined || argsRaw === '') return {}
   try {
     const parsed: unknown = JSON.parse(argsRaw)
@@ -368,6 +471,13 @@ function argsSummary(argsRaw: string | undefined): { command?: string; descripti
       ...(typeof a.description === 'string' ? { description: a.description } : {}),
       ...(typeof a.file_path === 'string' ? { path: a.file_path } : typeof a.path === 'string' ? { path: a.path } : {}),
       ...(Array.isArray(a.todos) ? { todos: a.todos } : {}),
+      ...(typeof a.content === 'string' ? { content: a.content } : {}),
+      ...(typeof a.old_string === 'string' ? { oldString: a.old_string } : {}),
+      ...(typeof a.new_string === 'string' ? { newString: a.new_string } : {}),
+      ...(typeof a.pattern === 'string' ? { pattern: a.pattern } : {}),
+      ...(typeof a.include === 'string' ? { include: a.include } : {}),
+      ...(Array.isArray(a.queries) && a.queries.every(q => typeof q === 'string') ? { queries: a.queries as readonly string[] } : {}),
+      ...(typeof a.url === 'string' ? { url: a.url } : {}),
     }
   } catch {
     return {}
@@ -383,6 +493,10 @@ export interface NodeCardInput {
   meta?: unknown
   /** 结果正文（已拼 text 块）。 */
   rawText: string
+  /** 失败标记（0.1.2 节点 isError）——失败结果无 meta（presentationMeta 只投
+   *  影成功路径），但 write 的空-meta 回退必须先判它，否则失败的 write 也
+   *  会被渲染成 diff 卡（官方 diffCardModel 显式 isError → null）。 */
+  isError?: boolean | undefined
   cwdBase?: string | undefined
 }
 
@@ -431,6 +545,71 @@ export function cardModelFromNode(input: NodeCardInput): ToolCardModel {
     if (items !== undefined) return { kind: 'todo', title: todoTitleOf(items), items }
   }
 
+  // write/edit → diff 卡（0.1.2 meta 逆向：FsDiffMeta {diffs: FileDiff[]}）。
+  // 官方语义（diffCardModel 实证）：失败结果不走 diff 卡；write 的 meta
+  // 缺失/malformed/空数组 → 回退 args 整文件 diff（create 语义）；edit 的
+  // meta 缺失/空 → 降级 generic。str_replace_editor settled 无 meta，官方走
+  // generic——不在此列。
+  if ((name === 'write' || name === 'edit') && input.isError !== true) {
+    const path = args.path
+    if (path !== undefined && path.trim() !== '') {
+      const dm = diffMetaOf(input.meta)
+      if (dm !== undefined && dm !== 'empty') {
+        return {
+          kind: 'diff',
+          title: displayTitle(`${name === 'write' ? 'Write' : 'Edit'} ${path}`),
+          diffs: dm.diffs,
+          locations: [{ path } as FileLocation],
+        }
+      }
+      // write 回退：整文件 diff（create/同内容覆写/meta 缺席同形）。
+      if (name === 'write' && args.content !== undefined) {
+        return {
+          kind: 'diff',
+          title: displayTitle(`Write ${path}`),
+          diffs: [{ path, oldText: null, newText: args.content } as FileDiff],
+          locations: [{ path } as FileLocation],
+        }
+      }
+    }
+  }
+
+  // grep/glob → search 卡（SearchMeta：shape 与工具名交叉校验；空结果合法）。
+  if ((name === 'grep' || name === 'glob') && input.isError !== true) {
+    const sm = searchMetaOf(input.meta)
+    const wantShape = name === 'grep' ? 'matches' : 'paths'
+    if (sm !== undefined && sm.shape === wantShape && args.pattern !== undefined) {
+      const where = args.path !== undefined && args.path.trim() !== '' ? ` in ${shortPath(args.path)}` : ''
+      const inc = name === 'grep' && args.include !== undefined && args.include.trim() !== '' ? ` (${args.include})` : ''
+      const title = `${name === 'grep' ? 'Grep' : 'Glob'} ${args.pattern}${where}${inc}`
+      return sm.shape === 'matches'
+        ? { kind: 'search', title, shape: 'matches', files: sm.files, truncated: sm.truncated, total: sm.total }
+        : { kind: 'search', title, shape: 'paths', paths: sm.paths, truncated: sm.truncated, total: sm.total }
+    }
+  }
+
+  // web_search/web_fetch → web 卡（meta 直读；publishedAt 校验后降采样丢弃）。
+  if (name === 'web_search' && input.isError !== true) {
+    const wm = webSearchMetaOf(input.meta)
+    const queries = args.queries?.filter(q => q.trim() !== '') ?? []
+    if (wm !== undefined && queries.length > 0) {
+      return {
+        kind: 'web',
+        title: queries.join(', '),
+        webKind: 'search',
+        sources: wm.sources,
+        truncated: wm.truncated,
+        ...(wm.answer !== undefined ? { answer: wm.answer } : {}),
+      }
+    }
+  }
+  if (name === 'web_fetch' && input.isError !== true) {
+    const wm = webFetchMetaOf(input.meta)
+    if (wm !== undefined && args.url !== undefined && args.url.trim() !== '') {
+      return { kind: 'web', title: args.url, webKind: 'fetch', url: wm.url, statusCode: wm.statusCode, truncated: wm.truncated }
+    }
+  }
+
   // 其余：generic（标题尽力从参数提取可读形态）。
   const title = args.path !== undefined
     ? `${name} · ${shortPath(args.path)}`
@@ -443,19 +622,22 @@ export function cardModelFromNode(input: NodeCardInput): ToolCardModel {
   }
 }
 
-/** 工具名 → 图标类别的静态映射（0.1.2 没有 callView.kind 可用）。 */
+/** 工具名 → 图标类别的静态映射（0.1.2 没有 callView.kind 可用）。
+ *  wire 名实证：str_replace_editor 是下划线（uitool client.js L381）；
+ *  web_search 的 0.1.1 wire kind 是 'search'（presentSearchCall），
+ *  'fetch' 是 web_fetch 的（presentFetchCall）。 */
 const KIND_BY_NAME: Record<string, ToolCallKind> = {
   read: 'read',
   write: 'edit',
   edit: 'edit',
-  'str-replace-editor': 'edit',
+  str_replace_editor: 'edit',
   bash: 'execute',
   'bash-persistent': 'execute',
   pwsh: 'execute',
   'pwsh-persistent': 'execute',
   grep: 'search',
   glob: 'search',
-  web_search: 'fetch',
+  web_search: 'search',
   web_fetch: 'fetch',
 }
 

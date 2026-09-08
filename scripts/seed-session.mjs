@@ -276,6 +276,72 @@ const lines = [
   },
   { type: 'step/end', seq: 31, time: t0 + 32, data: { turn: 4, step: 1 } },
   { type: 'turn/end', seq: 32, time: t0 + 33, data: { turn: 4, reason: { kind: 'completed' } } },
+  // Turn 5：diff/search/web 三卡的 meta fixture（0.1.2 全保真推导 + 0.1.1
+  // wire 的 presentResult 也从同一 meta 窄化——一个种子驱动双宿主）。
+  { type: 'turn/start', seq: 33, time: t0 + 34, data: { turn: 5 } },
+  { type: 'step/start', seq: 34, time: t0 + 35, data: { turn: 5, step: 1 } },
+  {
+    type: 'assistant/message', seq: 35, time: t0 + 36,
+    data: {
+      turn: 5, step: 1,
+      message: {
+        role: 'assistant',
+        id: 'e2e-assistant-6',
+        content: [
+          { type: 'text', text: 'Applying the rename, then checking references and the docs online.' },
+          { type: 'tool-call', id: 'edit_e2e_1', name: 'edit', arguments: '{"file_path":"/repo/dsh-sidenote/src/example.ts","old_string":"const oldName = 1","new_string":"const newName = 1"}' },
+          { type: 'tool-call', id: 'grep_e2e_1', name: 'grep', arguments: '{"pattern":"sidenote","path":"src"}' },
+          { type: 'tool-call', id: 'web_e2e_1', name: 'web_search', arguments: '{"queries":["dsh plugin"]}' },
+        ],
+        source: { kind: 'model', provider: 'e2e', model: 'e2e' },
+      },
+    },
+    surfaceOp: 'append',
+  },
+  { type: 'tool/call', seq: 36, time: t0 + 37, data: { turn: 5, step: 1, callId: 'edit_e2e_1', name: 'edit', arguments: '{"file_path":"/repo/dsh-sidenote/src/example.ts","old_string":"const oldName = 1","new_string":"const newName = 1"}' } },
+  { type: 'tool/call', seq: 37, time: t0 + 38, data: { turn: 5, step: 1, callId: 'grep_e2e_1', name: 'grep', arguments: '{"pattern":"sidenote","path":"src"}' } },
+  { type: 'tool/call', seq: 38, time: t0 + 39, data: { turn: 5, step: 1, callId: 'web_e2e_1', name: 'web_search', arguments: '{"queries":["dsh plugin"]}' } },
+  {
+    type: 'tool/result', seq: 39, time: t0 + 40, surfaceOp: 'append', sourceEventSeqs: [36],
+    data: {
+      turn: 5, step: 1,
+      message: {
+        role: 'user', id: 'e2e-tool-edit-1',
+        source: { kind: 'tool', callId: 'edit_e2e_1' },
+        content: [{ type: 'tool-result', toolCallId: 'edit_e2e_1', isError: false, content: [{ type: 'text', text: 'The file has been edited successfully.' }] }],
+      },
+      // FsDiffMeta（dsh-tool-fs computeHunkDiffs 产物形状）。
+      meta: { diffs: [{ path: '/repo/dsh-sidenote/src/example.ts', oldText: 'const oldName = 1', newText: 'const newName = 1' }] },
+    },
+  },
+  {
+    type: 'tool/result', seq: 40, time: t0 + 41, surfaceOp: 'append', sourceEventSeqs: [37],
+    data: {
+      turn: 5, step: 1,
+      message: {
+        role: 'user', id: 'e2e-tool-grep-1',
+        source: { kind: 'tool', callId: 'grep_e2e_1' },
+        content: [{ type: 'tool-result', toolCallId: 'grep_e2e_1', isError: false, content: [{ type: 'text', text: 'src/example.ts:3:// sidenote marker' }] }],
+      },
+      // SearchMeta matches 形态（dsh-tool-fs-search grepSearchMeta 产物形状）。
+      meta: { shape: 'matches', files: [{ path: 'src/example.ts', matches: [{ lineNumber: 3, line: '// sidenote marker' }] }], truncated: false, total: 1 },
+    },
+  },
+  {
+    type: 'tool/result', seq: 41, time: t0 + 42, surfaceOp: 'append', sourceEventSeqs: [38],
+    data: {
+      turn: 5, step: 1,
+      message: {
+        role: 'user', id: 'e2e-tool-web-1',
+        source: { kind: 'tool', callId: 'web_e2e_1' },
+        content: [{ type: 'tool-result', toolCallId: 'web_e2e_1', isError: false, content: [{ type: 'text', text: 'DeepSeek Harness plugin docs found.' }] }],
+      },
+      // WebSearchMeta（dsh-tool-web searchMetaFromValue 产物形状）。
+      meta: { sources: [{ url: 'https://example.dev/dsh', title: 'DSH Plugin Guide', snippet: 'How to build plugins.' }], truncated: false, answer: 'DeepSeek Harness plugin docs found.' },
+    },
+  },
+  { type: 'step/end', seq: 42, time: t0 + 43, data: { turn: 5, step: 1 } },
+  { type: 'turn/end', seq: 43, time: t0 + 44, data: { turn: 5, reason: { kind: 'completed' } } },
 ]
 
 const dir = join(dshHome, 'sessions', projectKey(cwd), sessionId)
@@ -304,7 +370,7 @@ projcache.tables.sessions[sessionId] = {
   rows: {
     title: { ver: 1, seq: 6, val: 'Side chat plugin review' },
     // lastPromptAt 跟随最后一个 user prompt（turn 3，seq 15）；seq 随行到日志尾。
-    sessionListMetadata: { ver: 1, seq: 32, val: { blank: false, lastPromptAt: t0 + 16 } },
+    sessionListMetadata: { ver: 1, seq: 43, val: { blank: false, lastPromptAt: t0 + 16 } },
   },
 }
 writeFileSync(projcachePath, JSON.stringify(projcache))

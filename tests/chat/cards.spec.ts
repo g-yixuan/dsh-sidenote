@@ -203,6 +203,135 @@ describe('cardModelFromNode（0.1.2 推导路径：callView 移除后的客户�
     expect(cardModelFromNode({ name: 'bash', argsRaw: undefined, rawText: '' })).toMatchObject({ title: 'bash' })
   })
 
+  // ── 0.1.2 全保真三卡（meta 逆向落地，/tmp/recon-meta012.md 证据）──
+
+  it('edit → diff 卡：meta.diffs 透传 + 标题「Edit · 末3段」+ locations 重建', () => {
+    const model = cardModelFromNode({
+      name: 'edit',
+      argsRaw: '{"file_path":"/Users/x/gyx/dsh-sidenote/src/a.ts","old_string":"a","new_string":"b"}',
+      meta: { diffs: [{ path: '/Users/x/gyx/dsh-sidenote/src/a.ts', oldText: 'a', newText: 'b' }] },
+      rawText: '',
+    })
+    expect(model).toMatchObject({
+      kind: 'diff',
+      title: 'Edit · dsh-sidenote/src/a.ts',
+      diffs: [{ path: '/Users/x/gyx/dsh-sidenote/src/a.ts', oldText: 'a', newText: 'b' }],
+      locations: [{ path: '/Users/x/gyx/dsh-sidenote/src/a.ts' }],
+    })
+  })
+
+  it('write → diff 卡：meta 空数组回退 args 整文件 diff（create 语义）；isError 不回退', () => {
+    const created = cardModelFromNode({
+      name: 'write',
+      argsRaw: '{"file_path":"/r/p/new.ts","content":"hello"}',
+      meta: { diffs: [] },
+      rawText: '',
+    })
+    expect(created).toMatchObject({
+      kind: 'diff',
+      diffs: [{ path: '/r/p/new.ts', oldText: null, newText: 'hello' }],
+    })
+    // 失败的 write 无 meta——绝不能被回退渲染成 diff 卡
+    expect(cardModelFromNode({
+      name: 'write',
+      argsRaw: '{"file_path":"/r/p/new.ts","content":"hello"}',
+      rawText: 'Error: EACCES',
+      isError: true,
+    }).kind).toBe('generic')
+    // edit 缺 meta → 降级（edit 无回退路径）
+    expect(cardModelFromNode({
+      name: 'edit',
+      argsRaw: '{"file_path":"/r/a.ts","old_string":"a","new_string":"b"}',
+      rawText: '',
+    }).kind).toBe('generic')
+  })
+
+  it('diff 卡 meta 一项违规整卡降级 generic', () => {
+    expect(cardModelFromNode({
+      name: 'edit',
+      argsRaw: '{"file_path":"/r/a.ts","old_string":"a","new_string":"b"}',
+      meta: { diffs: [{ path: '/r/a.ts', oldText: 1, newText: 'b' }] },
+      rawText: '',
+    }).kind).toBe('generic')
+  })
+
+  it('grep → search 卡（matches 形态 + 标题 Grep p in path (inc)）；shape 与工具名不匹配即降级', () => {
+    const model = cardModelFromNode({
+      name: 'grep',
+      argsRaw: '{"pattern":"TODO","path":"/Users/x/gyx/dsh-sidenote/src","include":"*.ts"}',
+      meta: { shape: 'matches', files: [{ path: 'src/a.ts', matches: [{ lineNumber: 3, line: '// TODO' }] }], truncated: false, total: 1 },
+      rawText: '',
+    })
+    expect(model).toMatchObject({
+      kind: 'search', shape: 'matches',
+      title: 'Grep TODO in gyx/dsh-sidenote/src (*.ts)',
+      total: 1, truncated: false,
+    })
+    // shape 交叉校验：grep 拿到 paths → 降级
+    expect(cardModelFromNode({
+      name: 'grep',
+      argsRaw: '{"pattern":"x"}',
+      meta: { shape: 'paths', paths: ['a'], truncated: false, total: 1 },
+      rawText: '',
+    }).kind).toBe('generic')
+  })
+
+  it('glob → search 卡（paths 形态，空结果合法）；truncated/total 硬校验', () => {
+    expect(cardModelFromNode({
+      name: 'glob',
+      argsRaw: '{"pattern":"**/*.ts"}',
+      meta: { shape: 'paths', paths: [], truncated: false, total: 0 },
+      rawText: '',
+    })).toMatchObject({ kind: 'search', shape: 'paths', title: 'Glob **/*.ts', total: 0 })
+    // total 缺失 → 降级
+    expect(cardModelFromNode({
+      name: 'glob',
+      argsRaw: '{"pattern":"**/*.ts"}',
+      meta: { shape: 'paths', paths: ['a'], truncated: false },
+      rawText: '',
+    }).kind).toBe('generic')
+  })
+
+  it('web_search → web 卡（sources 校验 + publishedAt 降采样丢弃 + answer 透传）', () => {
+    const model = cardModelFromNode({
+      name: 'web_search',
+      argsRaw: '{"queries":["dsh plugin","deepseek harness"]}',
+      meta: { sources: [{ url: 'https://a.dev', title: 'A', publishedAt: '2026' }, { url: 'https://b.dev' }], truncated: false, answer: '答案' },
+      rawText: '',
+    })
+    expect(model).toMatchObject({
+      kind: 'web', webKind: 'search',
+      title: 'dsh plugin, deepseek harness',
+      sources: [{ url: 'https://a.dev', title: 'A' }, { url: 'https://b.dev' }],
+      answer: '答案',
+    })
+    // sources[0] 不带 publishedAt（降采样丢弃）
+    expect(model.kind === 'web' && model.sources?.[0]).not.toHaveProperty('publishedAt')
+  })
+
+  it('web_fetch → web 卡（fetch 形态）；statusCode 非整数降级', () => {
+    expect(cardModelFromNode({
+      name: 'web_fetch',
+      argsRaw: '{"url":"https://a.dev/x"}',
+      meta: { url: 'https://a.dev/x', statusCode: 200, truncated: false },
+      rawText: '',
+    })).toMatchObject({ kind: 'web', webKind: 'fetch', title: 'https://a.dev/x', statusCode: 200 })
+    expect(cardModelFromNode({
+      name: 'web_fetch',
+      argsRaw: '{"url":"https://a.dev/x"}',
+      meta: { url: 'https://a.dev/x', statusCode: 20.5, truncated: false },
+      rawText: '',
+    }).kind).toBe('generic')
+  })
+
+  it('KIND_BY_NAME 回归：str_replace_editor（下划线 wire 名）与 web_search（kind=search）', () => {
+    expect(cardModelFromNode({ name: 'str_replace_editor', argsRaw: '{"path":"/r/a.ts"}', rawText: '' }))
+      .toMatchObject({ kind: 'generic', icon: 'edit' })
+    // web_search 缺 meta 降级 generic 时图标应为 search 族
+    expect(cardModelFromNode({ name: 'web_search', rawText: 'x' }))
+      .toMatchObject({ kind: 'generic', icon: 'search' })
+  })
+
   it('read：绝对路径标题缩短为末 3 段（主区「Read · 仓相对路径」同款）', () => {
     const model = cardModelFromNode({
       name: 'read',

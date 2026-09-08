@@ -133,6 +133,7 @@ export function nodeToMessage(node: unknown): ChatMessage | null {
             argsRaw: typeof call?.argsRaw === 'string' ? call.argsRaw : undefined,
             meta: n.meta,
             rawText: text,
+            ...(n.isError === true ? { isError: true } : {}),
           })
       return {
         key: seqKey('t', n),

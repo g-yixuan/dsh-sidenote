@@ -247,6 +247,25 @@ test('tool cards: fork 历史里的 read/bash 渲染为原生级工具卡（正�
     sidebar.getByText('Draft the release notes').first(),
     'todo 卡展开后无条目',
   ).toBeVisible({ timeout: 5_000 })
+
+  // 种子 turn 5：diff/search/web 三卡（0.1.1 wire 从同一 meta 窄化 /
+  // 0.1.2 客户端推导——双路同形断言）。
+  const diffTitle = sidebar.getByText(/Edit · dsh-sidenote\/src\/example\.ts/).first()
+  await expect(diffTitle, 'diff 卡标题未出现').toBeVisible({ timeout: 15_000 })
+  await expect(
+    sidebar.getByText('Grep sidenote in src', { exact: true }).first(),
+    'search 卡标题未出现',
+  ).toBeVisible({ timeout: 15_000 })
+  await expect(
+    sidebar.getByText('dsh plugin', { exact: true }).first(),
+    'web 卡标题未出现',
+  ).toBeVisible({ timeout: 15_000 })
+  // 展开 diff 卡 → DiffBlock 内容（newText 行）。
+  await diffTitle.locator('xpath=ancestor-or-self::*[@data-disclosure-row][1]').click()
+  await expect(
+    sidebar.getByText(/const newName = 1/).first(),
+    'diff 卡展开后无 hunk 内容',
+  ).toBeVisible({ timeout: 5_000 })
   await dumpStep(page, '15-tool-cards')
 
   expect(pageErrors, 'pageerrors during tool cards').toEqual([])
