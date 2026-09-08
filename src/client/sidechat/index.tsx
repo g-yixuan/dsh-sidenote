@@ -29,6 +29,7 @@ import { registerHeaderEntry } from './header.tsx'
 import { registerSideCommand } from './slash.ts'
 import { registerSideChatReferenceSource } from './referenceSource.ts'
 import { registerToastHost } from './toast.tsx'
+import { registerCompletionNotify } from './notify.ts'
 
 export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
   ctx.effect(
@@ -79,4 +80,6 @@ export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
   registerHeaderEntry(ctx)
   // 全局瞬态通知宿主（P4：转正确认等跨 Tab 寿命的反馈）。
   registerToastHost(ctx)
+  // 完成通知（WI-03）：侧聊 running 翻转 → toast。
+  registerCompletionNotify(ctx)
 }

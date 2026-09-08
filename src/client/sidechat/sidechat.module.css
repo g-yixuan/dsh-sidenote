@@ -626,7 +626,148 @@
   background: var(--dsw-alias-bg-layer-2);
 }
 
-/* R8 审批提示条（钉在 composer 上方）。 */
+/* R8 审批/提问答复卡（钉在 composer 上方；警示色左边条 + 圆角卡——
+   材质与胶囊 composer 同族）。 */
+.pendingCard {
+  margin: 0 10px 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-left: 3px solid var(--dsw-alias-state-warning-primary, #e8a13a);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-2);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.pendingHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dsw-alias-state-warning-primary, #e8a13a);
+}
+
+.pendingTitle {
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.pendingDesc {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.pendingReason {
+  color: var(--dsw-alias-label-tertiary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pendingQuestion {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.pendingQHeader {
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.pendingQText {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.pendingOption {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  padding: 5px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pendingOption:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+}
+
+/* 选中态：与 .pendingOption 同结构（CSS 层 composes 依赖构建管道，不冒进）。 */
+.pendingOptionActive {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  border: 1px solid var(--dsw-alias-state-business-primary);
+  border-radius: 6px;
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+  color: var(--dsw-alias-label-primary);
+  padding: 5px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pendingOptionDesc {
+  color: var(--dsw-alias-label-dimmed);
+  font-size: 11px;
+}
+
+.pendingCustom {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  padding: 5px 8px;
+  font-size: 12px;
+  font: inherit;
+}
+
+.pendingCustom:focus {
+  outline: none;
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.pendingActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.pendingBtnGhost {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pendingBtnPrimary {
+  border: none;
+  border-radius: 6px;
+  background: var(--dsw-alias-button-info-fill);
+  color: #fff;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pendingBtnGhost:disabled,
+.pendingBtnPrimary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* R8 审批提示条（钉在 composer 上方）——面缺席时的回退跳转条。 */
 .pendingBar {
   display: block;
   width: calc(100% - 16px);

@@ -27,11 +27,15 @@ import { FoldCard } from '../chat/FoldCard.tsx'
 import { createFoldStore } from '../chat/viewState.ts'
 import type { ReflowStore } from '../reflow.ts'
 import { showToast } from './toast.tsx'
+import { createPendingStore } from './pending.ts'
+import { PendingCardList } from './PendingCard.tsx'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
 import css from './sidechat.module.css'
 
 const NOOP_UNSUBSCRIBE = (): void => {}
+/** uSES 空快照常量（禁产新引用——`?? []` 字面量每次新数组会无限重渲）。 */
+const NO_PENDING: readonly import('./pending.ts').PendingItem[] = []
 
 /** D2 写型工具名（无 diff 卡时的名字兜底）。 */
 const WRITE_TOOLS = new Set(['edit', 'write', 'str-replace-editor', 'str_replace_editor'])
@@ -133,6 +137,23 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
     ),
     () => (parentSession === undefined ? null : parentSession.getSnapshot()),
   )
+  // R8：审批/提问数据源（双版本探测链——0.1.2 uiSession.pendingInteractions
+  // 优先，0.1.1 Session 快照 pending 回退；面缺席 undefined → 回退纯跳转
+  // pendingBar）。hooks 纪律：必须在相位早退之前（#310 教训）。
+  const pendingStore = useMemo(
+    () => (childId === undefined || session === undefined ? undefined : createPendingStore(ctx, session, childId)),
+    [ctx, session, childId],
+  )
+  const pendingItems = useSyncExternalStore(
+    useCallback(
+      (notify: () => void) => (visible && pendingStore !== undefined ? pendingStore.subscribe(notify) : NOOP_UNSUBSCRIBE),
+      [visible, pendingStore],
+    ),
+    // NO_PENDING 常量：uSES getSnapshot 禁产新引用（`?? []` 每次新数组 →
+    // 无限重渲——实证教训）。
+    () => pendingStore?.getSnapshot() ?? NO_PENDING,
+  )
+
   // D2 提示的消除态（hooks 纪律：必须在相位早退之前——#310 教训）。
   const [writeNoticeDismissed, setWriteNoticeDismissed] = useState(
     () => typeof localStorage !== 'undefined' && localStorage.getItem(WRITE_NOTICE_KEY) === '1',
@@ -321,7 +342,12 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
           >×</button>
         </div>
       )}
-      {pendingCount > 0 && childId !== undefined && (
+      {/* R8：数据源在场 → 面板内审批/提问答复卡；面缺席（老宿主）→ 回退
+          纯跳转 pendingBar（原行为不变）。 */}
+      {pendingStore !== undefined && pendingItems.length > 0 && (
+        <PendingCardList items={pendingItems} />
+      )}
+      {pendingStore === undefined && pendingCount > 0 && childId !== undefined && (
         <button
           type="button"
           className={css.pendingBar}
