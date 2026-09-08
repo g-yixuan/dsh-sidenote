@@ -59,6 +59,9 @@ const seedRow = page.getByText('Side chat plugin review').first()
 await seedRow.waitFor({ state: 'visible', timeout: 30_000 })
 await seedRow.click()
 await page.waitForTimeout(2000)
+// 关掉首次划选提示气泡（role=note 的 ×），别让它飘进截图。
+const hintClose = page.locator('[role="note"] button').first()
+if ((await hintClose.count()) > 0) { await hintClose.click().catch(() => {}); await page.waitForTimeout(300) }
 
 // 1. 划选浮层
 await page.evaluate(() => {
@@ -107,19 +110,8 @@ await page.evaluate(() => {
 })
 await shot('03-badge-and-chip')
 
-// 4. 发送携带（Enter 拦截 → 协议块随消息发出 → 气泡留痕标签）。
-//    无模型环境 turn 会报错——只截气泡本体，避开下方的错误行。
-const composer = page.getByRole('textbox', { name: /Message the agent|输入消息|随心输入/ }).first()
-await composer.click()
-await composer.pressSequentially('looks good to me — ship it with these noted', { delay: 10 })
-await page.keyboard.press('Enter')
-const sentBubble = page.locator('[data-chat-flow-kind="user"]', { hasText: 'looks good to me' }).last()
-await sentBubble.waitFor({ state: 'visible', timeout: 10_000 })
-await page.waitForTimeout(400)
-await sentBubble.screenshot({ path: `${OUT}05-sent-trace.png` })
-console.log('captured 05-sent-trace')
-
-// 5. 侧边聊天面板（fork 历史 + 独立 composer）
+// 5. 侧边聊天面板（fork 历史 + 独立 composer）——先于发送携带拍：无模型
+//    环境的 turn 报错行不能污染面板镜头。
 await ensureSidebarExpanded(page)
 const sidebar = page.locator('[data-dsh-better-sidebar]')
 await sidebar.getByRole('button', { name: /New tab/ }).first().click()
@@ -128,8 +120,8 @@ await page.getByRole('menuitem', { name: /Side chat/ }).first().click()
 await page.waitForTimeout(1500)
 await shot('04a-side-chat-collapsed')
 await expandInherited(page)
-// 展开一张工具卡（Bash 终端卡）
-const termRow = sidebar.locator('[data-disclosure-row]', { hasText: 'ls -1' }).first()
+// 展开一张工具卡（Bash 终端卡——标题已让位人话描述，命令原文在展开体里）
+const termRow = sidebar.locator('[data-disclosure-row]', { hasText: 'Bash · List workspace files' }).first()
 if ((await termRow.count()) > 0) {
   await termRow.click()
   await page.waitForTimeout(600)
@@ -153,6 +145,19 @@ await reflowBtn.click()
 await page.getByText(/side-chat reflow/).first().waitFor({ state: 'visible', timeout: 10_000 })
 await page.waitForTimeout(400)
 await shot('06-reflow-chip')
+
+// 4（末位拍）。发送携带（Enter 拦截 → 协议块随消息发出 → 气泡留痕标签）。
+//    无模型环境 turn 会报错——只截气泡本体，避开下方的错误行；
+//    放在最后是因为报错行会留在主区画面里。
+const composer = page.getByRole('textbox', { name: /Message the agent|输入消息|随心输入/ }).first()
+await composer.click()
+await composer.pressSequentially('looks good to me — ship it with these noted', { delay: 10 })
+await page.keyboard.press('Enter')
+const sentBubble = page.locator('[data-chat-flow-kind="user"]', { hasText: 'looks good to me' }).last()
+await sentBubble.waitFor({ state: 'visible', timeout: 10_000 })
+await page.waitForTimeout(400)
+await sentBubble.screenshot({ path: `${OUT}05-sent-trace.png` })
+console.log('captured 05-sent-trace')
 
 await browser.close()
 console.log('demo assets written to docs/assets/')

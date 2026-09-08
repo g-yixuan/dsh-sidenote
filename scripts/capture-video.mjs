@@ -47,6 +47,9 @@ const seedRow = page.getByText('Side chat plugin review').first()
 await seedRow.waitFor({ state: 'visible', timeout: 30_000 })
 await seedRow.click()
 await pause(1500)
+// 关掉首次划选提示气泡（role=note 的 ×），别让它飘进录屏。
+const hintClose = page.locator('[role="note"] button').first()
+if ((await hintClose.count()) > 0) { await hintClose.click().catch(() => {}); await pause(300) }
 
 // 划选 → 浮层
 await page.evaluate(() => {
@@ -84,14 +87,9 @@ await overlay.locator('button[aria-label="Save note"]').click()
 await page.getByText('1 annotation').first().waitFor({ state: 'visible', timeout: 10_000 })
 await pause(1500)
 
-// 发送携带：输入正文 → Enter → 协议块随消息发出、气泡收成「1 annotated」标签。
-const composer = page.getByRole('textbox', { name: /Message the agent|输入消息|随心输入/ }).first()
-await composer.click()
-await composer.pressSequentially('looks good to me', { delay: 30 })
-await pause(400)
-await page.keyboard.press('Enter')
-await page.getByText('1 annotated').first().waitFor({ state: 'visible', timeout: 10_000 })
-await pause(1500)
+// 发送携带的「气泡留痕」拍不进视频：无模型环境 Enter 后主区会留下
+// turn 报错行，污染后续镜头；该卖点由静态图 05-sent-trace 承载。
+// 视频的注释拍停在 composer 的「1 annotation」chip（上方已等待其可见）。
 
 // 侧边聊天
 const expand = page.getByRole('button', { name: /Expand sidebar/ }).first()
@@ -106,6 +104,10 @@ await pause(1200)
 await foldCard.click()
 await sidebar.getByText(/full history snapshot/).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: 15_000 })
 await pause(1500)
+// 滚到面板底部：展示新 UI 家族（思考行首行预览 / Bash 人话标题 /
+// todo 任务卡——种子 turn 4 在继承区尾部）。
+await sidebar.locator('[data-disclosure-row]').last().scrollIntoViewIfNeeded()
+await pause(1200)
 
 await context.close()
 await browser.close()
