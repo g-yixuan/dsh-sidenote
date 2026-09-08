@@ -20,7 +20,7 @@ const MARGIN = 24
 const browser = await chromium.launch()
 const page = await browser.newPage({ deviceScaleFactor: 1 })
 
-for (const name of readdirSync(ASSETS).filter(f => f.endsWith('.png') && f !== 'banner.png')) {
+for (const name of readdirSync(ASSETS).filter(f => f.endsWith('.png') && !f.startsWith('banner'))) {
   const path = join(ASSETS, name)
   const dataUrl = `data:image/png;base64,${readFileSync(path).toString('base64')}`
   await page.setContent(`<body style="margin:0;background:transparent">
