@@ -5,3 +5,6 @@ lib/
 .worktrees/
 test-results/
 playwright-report/
+
+# 本地临时验证脚本（不进库）
+scripts/.tmp-*
