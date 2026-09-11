@@ -227,6 +227,23 @@ export interface ModelSelection {
   reasoningEffort?: string
 }
 
+/**
+ * Remote session face that carries `selectModel` (dsh >= 0.1.5). The generated
+ * Remote namespaces hang off `ctx.remote` and are NOT part of the inject list,
+ * so call sites probe them lazily. Authority:
+ * `@deepseek-ai/dsh-api-session-controller/lib/typert.remote-client.d.ts`
+ * (`selectModel: (request) => Promise<RemoteResult<...>>`, RemoteResult =
+ * `{ok: true, value} | {ok: false, error}`).
+ */
+export interface RemoteSessionModelFace {
+  selectModel(request: {
+    sessionId: SessionId
+    provider: string
+    model: string
+    reasoningEffort?: string
+  }): Promise<{ ok: true; value: unknown } | { ok: false; error: { code?: string; message?: string } }>
+}
+
 export interface SessionModelsResult {
   current: ModelSelection
   routable: boolean
@@ -309,6 +326,12 @@ export interface Context {
    * 提供 `effect(execute, label?)`。）
    */
   get(name: string): unknown
+
+  /**
+   * Generated Remote namespaces (dsh >= 0.1.5), also outside the inject list.
+   * Absent on older hosts; consumers feature-check before use.
+   */
+  remote?: { session?: RemoteSessionModelFace }
 }
 
 // ── annotate 扩展 ────────────────────────────────────────────────────────────

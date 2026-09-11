@@ -6,9 +6,10 @@
  * off-face 探测纪律：session.open()、store.update 均为运行时可达但契约不
  * 保证的面——就地 feature-check + 吞错降级，并登记进 host/probes.ts。
  */
-import type { Context, ConversationSnapshot, SessionBinding, SessionFace, SessionModelsResult, UiConversationLike } from '../host/contracts.ts'
+import type { Context, ConversationSnapshot, ModelSelection, RemoteSessionModelFace, SessionBinding, SessionFace, SessionModelsResult, UiConversationLike } from '../host/contracts.ts'
 import { parseSideChatMeta, type SideChatMeta } from './model.ts'
 import { readTab } from './open.ts'
+import { rootContext } from './native.ts'
 
 /**
  * 首开编排：fork（全量历史快照）→ 登记 meta（先行，绝不丢登记）→
@@ -34,6 +35,9 @@ export async function forkAndRegister(ctx: Context, parentSessionId: string, tab
     // 边界缺失不阻断 fork。
   }
   const forked = await ctx.sessions.fork({ sessionId: parentSessionId })
+  // The slot-provided context a panel receives has a narrower inject list than the
+  // plugin root context, so host calls go through the root context (see native.ts).
+  const owner = rootContext(ctx)
   // meta 先行：fork resolve 后立即登记 childId（会话切换导致组件卸载时
   // updateTab 找不到 tab 也只是 no-op——否则 Tab 永远停在 forking 且下次
   // 挂载重复 fork 出孤儿会话）。
@@ -45,22 +49,28 @@ export async function forkAndRegister(ctx: Context, parentSessionId: string, tab
   }))
   // 归档失败残留可见（无 unarchive API），不阻断面板。
   try {
-    await ctx.workspaces.archiveSession(forked)
+    await owner.workspaces.archiveSession(forked)
   } catch (error) {
     console.warn('[dsh-sidenote] 归档侧边会话失败（会话列表可能短暂可见）:', error)
   }
   // fork 继承 agent preset 但不继承模型选择——读主会话当前模型并同步到
   // 子会话（best-effort，失败则子会话用宿主默认模型，面板标签如实回退）。
+  // The RPCs moved in 0.1.5: ctx.connection.api.sessions.* (<= 0.1.2) is gone,
+  // ctx.remote.session.selectModel takes over, and the durable current selection
+  // is a session projection rather than a models() RPC result.
   try {
-    const parentModels = await ctx.connection.api.sessions.models({ sessionId: parentSessionId })
-    if (parentModels.result.ok) {
-      const current = parentModels.result.value.current
-      await ctx.connection.api.sessions.selectModel({
+    const selection = projectedModelSelection(owner, parentSessionId)
+    const face = remoteSessionFace(owner)
+    if (selection === undefined || face === undefined) {
+      console.warn('[dsh-sidenote] 同步主会话模型跳过：主机模型 API 不可用')
+    } else {
+      const result = await face.selectModel({
         sessionId: forked,
-        provider: current.provider,
-        model: current.model,
-        ...(current.reasoningEffort !== undefined ? { reasoningEffort: current.reasoningEffort } : {}),
+        provider: selection.provider,
+        model: selection.model,
+        ...(selection.reasoningEffort !== undefined ? { reasoningEffort: selection.reasoningEffort } : {}),
       })
+      if (!result.ok) throw new Error(result.error.message ?? result.error.code ?? 'selectModel failed')
     }
   } catch (error) {
     console.warn('[dsh-sidenote] 同步主会话模型失败（子会话用默认模型）:', error)
@@ -102,6 +112,53 @@ export function openSessionWindow(session: SessionFace | undefined): void {
   openable.open().catch((error: unknown) => {
     console.warn('[dsh-sidenote] 会话窗口打开失败:', error)
   })
+}
+
+/**
+ * Current model selection of a session, read from its `modelSelection`
+ * projection (dsh >= 0.1.2): the durable selection is projected state, so no RPC
+ * is needed and the read is safe for any session id. Snapshot shape authority:
+ * dsh-client-ui-model-selection (`faceOf('modelSelection')` → `.next`).
+ */
+export function projectedModelSelection(ctx: Context, sessionId: string): ModelSelection | undefined {
+  try {
+    const session = ctx.sessions.binding(sessionId)?.session as
+      | { projections?: { faceOf?: (name: string) => { getSnapshot?: () => unknown } | undefined } }
+      | undefined
+    const snapshot = session?.projections?.faceOf?.('modelSelection')?.getSnapshot?.() as
+      | { next?: ModelSelection }
+      | undefined
+    return snapshot?.next
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Remote session face carrying `selectModel` (dsh >= 0.1.5). `remote` is absent
+ * from the inject list, so probe lazily: the namespace object and its `session`
+ * member are both accepted, and a missing face means callers degrade instead of
+ * throwing.
+ */
+export function remoteSessionFace(ctx: Context): RemoteSessionModelFace | undefined {
+  const candidates: unknown[] = []
+  try {
+    candidates.push((ctx as { remote?: { session?: unknown } }).remote?.session)
+  } catch {
+    // not injectable on this host
+  }
+  for (const name of ['remote.session', 'remote']) {
+    try {
+      candidates.push(ctx.get(name))
+    } catch {
+      // service absent
+    }
+  }
+  for (const candidate of candidates) {
+    const face = candidate as { selectModel?: unknown } | undefined
+    if (typeof face?.selectModel === 'function') return face as RemoteSessionModelFace
+  }
+  return undefined
 }
 
 /** 读子会话当前模型名（composer 模型标签用）；任何失败回退 null（默认文案）。 */

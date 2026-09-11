@@ -20,6 +20,7 @@ import { clearPendingDraft, parseSideChatMeta, phaseOf } from './model.ts'
 import { transcriptOf } from '../chat/transcript.ts'
 import { EmptyState, MessageList, StateScreen } from './rows.tsx'
 import { chatSourceOf, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, updateTabMeta } from './lifecycle.ts'
+import { registerLiveSideChat } from './native.ts'
 import { ToolCard } from '../chat/ToolCard.tsx'
 import { ComposerBar } from './ComposerBar.tsx'
 import { ReasoningRow } from '../chat/ReasoningRow.tsx'
@@ -186,6 +187,26 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
     // appendDraft 随草稿逐键换身份；不列入依赖 —— effect 只在
     // pendingDraft/相位变化时真正动作（清除后 pendingDraft 为 undefined，幂等）。
   }, [pendingDraft, phase, ctx, tab.id])
+
+  // Native right sidebar (better-sidebar >= 0.19): publish this panel so the
+  // programmatic entry points (/side, selection bridge) can reach its tab id and
+  // seed the draft — the layout snapshot cannot see native tabs (see native.ts).
+  const composerRef = useRef(composer)
+  composerRef.current = composer
+  const metaRef = useRef(tab.meta)
+  metaRef.current = tab.meta
+  useEffect(
+    () => registerLiveSideChat(
+      scope.sessionId,
+      tab.id,
+      (text) => {
+        composerRef.current.appendDraft(text)
+        requestAnimationFrame(() => { rootRef.current?.querySelector('textarea')?.focus() })
+      },
+      () => metaRef.current,
+    ),
+    [scope.sessionId, tab.id],
+  )
 
   // D3a 保存为正式会话：fork 子会话为独立主会话（无 unarchive API，
   // fork 即转正——内置侧边对话同款路径）→ 主视图打开 → 关本 Tab →
