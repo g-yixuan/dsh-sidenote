@@ -16,7 +16,7 @@ import {
   sideTabTitle,
 } from './model.ts'
 import { readInputDraft, resolveSessionInput } from './composer.ts'
-import { focusNativeTab, lastLiveSideChat, markSideChatOpening, nativeSidebarHost, nativeTabShell, sideChatOpening } from './native.ts'
+import { focusNativeTab, lastLiveSideChat, liveSideChatsOf, markSideChatOpening, nativeSidebarHost, nativeTabShell, sideChatOpening } from './native.ts'
 
 /**
  * 从最新快照读一个 Tab（meta 合并写入前的读取面；布局即注册表）。
@@ -133,6 +133,9 @@ export function sideChatTargetTitle(ctx: Context, sessionId: string): string | u
     if (snapshot.sessionId !== sessionId || snapshot.state === undefined) return undefined
     const existing = collectSideTabs(snapshot.state)
     if (existing.length > 0) return existing[existing.length - 1]!.title
+    // native：布局快照看不到 tab，改读 live registry（最近打开者）。
+    const live = lastLiveSideChat(sessionId)
+    if (live !== undefined) return live.readTitle()
     return sideTabTitle([])
   } catch {
     return undefined
@@ -150,6 +153,10 @@ export function reopenSideChat(ctx: Context, sessionId: string, childId: string,
     const snapshot = ctx.betterSidebar.getSnapshot()
     if (snapshot.sessionId !== sessionId || snapshot.state === undefined) return false
     if (!ctx.betterSidebar.isTabEnabled(SIDE_TAB_TYPE)) return false
+    // native 下同 kind 每 pane 单实例（dsh sidebar-right held 规则）：有存活
+    // 实例时 openTab 必折叠为聚焦既有 tab 且 seed.meta 被丢弃——拒绝（弹层
+    // 侧此时本就不列重开项，这里是双保险）。
+    if (nativeSidebarHost(ctx) && liveSideChatsOf(sessionId).length > 0) return false
     const before = new Set(collectTabs(snapshot.state).map(tab => tab.id))
     // native（>= 0.19）：seed.meta 携带恢复信息（native 面采纳 seed.meta；
     // 面板挂载即走绑定恢复路径）。legacy 的 createTab 铸造忽略 seed.meta，

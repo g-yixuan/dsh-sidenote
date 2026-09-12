@@ -2,7 +2,9 @@
  * /side 斜杠命令（spike 落点）：经 client 侧 `ctx.commandUi.register`
  * （dsh-client-ui-commands 的 CommandContribution，ui 形态 popupSelect）
  * 注册。popupSelect 是该注册面唯一的 UI 形态 —— 菜单行被选中后弹一个
- * 选项壳，选项 = 新建 + 当前会话已并存的侧边聊天（聚焦）。
+ * 选项壳，选项 = 新建 + 当前会话已并存的侧边聊天（聚焦）+ 最近关闭（重开）。
+ * native 宿主（better-sidebar >= 0.19）受 dsh sidebar-right 的 held 规则约束
+ * （page kind 每 pane 单实例）：有存活实例时不列「新建」与「重开」。
  *
  * 服务经 ctx.get 惰性解析（commandUi 不在 inject 清单里）：服务缺失、
  * 注册抛错（如与 host 命令撞名）都降级为「只有 Tab 入口」，绝不影响面板。
@@ -12,6 +14,7 @@
  */
 import type { Context } from '../host/contracts.ts'
 import { canForkFrom, collectSideTabs } from './model.ts'
+import { focusNativeTab, liveSideChatsOf, nativeSidebarHost } from './native.ts'
 import { createSideChat, reopenSideChat } from './open.ts'
 import { dropClosedSideChat, listClosedSideChats } from './recentClosed.ts'
 import { t } from '../locales.ts'
@@ -61,19 +64,37 @@ function makeContribution(ctx: Context, name: string) {
     ui: {
       kind: 'popupSelect' as const,
       options: (session: CommandSession) => {
-        const options: SelectOption[] = [
-          { id: 'new', label: t('cmdNew'), detail: t('cmdNewDetail') },
-        ]
+        const options: SelectOption[] = []
+        const native = nativeSidebarHost(ctx)
+        const lives = native ? liveSideChatsOf(session.sessionId) : []
+        // native 下同 kind 每 pane 单实例（dsh-client-ui-sidebar-right 的 held
+        // 规则：page kind 的 contentId 恒为 sidebar://<kind>，openTab 必折叠为
+        // 聚焦既有 tab）——已有存活实例时「新建」名不副实，不列。
+        if (!native || lives.length === 0) {
+          options.push({ id: 'new', label: t('cmdNew'), detail: t('cmdNewDetail') })
+        }
         // 已并存的侧边聊天列为聚焦项（命令弹层即多实例管理入口）。
-        const snapshot = ctx.betterSidebar.getSnapshot()
-        if (snapshot.sessionId === session.sessionId && snapshot.state !== undefined) {
-          for (const tab of collectSideTabs(snapshot.state)) {
-            options.push({ id: `focus:${tab.id}`, label: t('cmdFocus', { title: tab.title }), detail: t('cmdFocusDetail') })
+        // native（>= 0.19）：tab 不进布局快照，枚举改读 live registry；
+        // legacy：读布局快照（现状）。
+        if (native) {
+          for (const live of lives) {
+            options.push({ id: `focus:${live.tabId}`, label: t('cmdFocus', { title: live.readTitle() }), detail: t('cmdFocusDetail') })
+          }
+        } else {
+          const snapshot = ctx.betterSidebar.getSnapshot()
+          if (snapshot.sessionId === session.sessionId && snapshot.state !== undefined) {
+            for (const tab of collectSideTabs(snapshot.state)) {
+              options.push({ id: `focus:${tab.id}`, label: t('cmdFocus', { title: tab.title }), detail: t('cmdFocusDetail') })
+            }
           }
         }
         // D3 后悔药：最近关闭的可重开（Cmd+Shift+T 心智）。
-        for (const entry of listClosedSideChats(session.sessionId)) {
-          options.push({ id: `reopen:${entry.childId}`, label: t('cmdReopen', { title: entry.title }), detail: t('cmdReopenDetail') })
+        // native 单实例约束下，有存活实例时 reopen 必被 held 折叠（seed.meta
+        // 丢弃且聚焦错对象）——此时不列重开项。
+        if (!(native && lives.length > 0)) {
+          for (const entry of listClosedSideChats(session.sessionId)) {
+            options.push({ id: `reopen:${entry.childId}`, label: t('cmdReopen', { title: entry.title }), detail: t('cmdReopenDetail') })
+          }
         }
         return Promise.resolve(options)
       },
@@ -85,7 +106,9 @@ function makeContribution(ctx: Context, name: string) {
           return
         }
         if (option.id.startsWith('focus:')) {
-          ctx.betterSidebar.activateTab(option.id.slice('focus:'.length), { sessionId: session.sessionId })
+          const tabId = option.id.slice('focus:'.length)
+          // native 宿主的 activateTab 是空操作——聚焦走 ISidebarRight.focus 探测。
+          if (!focusNativeTab(ctx, tabId)) ctx.betterSidebar.activateTab(tabId, { sessionId: session.sessionId })
           return
         }
         if (option.id.startsWith('reopen:')) {
