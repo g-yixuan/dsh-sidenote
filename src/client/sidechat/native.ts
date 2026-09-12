@@ -6,8 +6,10 @@
  * lifecycle calls to that surface (`openTab`/`activateTab`/`updateTab`).
  * Sidechat tabs opened that way never enter the legacy layout store
  * (splits/bottomSplits/floats) that `collectSideTabs` walks, so the minted tab
- * id cannot be recovered from the snapshot and the panel's `meta` cannot be
- * seeded before mounting.
+ * id cannot be recovered from the snapshot — after `openTab` there is no
+ * `updateTab` target until the panel mounts and publishes itself. Drafts must
+ * therefore ride the `openTab` seed.meta (which the native surface honors) or
+ * wait for the panel's registration.
  *
  * This module keeps that missing link: a registry of live side-chat panels
  * (their native tab id, their draft sink, their current meta) plus a lazy
@@ -73,9 +75,47 @@ export function registerLiveSideChat(
 ): () => void {
   const entry: LiveSideChat = { tabId, sessionId, seedDraft, readMeta }
   liveSideChats.set(tabId, entry)
+  // 挂载即回放在 openTab→注册窗口内暂存的草稿（seedDraft 内有相位门）。
+  const opening = openings.get(sessionId)
+  if (opening !== undefined) {
+    openings.delete(sessionId)
+    for (const draft of opening.drafts) seedDraft(draft)
+  }
   return () => {
     if (liveSideChats.get(tabId) === entry) liveSideChats.delete(tabId)
   }
+}
+
+// ── openTab→面板挂载窗口的 in-flight 标记 ────────────────────────────────────
+// native tab 铸造后对布局快照与 registry 同时不可见，直到面板挂载登记；窗口内
+// 的重复触发必须落进标记（草稿暂存、注册时回放），而不是再开一个 tab
+// （双开 = 双 fork 出孤儿会话）。legacy 宿主无此窗口（openTab 同步落快照）。
+
+/** 标记失效应力：openTab 被静默拒绝/面板未挂载时，超时后允许重试。 */
+const OPENING_TTL_MS = 10_000
+
+interface OpeningMark {
+  readonly at: number
+  /** 窗口内到达的待投递草稿（面板注册时经 seedDraft 回放）。 */
+  readonly drafts: string[]
+}
+
+const openings = new Map<string, OpeningMark>()
+
+/** 标记一次已发起、面板尚未注册的 native 打开（create/reopen 铸造后调用）。 */
+export function markSideChatOpening(sessionId: string): void {
+  openings.set(sessionId, { at: Date.now(), drafts: [] })
+}
+
+/** 进行中的打开；TTL 外视为 openTab 被拒/面板未挂载，清除并返回 undefined。 */
+export function sideChatOpening(sessionId: string): OpeningMark | undefined {
+  const mark = openings.get(sessionId)
+  if (mark === undefined) return undefined
+  if (Date.now() - mark.at > OPENING_TTL_MS) {
+    openings.delete(sessionId)
+    return undefined
+  }
+  return mark
 }
 
 /** Live panel for a native tab id (undefined for legacy layout tabs). */
@@ -100,4 +140,29 @@ export function nativeTabShell(tabId: string, type: string): { id: string; type:
   const entry = liveSideChats.get(tabId)
   if (entry === undefined) return undefined
   return { id: entry.tabId, type, title: '', meta: entry.readMeta() }
+}
+
+/**
+ * 聚焦一个 native tab：better-sidebar >= 0.19 的 `surface.activate` 是空操作
+ * （只返回记录存在性——authority: dsh-better-sidebar src/client/native/surface.ts），
+ * 真实聚焦面是 dsh 0.1.5 的 `ISidebarRight.focus`（authority:
+ * dsh-client-ui-sidebar-right lib/types/client/service.d.ts `focus(tabId)`）。
+ * focus 只标记活动 tab/pane，不展开折叠的栏——聚焦的语义包含「让用户看见」，
+ * 故折叠时补 toggleExpanded（authority: 同文件 `isExpanded/toggleExpanded`）。
+ * @returns true = 已通过 focus 聚焦；false = 面缺席（调用方回退 activateTab）。
+ */
+export function focusNativeTab(ctx: Context, tabId: string): boolean {
+  try {
+    const face = ctx.get('sidebarRight') as {
+      focus?: (id: string) => void
+      isExpanded?: () => boolean
+      toggleExpanded?: () => void
+    } | undefined
+    if (typeof face?.focus !== 'function') return false
+    face.focus(tabId)
+    if (face.isExpanded?.() === false) face.toggleExpanded?.()
+    return true
+  } catch {
+    return false
+  }
 }

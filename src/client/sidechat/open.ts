@@ -16,7 +16,7 @@ import {
   sideTabTitle,
 } from './model.ts'
 import { readInputDraft, resolveSessionInput } from './composer.ts'
-import { lastLiveSideChat, nativeSidebarHost, nativeTabShell } from './native.ts'
+import { focusNativeTab, lastLiveSideChat, markSideChatOpening, nativeSidebarHost, nativeTabShell, sideChatOpening } from './native.ts'
 
 /**
  * 从最新快照读一个 Tab（meta 合并写入前的读取面；布局即注册表）。
@@ -44,7 +44,9 @@ export function openOrFocusSideChat(ctx: Context, sessionId: string, draftText?:
     const live = lastLiveSideChat(sessionId)
     if (live !== undefined) {
       if (draftText !== undefined && draftText !== '') live.seedDraft(draftText)
-      ctx.betterSidebar.activateTab(live.tabId, { sessionId })
+      // native 宿主的 activateTab 是空操作（surface.activate 只查记录存在性），
+      // 聚焦走 ISidebarRight.focus 探测；面缺席（legacy）回退 activateTab。
+      if (!focusNativeTab(ctx, live.tabId)) ctx.betterSidebar.activateTab(live.tabId, { sessionId })
       return true
     }
 
@@ -65,6 +67,15 @@ export function openOrFocusSideChat(ctx: Context, sessionId: string, draftText?:
       return true
     }
 
+    // openTab→面板挂载窗口（native 特有）：tab 已铸但对快照与 registry 均不可见，
+    // 重复触发落进 in-flight 标记（草稿暂存、注册时回放）而非再开一个
+    // （双开 = 双 fork 出孤儿会话）。legacy 无此窗口（openTab 同步落快照）。
+    const opening = sideChatOpening(sessionId)
+    if (opening !== undefined) {
+      if (draftText !== undefined && draftText !== '') opening.drafts.push(draftText)
+      return true
+    }
+
     return createSideChat(ctx, sessionId, draftText)
   } catch (error) {
     console.warn('[dsh-sidenote] 打开侧边聊天失败:', error)
@@ -81,6 +92,9 @@ export function createSideChat(ctx: Context, sessionId: string, draftText?: stri
   try {
     const snapshot = ctx.betterSidebar.getSnapshot()
     if (snapshot.sessionId !== sessionId || snapshot.state === undefined) return false
+    // openTab 的已知静默失败面先排除（类型在设置里被禁用 = 宿主 warn 后 return，
+    // 不抛错）——否则 native 分支的乐观返回会把失败报成成功。
+    if (!ctx.betterSidebar.isTabEnabled(SIDE_TAB_TYPE)) return false
     // 新建：openTab 走 createTab 铸造（seed.meta 会被忽略），所以先记下既有
     // id 集，openTab 同步落状态后找出新 Tab，再把 pendingDraft 写进它的 meta。
     const before = new Set(collectTabs(snapshot.state).map(tab => tab.id))
@@ -91,7 +105,13 @@ export function createSideChat(ctx: Context, sessionId: string, draftText?: stri
       : { type: SIDE_TAB_TYPE }
     ctx.betterSidebar.openTab(seed, { sessionId })
     const created = collectSideTabs(ctx.betterSidebar.getSnapshot().state).find(tab => !before.has(tab.id))
-    if (created === undefined) return nativeSidebarHost(ctx)
+    if (created === undefined) {
+      if (!nativeSidebarHost(ctx)) return false
+      // native：tab 不进快照属预期——openTab 不抛错即视为成功；标记 in-flight
+      // 窗口供并发触发去重（窗口语意见 native.ts）。
+      markSideChatOpening(sessionId)
+      return true
+    }
     if (draftText !== undefined && draftText !== '') {
       ctx.betterSidebar.updateTab(created.id, { meta: { pendingDraft: draftText } })
     }
@@ -129,13 +149,22 @@ export function reopenSideChat(ctx: Context, sessionId: string, childId: string,
   try {
     const snapshot = ctx.betterSidebar.getSnapshot()
     if (snapshot.sessionId !== sessionId || snapshot.state === undefined) return false
+    if (!ctx.betterSidebar.isTabEnabled(SIDE_TAB_TYPE)) return false
     const before = new Set(collectTabs(snapshot.state).map(tab => tab.id))
-    ctx.betterSidebar.openTab({ type: SIDE_TAB_TYPE }, { sessionId })
+    // native（>= 0.19）：seed.meta 携带恢复信息（native 面采纳 seed.meta；
+    // 面板挂载即走绑定恢复路径）。legacy 的 createTab 铸造忽略 seed.meta，
+    // 落快照后补写。
+    const meta = { childId, parentSessionId: sessionId }
+    ctx.betterSidebar.openTab({ type: SIDE_TAB_TYPE, ...(title !== undefined ? { title } : {}), meta }, { sessionId })
     const created = collectSideTabs(ctx.betterSidebar.getSnapshot().state).find(tab => !before.has(tab.id))
-    if (created === undefined) return false
+    if (created === undefined) {
+      if (!nativeSidebarHost(ctx)) return false
+      markSideChatOpening(sessionId)
+      return true
+    }
     ctx.betterSidebar.updateTab(created.id, {
       ...(title !== undefined ? { title } : {}),
-      meta: { childId, parentSessionId: sessionId },
+      meta,
     })
     return true
   } catch (error) {
