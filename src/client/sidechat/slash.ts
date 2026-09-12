@@ -32,7 +32,11 @@ interface SelectOption {
 interface CommandUiService {
   register(contribution: {
     readonly name: string
-    readonly description: string
+    // 契约在 0.1.5 从 string 改为 () => string（authority:
+    // dsh-client-ui-commands 0.1.5-rc.2 contract.d.ts `readonly description: () => string`；
+    // 0.1.1~0.1.3 为 string）。传错形状会在候选合成时炸掉整个斜杠菜单
+    // （ui-input-trigger 的 contribution.description() 对 string 抛 TypeError）。
+    readonly description: string | (() => string)
     available(session: CommandSession): boolean
     readonly ui: {
       readonly kind: 'popupSelect'
@@ -42,11 +46,17 @@ interface CommandUiService {
   }): () => void
 }
 
+/** 0.1.5 信号：`connection.api.sessions` 面在 0.1.5 被删（与模型面迁移同判据）。 */
+function isDsh015Plus(ctx: Context): boolean {
+  const legacy = (ctx as { connection?: { api?: { sessions?: unknown } } }).connection?.api?.sessions
+  return legacy === undefined || legacy === null
+}
+
 /** 单个命令名对应的完整贡献（side / 侧边 共用）。 */
 function makeContribution(ctx: Context, name: string) {
   return {
     name,
-    description: t('cmdDesc'),
+    description: isDsh015Plus(ctx) ? () => t('cmdDesc') : t('cmdDesc'),
     available: (session: CommandSession) => canForkFrom(ctx, session.sessionId),
     ui: {
       kind: 'popupSelect' as const,

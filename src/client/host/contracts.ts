@@ -228,12 +228,14 @@ export interface ModelSelection {
 }
 
 /**
- * Remote session face that carries `selectModel` (dsh >= 0.1.5). The generated
- * Remote namespaces hang off `ctx.remote` and are NOT part of the inject list,
- * so call sites probe them lazily. Authority:
- * `@deepseek-ai/dsh-api-session-controller/lib/typert.remote-client.d.ts`
- * (`selectModel: (request) => Promise<RemoteResult<...>>`, RemoteResult =
- * `{ok: true, value} | {ok: false, error}`).
+ * Remote session face（dsh >= 0.1.5 的模型读写照面；0.1.5 删除了
+ * `connection.api.sessions.*` 的 client 面后由它接管）。
+ * `remote`/`remote.session` 在宿主侧是可注入服务，但本插件不声明 inject
+ * （0.1.2 及更早无此服务，声明会让插件在旧宿主上永不激活）——调用点经
+ * `ctx.get` 惰性探测（cordis 的 get 不受 inject 门禁限制）。
+ * Authority：`@deepseek-ai/dsh-api-session-controller/lib/typert.remote-client.d.ts`
+ * （RemoteResult = `{ok: true, value} | {ok: false, error}`；error 实为
+ * RemoteError 实例，code 必有、message 继承 Error，这里弱化为可读取切片）。
  */
 export interface RemoteSessionModelFace {
   selectModel(request: {
@@ -242,6 +244,16 @@ export interface RemoteSessionModelFace {
     model: string
     reasoningEffort?: string
   }): Promise<{ ok: true; value: unknown } | { ok: false; error: { code?: string; message?: string } }>
+  /** 宿主级模型目录（authority 同上，`ModelCatalog`）。 */
+  modelCatalog?(): Promise<{ ok: true; value: ModelCatalogFace } | { ok: false; error: { code?: string; message?: string } }>
+}
+
+/** `remote.session.modelCatalog()` 的返回切片（authority: 同上 `ModelCatalog`）。 */
+export interface ModelCatalogFace {
+  readonly default: ModelSelection
+  readonly routableProviders: readonly string[]
+  readonly groups: SessionModelsResult['groups']
+  readonly failures?: readonly unknown[]
 }
 
 export interface SessionModelsResult {
@@ -326,12 +338,6 @@ export interface Context {
    * 提供 `effect(execute, label?)`。）
    */
   get(name: string): unknown
-
-  /**
-   * Generated Remote namespaces (dsh >= 0.1.5), also outside the inject list.
-   * Absent on older hosts; consumers feature-check before use.
-   */
-  remote?: { session?: RemoteSessionModelFace }
 }
 
 // ── annotate 扩展 ────────────────────────────────────────────────────────────

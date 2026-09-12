@@ -9,6 +9,8 @@
  * 新增 off-face 依赖时：调用点照写就地探测，同时把条目加进 PROBES。
  */
 import type { Context } from './contracts.ts'
+import { nativeSidebarHost } from '../sidechat/native.ts'
+import { remoteSessionFace } from '../sidechat/lifecycle.ts'
 
 interface Probe {
   /** 探测项名称（告警文案用）。 */
@@ -56,6 +58,31 @@ const PROBES: readonly Probe[] = [
       return typeof modules?.import === 'function'
     },
     fallback: 'ProducedFiles 等动态复用件降级为自绘',
+  },
+  {
+    name: 'sidebarRight.focus（native tab 程序化聚焦）',
+    check: (ctx) => {
+      // 仅 better-sidebar >= 0.19（native 右栏）需要的面；老宿主的
+      // activateTab 本就可用，缺失不算降级。
+      if (!nativeSidebarHost(ctx)) return true
+      const face = (ctx as { get?: (k: string) => unknown }).get?.('sidebarRight') as
+        | { focus?: unknown }
+        | undefined
+      return typeof face?.focus === 'function'
+    },
+    fallback: '聚焦既有侧边聊天 tab 不可用（activateTab 在 native 面是空操作）',
+  },
+  {
+    name: '会话模型面（remote.session / connection.api.sessions 双版本链）',
+    check: (ctx) => {
+      // 新面（0.1.5 的 remote.session）与旧面（<= 0.1.2 的 connection.api）
+      // 任一在列即能力在——双版本链的探测与调用点同序（lifecycle.ts）。
+      if (remoteSessionFace(ctx) !== undefined) return true
+      const legacy = (ctx as { connection?: { api?: { sessions?: { models?: unknown } } } })
+        .connection?.api?.sessions?.models
+      return typeof legacy === 'function'
+    },
+    fallback: 'fork 模型同步、模型标签与模型切换不可用（子会话用宿主默认模型）',
   },
 ]
 

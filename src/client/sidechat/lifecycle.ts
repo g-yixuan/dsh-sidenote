@@ -55,22 +55,14 @@ export async function forkAndRegister(ctx: Context, parentSessionId: string, tab
   }
   // fork 继承 agent preset 但不继承模型选择——读主会话当前模型并同步到
   // 子会话（best-effort，失败则子会话用宿主默认模型，面板标签如实回退）。
-  // The RPCs moved in 0.1.5: ctx.connection.api.sessions.* (<= 0.1.2) is gone,
-  // ctx.remote.session.selectModel takes over, and the durable current selection
-  // is a session projection rather than a models() RPC result.
+  // 双版本链：投影 + remote.session（0.1.5）优先，connection.api（<= 0.1.2
+  // client 面）回退——面迁移不弃旧档（chatSourceOf 先例）。
   try {
-    const selection = projectedModelSelection(owner, parentSessionId)
-    const face = remoteSessionFace(owner)
-    if (selection === undefined || face === undefined) {
+    const selection = await readModelSelection(owner, parentSessionId)
+    if (selection === undefined) {
       console.warn('[dsh-sidenote] 同步主会话模型跳过：主机模型 API 不可用')
-    } else {
-      const result = await face.selectModel({
-        sessionId: forked,
-        provider: selection.provider,
-        model: selection.model,
-        ...(selection.reasoningEffort !== undefined ? { reasoningEffort: selection.reasoningEffort } : {}),
-      })
-      if (!result.ok) throw new Error(result.error.message ?? result.error.code ?? 'selectModel failed')
+    } else if (!(await writeModelSelection(owner, forked, selection))) {
+      console.warn('[dsh-sidenote] 同步主会话模型失败（子会话用默认模型）')
     }
   } catch (error) {
     console.warn('[dsh-sidenote] 同步主会话模型失败（子会话用默认模型）:', error)
@@ -118,7 +110,9 @@ export function openSessionWindow(session: SessionFace | undefined): void {
  * Current model selection of a session, read from its `modelSelection`
  * projection (dsh >= 0.1.2): the durable selection is projected state, so no RPC
  * is needed and the read is safe for any session id. Snapshot shape authority:
- * dsh-client-ui-model-selection (`faceOf('modelSelection')` → `.next`).
+ * `@deepseek-ai/dsh-api-session-controller/lib/types/types.d.ts`
+ * (`ModelSelectionProjection = { lastUsed, next }`，两者均可为 null——
+ * `next` 缺省时按投影文档回落 `lastUsed`）。
  */
 export function projectedModelSelection(ctx: Context, sessionId: string): ModelSelection | undefined {
   try {
@@ -126,49 +120,86 @@ export function projectedModelSelection(ctx: Context, sessionId: string): ModelS
       | { projections?: { faceOf?: (name: string) => { getSnapshot?: () => unknown } | undefined } }
       | undefined
     const snapshot = session?.projections?.faceOf?.('modelSelection')?.getSnapshot?.() as
-      | { next?: ModelSelection }
+      | { next?: ModelSelection | null; lastUsed?: ModelSelection | null }
       | undefined
-    return snapshot?.next
+    return snapshot?.next ?? snapshot?.lastUsed ?? undefined
   } catch {
     return undefined
   }
 }
 
 /**
- * Remote session face carrying `selectModel` (dsh >= 0.1.5). `remote` is absent
- * from the inject list, so probe lazily: the namespace object and its `session`
- * member are both accepted, and a missing face means callers degrade instead of
- * throwing.
+ * Remote session face carrying `selectModel`/`modelCatalog`（dsh 0.1.5 删除
+ * `connection.api.sessions.*` client 面后的模型 RPC 面；事实上 0.1.2-rc.1
+ * 起存在——authority: dsh-api-session-controller lib/typert.remote-client.d.ts）。
+ * 探测走 `ctx.get`（cordis 的 get 不受 inject 门禁限制，本插件为兼容旧宿主
+ * 不声明 inject 'remote.session'；机制见 contracts.ts RemoteSessionModelFace）。
+ * `ctx.get('remote')` 返回命名空间容器时下钻其 `.session` 成员。
  */
 export function remoteSessionFace(ctx: Context): RemoteSessionModelFace | undefined {
-  const candidates: unknown[] = []
-  try {
-    candidates.push((ctx as { remote?: { session?: unknown } }).remote?.session)
-  } catch {
-    // not injectable on this host
-  }
   for (const name of ['remote.session', 'remote']) {
+    let candidate: unknown
     try {
-      candidates.push(ctx.get(name))
+      candidate = ctx.get(name)
     } catch {
-      // service absent
+      continue // service absent
     }
-  }
-  for (const candidate of candidates) {
-    const face = candidate as { selectModel?: unknown } | undefined
+    const face = candidate as { selectModel?: unknown; session?: { selectModel?: unknown } } | undefined
     if (typeof face?.selectModel === 'function') return face as RemoteSessionModelFace
+    if (typeof face?.session?.selectModel === 'function') return face.session as RemoteSessionModelFace
   }
   return undefined
 }
 
-/** 读子会话当前模型名（composer 模型标签用）；任何失败回退 null（默认文案）。 */
-export async function readModelName(ctx: Context, sessionId: string): Promise<string | null> {
+/**
+ * 读会话当前模型选择：投影面（0.1.2+，同步无 RPC）优先；旧
+ * `connection.api.sessions.models` RPC（<= 0.1.2 的 client 面，0.1.5 已删）
+ * 回退（双版本链，同 chatSourceOf 先例）。永不抛错。
+ */
+export async function readModelSelection(ctx: Context, sessionId: string): Promise<ModelSelection | undefined> {
+  const projected = projectedModelSelection(ctx, sessionId)
+  if (projected !== undefined) return projected
   try {
     const res = await ctx.connection.api.sessions.models({ sessionId })
-    return res.result.ok ? res.result.value.current.model : null
+    if (res.result.ok) return res.result.value.current
   } catch {
-    return null
+    // 旧面缺席（0.1.5）→ undefined。
   }
+  return undefined
+}
+
+/**
+ * 写会话模型选择：`remote.session.selectModel`（新面）优先，旧
+ * `connection.api.sessions.selectModel` 回退。面在而调用失败（模型不可路由等）
+ * 属真实失败，不再落旧面重试。
+ */
+export async function writeModelSelection(ctx: Context, sessionId: string, selection: ModelSelection): Promise<boolean> {
+  const request = {
+    sessionId,
+    provider: selection.provider,
+    model: selection.model,
+    ...(selection.reasoningEffort !== undefined ? { reasoningEffort: selection.reasoningEffort } : {}),
+  }
+  const face = remoteSessionFace(ctx)
+  if (face !== undefined) {
+    try {
+      return (await face.selectModel(request)).ok
+    } catch {
+      return false
+    }
+  }
+  try {
+    const res = await ctx.connection.api.sessions.selectModel(request)
+    return res.result.ok
+  } catch {
+    return false
+  }
+}
+
+/** 读子会话当前模型名（composer 模型标签用）；任何失败回退 null（默认文案）。 */
+export async function readModelName(ctx: Context, sessionId: string): Promise<string | null> {
+  const selection = await readModelSelection(ctx, sessionId)
+  return selection?.model ?? null
 }
 
 /** 会话内容读取源（0.1.1/0.1.2 双兼容，feature-check 优先链）。 */
@@ -212,8 +243,30 @@ export function chatSourceOf(ctx: Context, binding: SessionBinding | undefined):
   return undefined
 }
 
-/** 拉会话模型目录（models RPC 容错；失败 null → 菜单保持只读标签态）。 */
+/**
+ * 拉会话模型目录：0.1.5 走 `remote.session.modelCatalog()`（目录是宿主级，
+ * 菜单选中项所需的 current 由投影/旧面补上）；旧面回退
+ * `connection.api.sessions.models`。失败 null → 菜单保持只读标签态。
+ */
 export async function listModels(ctx: Context, sessionId: string): Promise<SessionModelsResult | null> {
+  const face = remoteSessionFace(ctx)
+  if (typeof face?.modelCatalog === 'function') {
+    try {
+      const result = await face.modelCatalog()
+      if (result.ok) {
+        const catalog = result.value
+        const current = (await readModelSelection(ctx, sessionId)) ?? catalog.default
+        return {
+          current,
+          routable: catalog.routableProviders.length > 0,
+          groups: catalog.groups,
+          ...(catalog.failures !== undefined ? { failures: catalog.failures } : {}),
+        }
+      }
+    } catch {
+      // 落旧面。
+    }
+  }
   try {
     const res = await ctx.connection.api.sessions.models({ sessionId })
     return res.result.ok ? res.result.value : null
@@ -224,10 +277,6 @@ export async function listModels(ctx: Context, sessionId: string): Promise<Sessi
 
 /** 切换子会话模型；成功返回新模型展示名，失败 null（best-effort）。 */
 export async function switchModel(ctx: Context, sessionId: string, provider: string, model: string): Promise<string | null> {
-  try {
-    const res = await ctx.connection.api.sessions.selectModel({ sessionId, provider, model })
-    return res.result.ok ? model : null
-  } catch {
-    return null
-  }
+  const ok = await writeModelSelection(ctx, sessionId, { provider, model })
+  return ok ? model : null
 }

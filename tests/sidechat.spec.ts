@@ -202,7 +202,10 @@ function fakeSidebarCtx(initialTabs: Array<{ id: string; title: string }>) {
   let minted = 0
   const ctx = {
     betterSidebar: {
+      // 显式 legacy 宿主（nativeSidebarHost=false），锁定 pre-0.19 路径。
+      version: '0.18.0',
       getSnapshot: () => ({ sessionId: 'sess', state: { splits: leaf('p:1', tabs) } }),
+      isTabEnabled: () => true,
       openTab: () => {
         minted += 1
         tabs = [...tabs, { id: `side:minted-${minted}`, type: SIDE_TAB_TYPE, title: sideTabTitle(tabs.map(t => t.title)) }]

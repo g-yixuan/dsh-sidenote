@@ -16,11 +16,12 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExterna
 import { IconNewChatOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context, SessionFace, TabComponentProps } from '../host/contracts.ts'
 import { useComposer, type Composer } from './composer.ts'
-import { clearPendingDraft, parseSideChatMeta, phaseOf } from './model.ts'
+import { appendDraftText, clearPendingDraft, parseSideChatMeta, phaseOf } from './model.ts'
 import { transcriptOf } from '../chat/transcript.ts'
 import { EmptyState, MessageList, StateScreen } from './rows.tsx'
 import { chatSourceOf, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, updateTabMeta } from './lifecycle.ts'
-import { registerLiveSideChat } from './native.ts'
+import { nativeSidebarHost, registerLiveSideChat } from './native.ts'
+import { dropClosedSideChat, recordClosedSideChat } from './recentClosed.ts'
 import { ToolCard } from '../chat/ToolCard.tsx'
 import { ComposerBar } from './ComposerBar.tsx'
 import { ReasoningRow } from '../chat/ReasoningRow.tsx'
@@ -191,22 +192,55 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
   // Native right sidebar (better-sidebar >= 0.19): publish this panel so the
   // programmatic entry points (/side, selection bridge) can reach its tab id and
   // seed the draft — the layout snapshot cannot see native tabs (see native.ts).
+  // latest-ref：composer/meta/phase/title 每渲新引用，进 deps 会高频重注册。
   const composerRef = useRef(composer)
   composerRef.current = composer
   const metaRef = useRef(tab.meta)
   metaRef.current = tab.meta
-  useEffect(
-    () => registerLiveSideChat(
+  const phaseRef = useRef(phase)
+  phaseRef.current = phase
+  const titleRef = useRef(tab.title)
+  titleRef.current = tab.title
+  useEffect(() => {
+    // 后悔药自愈（native）：重挂载说明上次卸载是切会话/HMR 而非关闭，清掉误记。
+    const metaNow = parseSideChatMeta(metaRef.current)
+    if (nativeSidebarHost(ctx) && metaNow.childId !== undefined) {
+      dropClosedSideChat(scope.sessionId, metaNow.childId)
+    }
+    const dispose = registerLiveSideChat(
       scope.sessionId,
       tab.id,
       (text) => {
+        // 相位门：未到 chat（forking/loading）时 composer 还是本地草稿，机器
+        // 绑定后本地草稿被丢弃——改走 meta.pendingDraft，由既有 pendingDraft
+        // effect 在相位就绪后应用（与 legacy 路径同机制）。
+        if (phaseRef.current !== 'chat') {
+          updateTabMeta(ctx, tab.id, (m) => ({ ...m, pendingDraft: appendDraftText(m.pendingDraft ?? '', text) }))
+          return
+        }
         composerRef.current.appendDraft(text)
         requestAnimationFrame(() => { rootRef.current?.querySelector('textarea')?.focus() })
       },
       () => metaRef.current,
-    ),
-    [scope.sessionId, tab.id],
-  )
+    )
+    return () => {
+      dispose()
+      // 后悔药数据源（native）：用户 × 关 native tab 不经 descriptor.onClose
+      // （tab-adapter 卸载只 records.drop），以面板卸载补记；误记由挂载时的
+      // drop 自愈。legacy 由 descriptor.onClose 负责，不双写。
+      if (nativeSidebarHost(ctx)) {
+        const m = parseSideChatMeta(metaRef.current)
+        if (m.childId !== undefined && m.parentSessionId !== undefined) {
+          recordClosedSideChat(m.parentSessionId, {
+            childId: m.childId,
+            parentSessionId: m.parentSessionId,
+            title: titleRef.current,
+            closedAt: Date.now(),
+          })
+        }
+      }
+    }
+  }, [scope.sessionId, tab.id, ctx])
 
   // D3a 保存为正式会话：fork 子会话为独立主会话（无 unarchive API，
   // fork 即转正——内置侧边对话同款路径）→ 主视图打开 → 关本 Tab →
