@@ -1,10 +1,10 @@
 /**
  * 模型选择器（WI-02）：composer 脚部的模型 chip → 两级 Menu（provider 分组
- * 标签 + 型号行）。数据走 wire 面（sessions.models/selectModel——fork 时
- * 同步主会话的同款通道）；切的是子会话自己的选择，不回写主会话。
+ * 标签 + 型号行）。数据面走 lifecycle.ts 的双版本链（0.1.5 的
+ * remote.session.modelCatalog/selectModel 优先，<= 0.1.2 的
+ * connection.api.sessions 回退）；切的是子会话自己的选择，不回写主会话。
  *
- * 懒加载：首次打开才拉目录（models RPC 有成本）；切换后本地标签立即更新
- * （selectModel 返回的 selected 为准）。
+ * 懒加载：首次打开才拉目录（catalog RPC 有成本）；切换后本地标签立即更新。
  */
 import { useState } from 'react'
 import { IconCheckOutline16, IconChevronDownOutline14, Menu, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
