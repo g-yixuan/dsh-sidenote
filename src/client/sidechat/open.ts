@@ -16,10 +16,16 @@ import {
   sideTabTitle,
 } from './model.ts'
 import { readInputDraft, resolveSessionInput } from './composer.ts'
+import { lastLiveSideChat, nativeSidebarHost, nativeTabShell } from './native.ts'
 
-/** 从最新快照读一个 Tab（meta 合并写入前的读取面；布局即注册表）。 */
+/**
+ * 从最新快照读一个 Tab（meta 合并写入前的读取面；布局即注册表）。
+ * better-sidebar >= 0.19: the open tab lives in the native right sidebar, not
+ * in the layout snapshot — fall back to the live-panel registry.
+ */
 export function readTab(ctx: Context, tabId: string): SidebarTab | undefined {
-  return collectTabs(ctx.betterSidebar.getSnapshot().state).find(tab => tab.id === tabId)
+  const tab = collectTabs(ctx.betterSidebar.getSnapshot().state).find(candidate => candidate.id === tabId)
+  return tab ?? nativeTabShell(tabId, SIDE_TAB_TYPE)
 }
 
 /**
@@ -32,6 +38,15 @@ export function openOrFocusSideChat(ctx: Context, sessionId: string, draftText?:
     // 侧边聊天活在主会话自己的侧栏状态里；目标会话不在屏上时不越权开 Tab。
     if (snapshot.sessionId !== sessionId || snapshot.state === undefined) return false
     const existing = collectSideTabs(snapshot.state)
+
+    // Native right sidebar (better-sidebar >= 0.19): the tab is invisible to the
+    // layout snapshot, so focus the live panel and hand it the draft directly.
+    const live = lastLiveSideChat(sessionId)
+    if (live !== undefined) {
+      if (draftText !== undefined && draftText !== '') live.seedDraft(draftText)
+      ctx.betterSidebar.activateTab(live.tabId, { sessionId })
+      return true
+    }
 
     if (existing.length > 0) {
       const target = existing[existing.length - 1]!
@@ -69,9 +84,14 @@ export function createSideChat(ctx: Context, sessionId: string, draftText?: stri
     // 新建：openTab 走 createTab 铸造（seed.meta 会被忽略），所以先记下既有
     // id 集，openTab 同步落状态后找出新 Tab，再把 pendingDraft 写进它的 meta。
     const before = new Set(collectTabs(snapshot.state).map(tab => tab.id))
-    ctx.betterSidebar.openTab({ type: SIDE_TAB_TYPE }, { sessionId })
+    // Native tabs (better-sidebar >= 0.19) take meta from the seed: the minted id
+    // only becomes known once the panel mounts and publishes itself.
+    const seed = draftText !== undefined && draftText !== ''
+      ? { type: SIDE_TAB_TYPE, meta: { pendingDraft: draftText } }
+      : { type: SIDE_TAB_TYPE }
+    ctx.betterSidebar.openTab(seed, { sessionId })
     const created = collectSideTabs(ctx.betterSidebar.getSnapshot().state).find(tab => !before.has(tab.id))
-    if (created === undefined) return false
+    if (created === undefined) return nativeSidebarHost(ctx)
     if (draftText !== undefined && draftText !== '') {
       ctx.betterSidebar.updateTab(created.id, { meta: { pendingDraft: draftText } })
     }
