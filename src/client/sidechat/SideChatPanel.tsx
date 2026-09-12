@@ -222,6 +222,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
         requestAnimationFrame(() => { rootRef.current?.querySelector('textarea')?.focus() })
       },
       () => metaRef.current,
+      () => titleRef.current,
     )
     return () => {
       dispose()

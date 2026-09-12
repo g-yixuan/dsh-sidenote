@@ -58,10 +58,19 @@ interface LiveSideChat {
   seedDraft(text: string): void
   /** Current tab meta, read at call time (the panel re-renders on meta change). */
   readMeta(): unknown
+  /** Current tab title（聚焦列表/编号数据源的读取面）。 */
+  readTitle(): string
 }
 
 /** Native tab id → live panel. Native layouts are memory-only, so is this. */
 const liveSideChats = new Map<string, LiveSideChat>()
+
+/**
+ * tabId → 首次注册序号（打开序的近似）。tab.id 跨重挂载稳定，重注册不改写
+ * ——遍历 Map 的插入序会随重挂漂移，「最近打开」只能锚在首次序号上。
+ */
+const birthOrder = new Map<string, number>()
+let birthSeq = 0
 
 /**
  * Publish a mounted panel so programmatic entry points can focus it and seed
@@ -72,9 +81,11 @@ export function registerLiveSideChat(
   tabId: string,
   seedDraft: (text: string) => void,
   readMeta: () => unknown,
+  readTitle: () => string,
 ): () => void {
-  const entry: LiveSideChat = { tabId, sessionId, seedDraft, readMeta }
+  const entry: LiveSideChat = { tabId, sessionId, seedDraft, readMeta, readTitle }
   liveSideChats.set(tabId, entry)
+  if (!birthOrder.has(tabId)) birthOrder.set(tabId, ++birthSeq)
   // 挂载即回放在 openTab→注册窗口内暂存的草稿（seedDraft 内有相位门）。
   const opening = openings.get(sessionId)
   if (opening !== undefined) {
@@ -123,16 +134,29 @@ export function liveSideChat(tabId: string): LiveSideChat | undefined {
   return liveSideChats.get(tabId)
 }
 
+/** 一个会话的全部存活面板（按打开序升序；native 下枚举 side tab 的唯一数据源）。 */
+export function liveSideChatsOf(sessionId: string): LiveSideChat[] {
+  return [...liveSideChats.values()]
+    .filter(entry => entry.sessionId === sessionId)
+    .sort((a, b) => (birthOrder.get(a.tabId) ?? 0) - (birthOrder.get(b.tabId) ?? 0))
+}
+
 /**
- * Most recently registered live panel of a session — the open-or-focus target
+ * Most recently OPENED live panel of a session — the open-or-focus target
  * when the legacy snapshot cannot see the tab (mirrors "last opened wins").
+ * 排序锚在首次注册序号上：面板重挂载不翻序（见 birthOrder）。
  */
 export function lastLiveSideChat(sessionId: string): LiveSideChat | undefined {
-  let found: LiveSideChat | undefined
-  for (const entry of liveSideChats.values()) {
-    if (entry.sessionId === sessionId) found = entry
-  }
-  return found
+  const all = liveSideChatsOf(sessionId)
+  return all[all.length - 1]
+}
+
+/** 插件卸载/重载时清场（apply 的 ctx.effect disposer 调用）。 */
+export function clearNativeRuntime(): void {
+  root = undefined
+  liveSideChats.clear()
+  openings.clear()
+  birthOrder.clear()
 }
 
 /** Native tab shell for reads that go through the layout snapshot (`readTab`). */

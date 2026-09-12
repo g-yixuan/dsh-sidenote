@@ -13,14 +13,18 @@ import { attachLocale, type LocaleServiceLike } from './locales.ts'
 import { createReflowStore } from './reflow.ts'
 import { registerSideChat } from './sidechat/index.tsx'
 import { registerAnnotations } from './annotate/index.tsx'
-import { setRootContext } from './sidechat/native.ts'
+import { clearNativeRuntime, setRootContext } from './sidechat/native.ts'
 
 export const inject = ['betterSidebar', 'sessions', 'workspaces', 'slots', 'connection', 'locale']
 
 export function apply(ctx: Context): void {
   // 侧栏 Tab 的原生面（better-sidebar >= 0.19）与宿主调用都要用插件根 ctx：
   // 面板拿到的是 slot 注入的收缩 ctx（inject 里没有 workspaces），见 native.ts。
-  setRootContext(ctx)
+  // fiber 撤销即清场（registry/openings/birthOrder 全模块级，重激活不得带病存活）。
+  ctx.effect(() => {
+    setRootContext(ctx)
+    return () => { clearNativeRuntime() }
+  }, 'dsh-sidenote: native bridge')
   // 跟随 DSH 通用设置里的语言（locale.preference，Host-backed，实时切换）。
   attachLocale(ctx.locale as LocaleServiceLike | undefined)
   // T2 off-face 全景探测：宿主升级后哪些能力降级了，开发者工具里一眼可见。
