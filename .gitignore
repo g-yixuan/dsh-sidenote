@@ -8,3 +8,6 @@ playwright-report/
 
 # 本地临时验证脚本（不进库）
 scripts/.tmp-*
+
+# 本地 agent 工作记录（不入库）
+.vibe/
