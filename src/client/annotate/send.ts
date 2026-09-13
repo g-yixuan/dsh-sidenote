@@ -26,7 +26,10 @@
  * 的按钮派发 `click`（`mousedown` 同样不发），只有 `pointerdown` 仍会到达它
  * （Chromium / Firefox / WebKit 实测一致）。因此对「空草稿导致 disabled 的
  * 主按钮」补一条 pointerdown 拦截；enabled 时一切照旧走 click，两条路径以
- * `button.disabled` 互斥，不会双驱动。
+ * `button.disabled` 互斥，不会双驱动。**该手势尾随的 click 必须一并吞掉**：
+ * 提交瞬间草稿变空，宿主主按钮随即按 `primaryStops = running && empty` 变身
+ * 「停止」，放行那一发 click 会立刻 `stop()` 掉刚发起的这一轮 —— 症状是
+ * `assistant/attempt` 空流、缺 `turn/end`、界面上却没有任何错误提示。
  */
 import type { Context, ConversationService, SessionId, SessionInput } from '../host/contracts.ts'
 import { buildProtocolBlock } from './format.ts'
@@ -63,6 +66,25 @@ function findSendButtonInCard(): HTMLButtonElement | null {
 export function installSendInterceptor(ctx: Context, store: AnnotationStore, reflow: ReflowStore): () => void {
   /** 重入/连按护栏：事务进行中吞掉命中识别面的 Enter/点击（不重复驱动）。 */
   let committing = false
+
+  /**
+   * 手势尾随 click 的一次性吞并。pointerdown 提交后，同一次点击的 click 仍会
+   * 到达，而此时宿主主按钮已按 `primaryStops = running && empty` 变身「停止」
+   * ——放行它会立刻 `stop()` 掉刚发起的这一轮（表现：assistant/attempt 空流、
+   * 缺 turn/end、且没有任何错误提示）。只吞这一发，并带兜底超时。
+   */
+  let swallowNextClick = false
+  let swallowTimer = 0
+  const clearSwallow = (): void => {
+    swallowNextClick = false
+    window.clearTimeout(swallowTimer)
+  }
+  const armSwallow = (): void => {
+    swallowNextClick = true
+    window.clearTimeout(swallowTimer)
+    // 兜底：手势没有产生 click（指针移出按钮等）时不至于吞掉后续无关点击。
+    swallowTimer = window.setTimeout(clearSwallow, 2_000)
+  }
 
   const currentSessionId = (): string => {
     try {
@@ -167,6 +189,13 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     if (!(target instanceof Element)) return
     const seat = target.closest('[data-composer-seat]')
     if (seat === null) return
+    // 尾随 click：必须先于按钮识别吞掉（见 armSwallow），否则宿主按「停止」处理。
+    if (swallowNextClick) {
+      clearSwallow()
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      return
+    }
     const button = target.closest('button')
     if (button === null) return
     if (committing) {
@@ -201,6 +230,8 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     const input = resolveInput(ctx, sessionId)
     if (input === undefined || input.state.getSnapshot().draft.trim() !== '') return
     if (!hijack()) return
+    // 同一次手势的 click 紧随其后，而主按钮此刻已变身「停止」——吞掉这一发。
+    armSwallow()
     event.preventDefault()
     event.stopImmediatePropagation()
   }

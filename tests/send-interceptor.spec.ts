@@ -90,6 +90,12 @@ function pointerDown(element: Element): Event {
   return event
 }
 
+function click(element: Element): Event {
+  const event = new MouseEvent('click', { bubbles: true, cancelable: true })
+  element.dispatchEvent(event)
+  return event
+}
+
 describe('send interceptor — 空草稿补位（disabled 主按钮）', () => {
   let harness: Harness | undefined
 
@@ -139,5 +145,21 @@ describe('send interceptor — 空草稿补位（disabled 主按钮）', () => {
     harness.dispose()
     pointerDown(document.querySelector('#send')!)
     expect(harness.submitted).toEqual([])
+  })
+
+  it('吞掉同一次手势的尾随 click（否则宿主按「停止」取消本轮）', () => {
+    harness = makeHarness({ draft: '', buttonDisabled: true })
+    pointerDown(document.querySelector('#send')!)
+    expect(harness.submitted).toEqual(['queue'])
+    // 提交后草稿已空 → 宿主主按钮按 primaryStops 变身「停止」，这一发必须被吞。
+    const event = click(document.querySelector('#send')!)
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  it('没有 pointerdown 时 click 不被误吞（正常拦截路径不受影响）', () => {
+    harness = makeHarness({ draft: '', buttonDisabled: true })
+    harness.removeAllAnnotations()
+    const event = click(document.querySelector('#send')!)
+    expect(event.defaultPrevented).toBe(false)
   })
 })
