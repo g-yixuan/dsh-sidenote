@@ -19,6 +19,14 @@
  * plain 且草稿清空 = 发出（markSent 只翻当时拼进去的那批 id，C2 P1-3）；
  * 回到 plain 而草稿未清 = 发送失败（宿主 notice + 留稿）→ 仅在草稿仍以
  * 我们拼的前缀开头时剥离回滚（C2 P2-3）；相位未到终态前绝不回滚。
+ *
+ * 空草稿补位：宿主主按钮在 `draft.trim()==="" && attachments.length===0` 时
+ * 被置为原生 `disabled`（dsh-client-ui-conversation 的 `empty`），而注释/回流
+ * 按设计不进草稿 —— 于是此时**没有任何可达的发送手势**：浏览器不为 disabled
+ * 的按钮派发 `click`（`mousedown` 同样不发），只有 `pointerdown` 仍会到达它
+ * （Chromium / Firefox / WebKit 实测一致）。因此对「空草稿导致 disabled 的
+ * 主按钮」补一条 pointerdown 拦截；enabled 时一切照旧走 click，两条路径以
+ * `button.disabled` 互斥，不会双驱动。
  */
 import type { Context, ConversationService, SessionId, SessionInput } from '../host/contracts.ts'
 import { buildProtocolBlock } from './format.ts'
@@ -175,10 +183,34 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     event.stopImmediatePropagation()
   }
 
+  /**
+   * 空草稿补位：只接管「因空草稿而 disabled」的主按钮。enabled 时立即放行，
+   * 正常路径仍由上面的 click 拦截负责 —— 二者以 button.disabled 互斥。
+   */
+  const onPointerDown = (event: PointerEvent): void => {
+    const target = event.target
+    if (!(target instanceof Element)) return
+    const button = target.closest('button')
+    if (!(button instanceof HTMLButtonElement)) return
+    if (!button.disabled) return
+    if (button !== findSendButtonInCard()) return
+    if (committing) return
+    // disabled 的成因必须是空草稿：离线/无模型等其它成因不属本拦截器授权范围。
+    const sessionId = currentSessionId()
+    if (sessionId === '') return
+    const input = resolveInput(ctx, sessionId)
+    if (input === undefined || input.state.getSnapshot().draft.trim() !== '') return
+    if (!hijack()) return
+    event.preventDefault()
+    event.stopImmediatePropagation()
+  }
+
   document.addEventListener('keydown', onKeyDown, true)
   document.addEventListener('click', onClick, true)
+  document.addEventListener('pointerdown', onPointerDown, true)
   return () => {
     document.removeEventListener('keydown', onKeyDown, true)
     document.removeEventListener('click', onClick, true)
+    document.removeEventListener('pointerdown', onPointerDown, true)
   }
 }
