@@ -217,6 +217,9 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
    * 正常路径仍由上面的 click 拦截负责 —— 二者以 button.disabled 互斥。
    */
   const onPointerDown = (event: PointerEvent): void => {
+    // 只认主键：右键/中键的 pointerdown 同样到达 disabled 按钮（已实证），
+    // 不检查会把「打开上下文菜单」误当发送手势。
+    if (event.button !== 0) return
     const target = event.target
     if (!(target instanceof Element)) return
     const button = target.closest('button')

@@ -83,9 +83,10 @@ function makeHarness(options: { draft?: string; buttonDisabled?: boolean } = {})
   }
 }
 
-function pointerDown(element: Element): Event {
+function pointerDown(element: Element, button = 0): Event {
   const Ctor = (globalThis as unknown as { PointerEvent?: typeof Event }).PointerEvent ?? Event
   const event = new Ctor('pointerdown', { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'button', { value: button })
   element.dispatchEvent(event)
   return event
 }
@@ -131,6 +132,13 @@ describe('send interceptor — 空草稿补位（disabled 主按钮）', () => {
     harness = makeHarness({ draft: '', buttonDisabled: true })
     pointerDown(document.querySelector('#extra')!)
     expect(harness.submitted).toEqual([])
+  })
+
+  it('非主键手势不接管：右键 pointerdown 不触发发送', () => {
+    harness = makeHarness({ draft: '', buttonDisabled: true })
+    const event = pointerDown(document.querySelector('#send')!, 2)
+    expect(harness.submitted).toEqual([])
+    expect(event.defaultPrevented).toBe(false)
   })
 
   it('没有待发内容时不接管：死按钮保持死的，不产生空提交', () => {
