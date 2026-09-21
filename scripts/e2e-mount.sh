@@ -110,11 +110,15 @@ minimumReleaseAgeExclude:
   - dsh-sidenote
 EOF
 
-# 步骤 2：先装硬依赖 better-sidebar（版本钉住：缺省 0.12.3 = 线上 profile 同版；
-# BS_VERSION 覆盖可做前向兼容验证，如 BS_VERSION=0.13.0）
+# 步骤 2：better-sidebar（缺省 0.12.3 = legacy 档；BS_VERSION=none = 无-BS
+# 直连档——optional peer 后的主路径；0.19.1 = 转发层共存档）。
 BS_VERSION="${BS_VERSION:-0.12.3}"
-say "安装 dsh-better-sidebar@${BS_VERSION}..."
-$DSH_CMD plugin --profile web add "dsh-better-sidebar@${BS_VERSION}"
+if [ "$BS_VERSION" != "none" ]; then
+  say "安装 dsh-better-sidebar@${BS_VERSION}..."
+  $DSH_CMD plugin --profile web add "dsh-better-sidebar@${BS_VERSION}"
+else
+  say "跳过 dsh-better-sidebar（无-BS 直连档）"
+fi
 say "安装本插件 tarball..."
 $DSH_CMD plugin --profile web add "file:$TARBALL"
 
@@ -122,10 +126,11 @@ node -e '
   const fs = require("fs");
   const p = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
   const bundles = p.dsh?.profile?.bundles ?? [];
-  const missing = ["dsh-better-sidebar", "dsh-sidenote"].filter((b) => !bundles.includes(b));
+  const required = process.argv[2] === "none" ? ["dsh-sidenote"] : ["dsh-better-sidebar", "dsh-sidenote"];
+  const missing = required.filter((b) => !bundles.includes(b));
   if (missing.length) { console.error("挂载未注册:", missing.join(", ")); process.exit(1); }
-' "$PROFILE_DIR/package.json"
-say "挂载已注册：dsh-better-sidebar + dsh-sidenote"
+' "$PROFILE_DIR/package.json" "$BS_VERSION"
+say "挂载已注册（BS_VERSION=$BS_VERSION）"
 
 # 步骤 3：伪造含已完成 turn 的会话（fork 路径无需模型凭证）
 SEED_SESSION_ID="$(node "$SCRIPT_DIR/seed-session.mjs" "$DSH_HOME" "$WORKSPACE_DIR")"
@@ -165,9 +170,14 @@ say "dsh web 就绪：${URL}（pid ${SERVER_PID}）"
 # 统一移进 tests/e2e/host.ts 的 createHostApi()/hostRpc()（lane beforeAll
 # 调用），0.1.1/0.1.2 双方言自动选择。
 
-# 步骤 5：Playwright 无头渲染 lane
+# 步骤 5：Playwright 无头渲染 lane（无-BS 档跑直连冒烟，BS 档跑全量 journey）
 say "运行 Playwright 无头渲染 lane..."
+if [ "$BS_VERSION" = "none" ]; then
+  SPEC_FILTER="mount-direct.e2e.ts"
+else
+  SPEC_FILTER="mount.e2e.ts"
+fi
 DSH_E2E_URL="$URL" DSH_E2E_WORKSPACE="$WORKSPACE_DIR" DSH_E2E_SEED_SESSION="$SEED_SESSION_ID" \
-  pnpm exec playwright test ${GREP_FILTER:+--grep "$GREP_FILTER"}
+  pnpm exec playwright test "$SPEC_FILTER" ${GREP_FILTER:+--grep "$GREP_FILTER"}
 
 say "通过：dsh-sidenote 挂载到真实 DSH 后无头渲染未崩溃"
