@@ -9,7 +9,7 @@
 import type { Context, ConversationSnapshot, ModelSelection, RemoteSessionModelFace, SessionBinding, SessionFace, SessionModelsResult, UiConversationLike } from '../host/contracts.ts'
 import { parseSideChatMeta, type SideChatMeta } from './model.ts'
 import { readTab, sidebarRightOf } from './open.ts'
-import { directNativeLeg, rootContext } from './native.ts'
+import { betterSidebarOf, directNativeLeg, rootContext } from './native.ts'
 import { readSideChatMeta, writeSideChatMeta } from './metaStore.ts'
 
 /**
@@ -100,7 +100,7 @@ export function updateTabMeta(ctx: Context, sessionId: string, tabId: string, mu
     })
     return
   }
-  const bs = ctx.betterSidebar
+  const bs = betterSidebarOf(ctx)
   if (bs === undefined) return
   const current = parseSideChatMeta(readTab(ctx, sessionId, tabId)?.meta)
   bs.updateTab(tabId, { meta: mutate(current) })
@@ -115,7 +115,7 @@ export function closeSideTab(ctx: Context, tabId: string, sessionId: string): vo
       return
     }
   }
-  ctx.betterSidebar?.closeTab(tabId, { sessionId })
+  betterSidebarOf(ctx)?.closeTab(tabId, { sessionId })
 }
 
 /**

@@ -39,10 +39,23 @@ export interface SideChatMetaRecord {
 
 const KEY_PREFIX = 'dsh-sidenote:side-meta:v1:'
 
-/** 本页面生命周期 id（模块级铸造，刷新即变）。 */
-export const SIDENOTE_RUN_ID: string = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-  ? crypto.randomUUID()
-  : `run-${Date.now()}-${Math.random().toString(36).slice(2)}`
+/**
+ * 本页面生命周期 id。**挂在 window 上**（审查 m3）：模块级铸造会在插件
+ * HMR/重载时换模块实例 → 新 runId 触发孤键清扫误删本页活记录。window
+ * 级持有跨模块重载稳定；页面刷新（真正的清扫时机）window 重建。
+ */
+export const SIDENOTE_RUN_ID: string = (() => {
+  if (typeof window !== 'undefined') {
+    const w = window as unknown as { __dshSidenoteRunId?: string }
+    if (w.__dshSidenoteRunId === undefined) {
+      w.__dshSidenoteRunId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `run-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    }
+    return w.__dshSidenoteRunId
+  }
+  return `run-ssr-${Math.random().toString(36).slice(2)}`
+})()
 
 function keyOf(sessionId: string, tabId: string): string {
   return `${KEY_PREFIX}${sessionId}:${tabId}`

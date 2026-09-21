@@ -25,7 +25,7 @@ import {
   sideTabTitle,
 } from './model.ts'
 import { readInputDraft, resolveSessionInput } from './composer.ts'
-import { directNativeLeg, focusNativeTab, lastLiveSideChat, liveSideChatsOf, markSideChatOpening, nativeSidebarHost, nativeTabShell, sideChatOpening } from './native.ts'
+import { betterSidebarOf, directNativeLeg, focusNativeTab, lastLiveSideChat, liveSideChatsOf, markSideChatOpening, nativeSidebarHost, nativeTabShell, sideChatOpening } from './native.ts'
 import { readSideChatMeta, sideChatMetasOf, writeSideChatMeta } from './metaStore.ts'
 import { t } from '../locales.ts'
 
@@ -66,7 +66,7 @@ export function readTab(ctx: Context, sessionId: string, tabId: string): Sidebar
       meta: direct,
     }
   }
-  const legacySnap = ctx.betterSidebar?.getSnapshot()
+  const legacySnap = betterSidebarOf(ctx)?.getSnapshot()
   const tab = collectTabs(legacySnap?.state).find(candidate => candidate.id === tabId)
   return tab ?? nativeTabShell(tabId, SIDE_TAB_TYPE)
 }
@@ -102,27 +102,26 @@ function openOrFocusDirect(ctx: Context, sessionId: string, draftText?: string):
       return true
     }
 
-    // 3. metaStore 里本会话的存活记录（面板卸载后 tab 仍在布局里——live
-    //    registry 此时已空）：显式聚焦 + 草稿走 metaStore.pendingDraft（面板
-    //    重挂载时由 pendingDraft effect 应用）。为何不走 openTab 的 params
-    //    通道：held 折叠时宿主其实会 navigate 新 params（对抗性审查 M1
-    //    实证），但面板存活时 reconcile 幂等不覆盖，params 不会被消费——
-    //    metaStore 是存活面板的唯一可达草稿通道。活伤修复点：此路径在
-    //    PR#3 前经 BS 转发时 seed.meta 进 records 层、原生 params 收不到，
-    //    草稿静默丢失。
+    // 3. metaStore 里本会话已有记录：草稿先落 metaStore.pendingDraft（存活
+    //    面板消费草稿的唯一通道——held 折叠时宿主虽 navigate 新 params
+    //    （审查 M1 实证），但 reconcile 幂等不覆盖既有记录，params 不会被
+    //    消费）。注意 metaStore 不作存活 Oracle（审查 M-3）：记录是否是
+    //    孤键（tab 已不在布局）由下一步的 openTab 裁定。
     const metas = sideChatMetasOf(sessionId)
     const target = metas[metas.length - 1]
-    if (target !== undefined) {
-      if (hasDraft) appendNativePendingDraft(sessionId, target.tabId, draftText!)
-      if (!focusNativeTab(ctx, target.tabId)) sidebarRightOf(ctx)?.focus(target.tabId)
-      return true
+    if (target !== undefined && hasDraft) {
+      appendNativePendingDraft(sessionId, target.tabId, draftText!)
     }
 
-    // 4. 铸造新开：初始 meta 经 params 随宿主管道投递（面板挂载 reconcile 落 store）。
+    // 4. openTab 即裁定：held 规则下同 kind 既有 tab 折叠聚焦（孤键/正常
+    //    存活都正确）；无既存则新铸（孤键自愈——面板 reconcile 幂等接管
+    //    旧记录，childId 在则走绑定恢复）。首开/新铸的初始 meta 经 params
+    //    随宿主管道投递（reconcile 落 store）；聚焦既存时 params 不消费
+    //    （见第 3 级），传 parentSessionId 足够。
     sidebarRightOf(ctx)!.openTab(SIDE_TAB_TYPE, {
       params: {
         parentSessionId: sessionId,
-        ...(hasDraft ? { pendingDraft: draftText! } : {}),
+        ...(hasDraft && target === undefined ? { pendingDraft: draftText! } : {}),
       },
     })
     markSideChatOpening(sessionId)
@@ -135,7 +134,7 @@ function openOrFocusDirect(ctx: Context, sessionId: string, draftText?: string):
 
 /** legacy 腿：布局快照即注册表的原始路径（BS < 0.19）。 */
 function openOrFocusLegacy(ctx: Context, sessionId: string, draftText?: string): boolean {
-  const bs = ctx.betterSidebar
+  const bs = betterSidebarOf(ctx)
   if (bs === undefined) return false
   try {
     const snapshot = bs.getSnapshot()
@@ -199,7 +198,7 @@ export function createSideChat(ctx: Context, sessionId: string, draftText?: stri
 }
 
 function createSideChatLegacy(ctx: Context, sessionId: string, draftText?: string): boolean {
-  const bs = ctx.betterSidebar
+  const bs = betterSidebarOf(ctx)
   if (bs === undefined) return false
   try {
     const snapshot = bs.getSnapshot()
@@ -250,7 +249,7 @@ export function sideChatTargetTitle(ctx: Context, sessionId: string): string | u
       if (last !== undefined) return last.number <= 1 ? t('tabBaseTitle') : `${t('tabBaseTitle')} ${last.number}`
       return t('tabBaseTitle')
     }
-    const snapshot = ctx.betterSidebar?.getSnapshot()
+    const snapshot = betterSidebarOf(ctx)?.getSnapshot()
     if (snapshot === undefined || snapshot.sessionId !== sessionId || snapshot.state === undefined) return undefined
     const existing = collectSideTabs(snapshot.state)
     if (existing.length > 0) return existing[existing.length - 1]!.title
@@ -285,7 +284,7 @@ export function reopenSideChat(ctx: Context, sessionId: string, childId: string,
       return false
     }
   }
-  const bs = ctx.betterSidebar
+  const bs = betterSidebarOf(ctx)
   if (bs === undefined) return false
   try {
     const snapshot = bs.getSnapshot()

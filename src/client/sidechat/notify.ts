@@ -10,7 +10,7 @@
 import type { Context } from '../host/contracts.ts'
 import { collectSideTabs, parseSideChatMeta } from './model.ts'
 import { openSessionWindow } from './lifecycle.ts'
-import { directNativeLeg } from './native.ts'
+import { betterSidebarOf, directNativeLeg } from './native.ts'
 import { sideChatMetaStore, sideChatMetasAll } from './metaStore.ts'
 import { showToast } from './toast.tsx'
 import { t } from '../locales.ts'
@@ -48,7 +48,7 @@ export function registerCompletionNotify(ctx: Context): void {
           return [{ childId: meta.childId, title }]
         })
       }
-      const snapshot = ctx.betterSidebar?.getSnapshot()
+      const snapshot = betterSidebarOf(ctx)?.getSnapshot()
       if (snapshot?.state === undefined) return []
       return collectSideTabs(snapshot.state).flatMap((tab) => {
         const childId = parseSideChatMeta(tab.meta).childId
@@ -101,7 +101,7 @@ export function registerCompletionNotify(ctx: Context): void {
     // notify）；legacy 腿 = betterSidebar 布局状态订阅。
     const offState = directNativeLeg(ctx)
       ? sideChatMetaStore.subscribe(rescan)
-      : (ctx.betterSidebar?.subscribeState(rescan) ?? (() => {}))
+      : (betterSidebarOf(ctx)?.subscribeState(rescan) ?? (() => {}))
     rescan()
     return () => {
       offState()

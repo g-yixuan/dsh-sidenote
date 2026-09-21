@@ -12,6 +12,58 @@
  */
 import { t } from './locales.ts'
 
+/**
+ * reflow 注入通道（Workitem_06）：优先经宿主路由 /sidenote/reflow 以
+ * agent.inject 落父会话日志（plugin-source 独立事件，context row 折叠）；
+ * 路由缺席/父会话无 live agent/超时 → 调用方回落搭车形态（发送拦截器
+ * 序列化前缀）。逐个 item 投递；成功项由调用方从 store 移除（不等发送
+ * 确认——注入已入 inbox，chip 消失表达「已注入」）。
+ *
+ * 有界等待：注入尝试绝不能拖住发送手势——300ms 超时即回落搭车。
+ */
+const REFLOW_ROUTE_TIMEOUT_MS = 300
+
+export interface ReflowInjectResult {
+  /** 成功注入（应从 store 移除、不拼前缀）的 item id 集。 */
+  injectedIds: ReadonlySet<number>
+}
+
+/** 尝试经宿主路由注入一批回流项；任何失败都降级为「全未注入」。 */
+export async function tryInjectReflows(parentSessionId: string, items: readonly ReflowItem[]): Promise<ReflowInjectResult> {
+  if (items.length === 0) return { injectedIds: new Set() }
+  const empty: ReflowInjectResult = { injectedIds: new Set() }
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => { controller.abort() }, REFLOW_ROUTE_TIMEOUT_MS)
+    let res: Response
+    try {
+      res = await fetch('/sidenote/reflow', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          parentSessionId,
+          // inject 形态下块是独立 plugin-source 消息（审查 M6：自造标签在
+          // 无用户正文相伴时可能被当第三方元数据）——前置一行自然语言引导
+          // 规避。搭车路径的块结构不变（气泡反解析兼容）。
+          items: items.map(item => ({
+            text: `以下是用户从侧边对话带回的结论（参考上下文）：\n\n${buildReflowBlock(item)}`,
+            sideTitle: item.sideTitle,
+          })),
+        }),
+        signal: controller.signal,
+      })
+    } finally {
+      clearTimeout(timer)
+    }
+    if (!res.ok) return empty
+    const data = await res.json() as { ok?: boolean }
+    if (data.ok !== true) return empty
+    return { injectedIds: new Set(items.map(item => item.id)) }
+  } catch {
+    return empty
+  }
+}
+
 /** 回流内容不截断（2026-09-06 用户裁定：静默截断让用户不知道内容少了，
  *  「会产生幻觉」；结论是用户亲手选择回流的，全文注入）。 */
 

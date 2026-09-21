@@ -21,17 +21,24 @@ interface MockFace {
   close: ReturnType<typeof vi.fn>
 }
 
-/** 直连腿 ctx：BS 0.19 版本信号 + sidebarRight mock 面 + sessions.list。 */
-function directCtx(): { ctx: Context, face: MockFace } {
+/** 直连腿 ctx：sidebarRight mock 面 + sessions.list；withBs=true 时 BS 0.19.1
+ *  在场（真实主路径——属性与 get 双通道可达），否则 BS 缺席（optional peer）。 */
+function directCtx(opts?: { withBs?: boolean }): { ctx: Context, face: MockFace } {
   const face: MockFace = {
     openTab: vi.fn(),
     focus: vi.fn(),
     close: vi.fn(),
   }
+  const bs = { version: '0.19.1' }
+  const withBs = opts?.withBs === true
   const ctx = {
-    betterSidebar: { version: '0.19.1' },
+    ...(withBs ? { betterSidebar: bs } : {}),
     sessions: { list: { getSnapshot: () => ({ current: SESSION, byId: {} }), subscribe: () => () => {} } },
-    get: (name: string) => (name === 'sidebarRight' ? face : undefined),
+    get: (name: string) => {
+      if (name === 'sidebarRight') return face
+      if (name === 'betterSidebar') return withBs ? bs : undefined
+      return undefined
+    },
   } as unknown as Context
   return { ctx, face }
 }
@@ -75,23 +82,29 @@ describe('openOrFocusSideChat（直连腿）', () => {
     dispose()
   })
 
-  it('活伤修复：tab 存活但面板已卸载（metaStore 有记录）→ 草稿写 pendingDraft 并 focus，不开新 tab 不丢草稿', () => {
+  it('活伤修复：metaStore 有记录 → 草稿写 pendingDraft + openTab（held 折叠聚焦由宿主裁定）', () => {
     const { ctx, face } = directCtx()
     liveMeta('tab-old', { childId: 'child-1' })
     expect(openOrFocusSideChat(ctx, SESSION, '这段什么意思')).toBe(true)
-    expect(face.openTab).not.toHaveBeenCalled()
-    expect(face.focus).toHaveBeenCalledWith('tab-old')
+    // openTab 即裁定（审查 M-3）：tab 在 → held 聚焦；不在（孤键）→ 新铸自愈。
+    // 有存活记录时 params 不带 pendingDraft（草稿走 metaStore——存活面板的
+    // 唯一可达通道，reconcile 幂等不消费 params）。
+    expect(face.openTab).toHaveBeenCalledWith(SIDE_TAB_TYPE, {
+      params: { parentSessionId: SESSION },
+    })
     expect(readSideChatMeta(SESSION, 'tab-old')?.pendingDraft).toBe('这段什么意思')
-    // 再投一次：换行追加（appendDraftText 语义）
+    // 再投一次：清掉 openings 窗口标记（第一次 openTab 后标的），
+    // 让第二投仍走 metaStore 追加（appendDraftText 语义）。
+    clearNativeRuntime()
     expect(openOrFocusSideChat(ctx, SESSION, '追问')).toBe(true)
     expect(readSideChatMeta(SESSION, 'tab-old')?.pendingDraft).toBe('这段什么意思\n追问')
   })
 
-  it('createSideChat 在单实例期折叠为 openOrFocus（聚焦既有 + 草稿投递）', () => {
+  it('createSideChat 在单实例期折叠为 openOrFocus（openTab 聚焦既有 + 草稿投递）', () => {
     const { ctx, face } = directCtx()
     liveMeta('tab-old')
     expect(createSideChat(ctx, SESSION, '带草稿')).toBe(true)
-    expect(face.openTab).not.toHaveBeenCalled()
+    expect(face.openTab).toHaveBeenCalledWith(SIDE_TAB_TYPE, { params: { parentSessionId: SESSION } })
     expect(readSideChatMeta(SESSION, 'tab-old')?.pendingDraft).toBe('带草稿')
   })
 
@@ -125,6 +138,21 @@ describe('sideChatTargetTitle（直连腿）', () => {
     expect(sideChatTargetTitle(ctx, SESSION)).toBe('Side')
     liveMeta('tab-2', { number: 2 })
     expect(sideChatTargetTitle(ctx, SESSION)).toBe('Side 2')
+  })
+})
+
+describe('BS ≥ 0.19 在场的真实主路径（审查 n1：旧 mock 全部从 BS 缺席分支进入）', () => {
+  it('openOrFocus 与 reopen 与 BS 缺席分支行为一致（直连编排不依赖 BS）', () => {
+    const { ctx, face } = directCtx({ withBs: true })
+    expect(openOrFocusSideChat(ctx, SESSION, '问一下')).toBe(true)
+    expect(face.openTab).toHaveBeenCalledWith(SIDE_TAB_TYPE, {
+      params: { parentSessionId: SESSION, pendingDraft: '问一下' },
+    })
+    const { ctx: ctx2, face: face2 } = directCtx({ withBs: true })
+    expect(reopenSideChat(ctx2, SESSION, 'child-9')).toBe(true)
+    expect(face2.openTab).toHaveBeenCalledWith(SIDE_TAB_TYPE, {
+      params: { parentSessionId: SESSION, childId: 'child-9' },
+    })
   })
 })
 

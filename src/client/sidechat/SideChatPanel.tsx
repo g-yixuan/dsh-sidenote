@@ -52,6 +52,17 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
   const [forkError, setForkError] = useState<string | null>(null)
   const forkStarted = useRef(false)
 
+  // 绑定丢失自愈（审查 M-2）：meta 记录被清（多窗口清扫/HMR/occurrence
+  // 替换）时 childId 从有到无——重置 fork 守卫允许重 fork，而不是永久卡
+  // 在 forking（子会话可能仍在盘，重 fork 是开销而非错误）。
+  const prevChildId = useRef(childId)
+  useEffect(() => {
+    if (prevChildId.current !== undefined && childId === undefined) {
+      forkStarted.current = false
+    }
+    prevChildId.current = childId
+  }, [childId])
+
   // 程序化入口（/side、bridge 划选提问）打开 Tab 时面板可能处于折叠态，
   // 挂载即幂等展开（编排细节在 lifecycle.ts）。
   const { store } = props

@@ -38,6 +38,29 @@ export function rootContext(fallback: Context): Context {
 }
 
 /**
+ * betterSidebar 服务的唯一安全读取面（对抗性审查 B-1）：cordis 对「未
+ * provide 且未 inject」的服务**属性访问抛错**（`cannot get property without
+ * inject`），`?.` 也挡不住；`ctx.get` 返回 undefined 不抛。optional peer
+ * 后 betterSidebar 不在 inject 清单——一切消费点必须走这里。
+ */
+export function betterSidebarOf(ctx: Context): Context['betterSidebar'] {
+  // ctx.get 优先（cordis 官方探测面：未 provide 返回 undefined 不抛）；
+  // 返回空再试属性访问（测试 mock 形态；真实 cordis 对未 inject 的服务
+  // 属性访问抛错——包 try）。
+  try {
+    const viaGet = ctx.get('betterSidebar') as Context['betterSidebar']
+    if (viaGet !== undefined && viaGet !== null) return viaGet
+  } catch {
+    // 无 get 面：落属性访问。
+  }
+  try {
+    return ctx.betterSidebar
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * 直连腿判定（WI-05）：tab 直连注册进原生右栏的条件。
  * - betterSidebar ≥ 0.19 ⇒ 宿主必 ≥ 0.1.5（BS 0.19 只支持 0.1.5）⇒ 直连；
  * - betterSidebar 整体缺席（optional peer 后的合法形态）⇒ 只能直连；
@@ -45,17 +68,7 @@ export function rootContext(fallback: Context): Context {
  *   其余功能（注释/回流搭车）存活——静默缺席优于崩。
  */
 export function directNativeLeg(ctx: Context): boolean {
-  let bs: unknown
-  try {
-    bs = ctx.get('betterSidebar')
-  } catch {
-    // 无 get 面的测试 mock 等：回退属性访问（cordis 属性门禁对未声明服务抛错）。
-    try {
-      bs = ctx.betterSidebar
-    } catch {
-      bs = undefined
-    }
-  }
+  const bs = betterSidebarOf(ctx)
   if (bs === undefined || bs === null) return true
   return nativeSidebarHost(ctx)
 }
@@ -67,7 +80,7 @@ export function directNativeLeg(ctx: Context): boolean {
  */
 export function nativeSidebarHost(ctx: Context): boolean {
   try {
-    const version = ctx.betterSidebar?.version
+    const version = betterSidebarOf(ctx)?.version
     if (version === undefined) return false
     const [major = 0, minor = 0] = version.split('.').map(part => Number.parseInt(part, 10))
     return major > 0 || minor >= NATIVE_SIDEBAR_MINOR

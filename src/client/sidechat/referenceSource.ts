@@ -12,7 +12,7 @@
  */
 import type { Context } from '../host/contracts.ts'
 import { collectSideTabs, parseSideChatMeta } from './model.ts'
-import { directNativeLeg } from './native.ts'
+import { betterSidebarOf, directNativeLeg } from './native.ts'
 import { sideChatMetasAll, sideChatMetasOf } from './metaStore.ts'
 import { t } from '../locales.ts'
 import { transcriptOf, type ChatMessage } from '../chat/transcript.ts'
@@ -48,7 +48,7 @@ export async function serializeSideChatRef(ctx: Context, childId: string): Promi
         const meta = sideChatMetasAll().find(m => m.childId === childId)
         if (meta !== undefined) return meta.number <= 1 ? t('tabBaseTitle') : `${t('tabBaseTitle')} ${meta.number}`
       }
-      for (const tab of collectSideTabs(ctx.betterSidebar?.getSnapshot().state)) {
+      for (const tab of collectSideTabs(betterSidebarOf(ctx)?.getSnapshot().state)) {
         if (parseSideChatMeta(tab.meta).childId === childId) return tab.title
       }
     } catch { /* fall through */ }
@@ -89,7 +89,7 @@ export function registerSideChatReferenceSource(ctx: Context): void {
                 })),
             )
           }
-          const snapshot = ctx.betterSidebar?.getSnapshot()
+          const snapshot = betterSidebarOf(ctx)?.getSnapshot()
           if (snapshot === undefined || snapshot.sessionId !== session.sessionId || snapshot.state === undefined) return Promise.resolve([])
           return Promise.resolve(
             collectSideTabs(snapshot.state).map(tab => ({
@@ -120,7 +120,7 @@ export function registerSideChatReferenceSource(ctx: Context): void {
             },
           }
         }
-        const snapshot = ctx.betterSidebar?.getSnapshot()
+        const snapshot = betterSidebarOf(ctx)?.getSnapshot()
         if (snapshot === undefined || snapshot.sessionId !== session.sessionId || snapshot.state === undefined) return undefined
         const tab = collectSideTabs(snapshot.state).find(tab => tab.title === pick.candidate.name)
         const childId = tab === undefined ? undefined : parseSideChatMeta(tab.meta).childId

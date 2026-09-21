@@ -34,14 +34,23 @@ import { registerToastHost } from './toast.tsx'
 import { registerCompletionNotify } from './notify.ts'
 
 export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
-  // 双腿互斥分路：BS ≥ 0.19 ⇒ 宿主必是 DSH ≥ 0.1.5（BS 0.19 只支持 0.1.5）
-  // ⇒ 走直连（sidebarRightTabs 经 ctx.inject 等服务，晚到不双份）；
-  // BS < 0.19 ⇒ 宿主 ≤ 0.1.2 ⇒ 无原生面，走 legacy registerTab。
-  // （同 kind 双注册会被原生注册表判碰撞 throw，故必须互斥。）
-  const bs = ctx.betterSidebar
-  if (directNativeLeg(ctx)) {
-    registerNativeSideChatTab(ctx, reflow)
-  } else if (bs !== undefined) {
+  // 反应式双腿注册（对抗性审查 M-1：不做 apply 期一次性判定——BS 可能晚于
+  // 本插件就绪，一次性快照会让旧宿主静默缺席）：两条腿各自等自己的前提服务。
+  // - sidebarRightTabs 到（宿主 ≥ 0.1.5）⇒ 直连注册（native-tab.tsx 内 ctx.inject）；
+  // - betterSidebar 到且 < 0.19（宿主 ≤ 0.1.2）⇒ legacy 注册。
+  // 互斥：BS ≥ 0.19 时本分支不注册（原生面必在，直连腿接管）；同 kind 双注册
+  // 会被原生注册表判碰撞 throw，本结构天然不冲突。
+  registerNativeSideChatTab(ctx, reflow)
+  ctx.inject(['betterSidebar'], (injected) => {
+    const bs = injected.get('betterSidebar') as Context['betterSidebar']
+    if (bs === undefined) return
+    // 版本判定：≥ 0.19 的 BS 是转发层（宿主有原生面，直连腿负责），不注册。
+    try {
+      const [major = 0, minor = 0] = bs.version.split('.').map(part => Number.parseInt(part, 10))
+      if (major > 0 || minor >= 19) return
+    } catch {
+      // 版本不可解析：按 legacy 处理（保守可用）。
+    }
     ctx.effect(
       () => bs.registerTab({
         id: SIDE_TAB_TYPE,
@@ -77,7 +86,7 @@ export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
       }),
       'dsh-sidenote: side chat tab',
     )
-  }
+  })
 
   // annotate 桥：「在侧边聊天中提问」= 新建或聚焦一个侧边聊天 Tab 并写入草稿。
   ctx.effect(() => {

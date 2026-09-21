@@ -97,6 +97,8 @@ function click(element: Element): Event {
   return event
 }
 
+const flushMicrotasks = (): Promise<void> => new Promise(resolve => { setTimeout(resolve, 0) })
+
 describe('send interceptor — 空草稿补位（disabled 主按钮）', () => {
   let harness: Harness | undefined
 
@@ -106,9 +108,11 @@ describe('send interceptor — 空草稿补位（disabled 主按钮）', () => {
     document.body.innerHTML = ''
   })
 
-  it('接管因空草稿而 disabled 的主按钮：拼入协议块后提交', () => {
+  it('接管因空草稿而 disabled 的主按钮：拼入协议块后提交', async () => {
     harness = makeHarness({ draft: '', buttonDisabled: true })
     const event = pointerDown(document.querySelector('#send')!)
+    // Workitem_06：inject 尝试使提交落到 microtask 之后（有界等待）。
+    await flushMicrotasks()
     expect(harness.submitted).toEqual(['queue'])
     expect(harness.drafts).toHaveLength(1)
     expect(harness.drafts[0]).toContain('I annotated 1 passage(s) of the conversation above:')
@@ -155,9 +159,10 @@ describe('send interceptor — 空草稿补位（disabled 主按钮）', () => {
     expect(harness.submitted).toEqual([])
   })
 
-  it('吞掉同一次手势的尾随 click（否则宿主按「停止」取消本轮）', () => {
+  it('吞掉同一次手势的尾随 click（否则宿主按「停止」取消本轮）', async () => {
     harness = makeHarness({ draft: '', buttonDisabled: true })
     pointerDown(document.querySelector('#send')!)
+    await flushMicrotasks()
     expect(harness.submitted).toEqual(['queue'])
     // 提交后草稿已空 → 宿主主按钮按 primaryStops 变身「停止」，这一发必须被吞。
     const event = click(document.querySelector('#send')!)

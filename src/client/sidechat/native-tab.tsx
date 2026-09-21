@@ -107,8 +107,17 @@ interface NativeBodyInjected {
   readonly reflow: ReflowStore
 }
 
-/** 面板体：原生 tab → SideChatPanel 的 TabComponentProps 合成适配。 */
+/** 面板体外壳：把 useTabInfo（可能对未提交 record throw）也包进错误边界。 */
 function NativeSideChatBody(props: NativeBodyInjected & NativeTabFrameworkProps): ReactNode {
+  return (
+    <NativeTabBoundary>
+      <NativeSideChatBodyInner {...props} />
+    </NativeTabBoundary>
+  )
+}
+
+/** 面板体：原生 tab → SideChatPanel 的 TabComponentProps 合成适配。 */
+function NativeSideChatBodyInner(props: NativeBodyInjected & NativeTabFrameworkProps): ReactNode {
   const { ctx, sessionId, reflow, useTabInfo } = props
   const info: NativeTabInfo = useTabInfo()
   const nativeTab = info.tab
@@ -135,15 +144,19 @@ function NativeSideChatBody(props: NativeBodyInjected & NativeTabFrameworkProps)
   const meta = readSideChatMeta(sessionId, nativeTab.id) ?? reconciledMeta
 
   // meta 清场：tab record 的 signal 在 record 消失（真关闭）时 abort——
-  // 面板卸载后一拍检查，真关闭清 meta；未 abort（切会话/重挂载）不动，
-  // reconcile 幂等。后悔药登记（recentClosed）由 SideChatPanel 的卸载
-  // effect 负责（挂载自愈清误记），这里不双写。
+  // 直接监听 abort 事件（精确时点；切会话/重挂载不 abort，不动）。
+  // 后悔药登记（recentClosed）由 SideChatPanel 的卸载 effect 负责
+  // （挂载自愈清误记），这里不双写。
   const tabSignal = nativeTab.signal
-  useEffect(() => () => {
-    setTimeout(() => {
-      if (tabSignal.aborted) dropSideChatMeta(sessionId, nativeTab.id)
-    }, 0)
-  }, [nativeTab.id, tabSignal])
+  useEffect(() => {
+    const onAbort = (): void => { dropSideChatMeta(sessionId, nativeTab.id) }
+    if (tabSignal.aborted) {
+      onAbort()
+      return
+    }
+    tabSignal.addEventListener('abort', onAbort, { once: true })
+    return () => { tabSignal.removeEventListener('abort', onAbort) }
+  }, [nativeTab.id, tabSignal, sessionId])
 
   const tab: SidebarTab = {
     id: nativeTab.id,
@@ -154,9 +167,7 @@ function NativeSideChatBody(props: NativeBodyInjected & NativeTabFrameworkProps)
 
   return (
     <div className={css.nativeHost} data-dsh-sidenote-native-host="">
-      <NativeTabBoundary>
-        <SideChatPanel ctx={ctx} store={undefined} scope={scope} tab={tab} visible={nativeTab.visible} reflow={reflow} />
-      </NativeTabBoundary>
+      <SideChatPanel ctx={ctx} store={undefined} scope={scope} tab={tab} visible={nativeTab.visible} reflow={reflow} />
     </div>
   )
 }
