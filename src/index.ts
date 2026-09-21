@@ -10,9 +10,9 @@
  * 为什么需要宿主半包：`agent.inject` 只在宿主侧可达（agents registry）；
  * 客户端的 session.prompt 只有 queue/steer（会唤醒开轮次，语义不符）。
  *
- * 降级纪律：webServer/agents/webRuntime 任一面缺席（headless/CLI 形态、
- * 旧宿主）→ 路由不注册，客户端回落搭车形态（发送拦截器内序列化前缀）——
- * 能力可选，绝不阻塞插件装载。
+ * 降级纪律：webServer 面缺席（headless/CLI 形态）→ 路由不注册，客户端
+ * 回落搭车形态；agents/webRuntime 缺席 → handler 内降级（no-live-agent /
+ * fence 退化为只信 loopback——fail-closed）。能力可选，绝不阻塞插件装载。
  *
  * 信任栅栏（对抗性审查 M3）：本路由能把任意文本注入用户主会话上下文
  * （间接 prompt injection 面）——每个请求先过 trust-fence（移植自
