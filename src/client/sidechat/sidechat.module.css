@@ -3,6 +3,17 @@
  * （声明在 <body> 与 body[data-ds-dark-theme] 上），跟随皮肤系统，
  * 不做任何每皮肤适配、不写死颜色。
  */
+
+/* 直连原生腿的 tab 体宿主：原生 .paneBody 是有确定高度的块级滚动容器
+ * （非 flex），面板根依赖 flex:1/height:100% 契约——包一层列 flex 宿主
+ * 把高度链接通（better-sidebar .nativeTabHost 同款）。 */
+.nativeHost {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
 .root {
   position: relative; /* jumpBottom 浮动按钮的定位锚 */
   display: flex;

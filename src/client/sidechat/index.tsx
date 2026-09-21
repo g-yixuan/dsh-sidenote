@@ -24,6 +24,7 @@ import { SIDE_TAB_TYPE, canForkFrom, collectSideTabs, mintSideTabId, sideTabTitl
 import { parseSideChatMeta } from './model.ts'
 import { recordClosedSideChat } from './recentClosed.ts'
 import { liveSideChatsOf, nativeSidebarHost } from './native.ts'
+import { registerNativeSideChatTab } from './native-tab.tsx'
 import { openOrFocusSideChat, sideChatTargetTitle } from './open.ts'
 import { t } from '../locales.ts'
 import { registerHeaderEntry } from './header.tsx'
@@ -33,41 +34,49 @@ import { registerToastHost } from './toast.tsx'
 import { registerCompletionNotify } from './notify.ts'
 
 export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
-  ctx.effect(
-    () => ctx.betterSidebar.registerTab({
-      id: SIDE_TAB_TYPE,
-      title: () => t('menuTitle'),
-      icon: (size: number) => <IconNewChatOutline16 size={size} />,
-      order: 60,
-      available: (availableCtx, scope) => canForkFrom(availableCtx, scope.sessionId),
-      createTab: (state) => {
-        // 标题编号数据源：legacy 读布局快照；native 的 tab 不进快照，并入
-        // live registry（当前会话——openTab 的会话守卫保证 state 属在屏会话）。
-        const titles = collectSideTabs(state).map(tab => tab.title)
-        if (nativeSidebarHost(ctx)) {
-          const current = ctx.sessions.list.getSnapshot().current
-          if (current !== undefined) {
-            for (const live of liveSideChatsOf(current)) titles.push(live.readTitle())
+  // 双腿互斥分路：BS ≥ 0.19 ⇒ 宿主必是 DSH ≥ 0.1.5（BS 0.19 只支持 0.1.5）
+  // ⇒ 走直连（sidebarRightTabs 经 ctx.inject 等服务，晚到不双份）；
+  // BS < 0.19 ⇒ 宿主 ≤ 0.1.2 ⇒ 无原生面，走 legacy registerTab。
+  // （同 kind 双注册会被原生注册表判碰撞 throw，故必须互斥。）
+  if (nativeSidebarHost(ctx)) {
+    registerNativeSideChatTab(ctx, reflow)
+  } else {
+    ctx.effect(
+      () => ctx.betterSidebar.registerTab({
+        id: SIDE_TAB_TYPE,
+        title: () => t('menuTitle'),
+        icon: (size: number) => <IconNewChatOutline16 size={size} />,
+        order: 60,
+        available: (availableCtx, scope) => canForkFrom(availableCtx, scope.sessionId),
+        createTab: (state) => {
+          // 标题编号数据源：legacy 读布局快照；native 的 tab 不进快照，并入
+          // live registry（当前会话——openTab 的会话守卫保证 state 属在屏会话）。
+          const titles = collectSideTabs(state).map(tab => tab.title)
+          if (nativeSidebarHost(ctx)) {
+            const current = ctx.sessions.list.getSnapshot().current
+            if (current !== undefined) {
+              for (const live of liveSideChatsOf(current)) titles.push(live.readTitle())
+            }
           }
-        }
-        return { tab: { id: mintSideTabId(), type: SIDE_TAB_TYPE, title: sideTabTitle(titles) } }
-      },
-      // × 即焚观感 + 后悔药：关 Tab 时登记「最近关闭」（会话本体仍归档在盘）。
-      onClose: (closedTab) => {
-        const meta = parseSideChatMeta(closedTab.meta)
-        if (meta.childId !== undefined && meta.parentSessionId !== undefined) {
-          recordClosedSideChat(meta.parentSessionId, {
-            childId: meta.childId,
-            parentSessionId: meta.parentSessionId,
-            title: closedTab.title,
-            closedAt: Date.now(),
-          })
-        }
-      },
-      component: (props) => <SideChatPanel {...props} reflow={reflow} />,
-    }),
-    'dsh-sidenote: side chat tab',
-  )
+          return { tab: { id: mintSideTabId(), type: SIDE_TAB_TYPE, title: sideTabTitle(titles) } }
+        },
+        // × 即焚观感 + 后悔药：关 Tab 时登记「最近关闭」（会话本体仍归档在盘）。
+        onClose: (closedTab) => {
+          const meta = parseSideChatMeta(closedTab.meta)
+          if (meta.childId !== undefined && meta.parentSessionId !== undefined) {
+            recordClosedSideChat(meta.parentSessionId, {
+              childId: meta.childId,
+              parentSessionId: meta.parentSessionId,
+              title: closedTab.title,
+              closedAt: Date.now(),
+            })
+          }
+        },
+        component: (props) => <SideChatPanel {...props} reflow={reflow} />,
+      }),
+      'dsh-sidenote: side chat tab',
+    )
+  }
 
   // annotate 桥：「在侧边聊天中提问」= 新建或聚焦一个侧边聊天 Tab 并写入草稿。
   ctx.effect(() => {

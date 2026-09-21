@@ -19,7 +19,7 @@ import { useComposer, type Composer } from './composer.ts'
 import { appendDraftText, clearPendingDraft, parseSideChatMeta, phaseOf } from './model.ts'
 import { transcriptOf } from '../chat/transcript.ts'
 import { EmptyState, MessageList, StateScreen } from './rows.tsx'
-import { chatSourceOf, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, updateTabMeta } from './lifecycle.ts'
+import { chatSourceOf, closeSideTab, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, updateTabMeta } from './lifecycle.ts'
 import { nativeSidebarHost, registerLiveSideChat } from './native.ts'
 import { dropClosedSideChat, recordClosedSideChat } from './recentClosed.ts'
 import { ToolCard } from '../chat/ToolCard.tsx'
@@ -253,7 +253,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
       try {
         const promoted = await ctx.sessions.fork({ sessionId: childId, increaseTitle: true })
         ctx.sessions.open(promoted)
-        ctx.betterSidebar.closeTab(tab.id, { sessionId: scope.sessionId })
+        closeSideTab(ctx, tab.id, scope.sessionId)
         showToast(t('promoteDone'))
       } catch (error) {
         console.warn('[dsh-sidenote] 保存为正式会话失败:', error)

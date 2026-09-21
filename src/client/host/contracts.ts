@@ -371,6 +371,8 @@ export interface SlotRegisterOptions {
 export type KnownSlotKey =
   | 'conversation.input.dock'
   | 'conversation.session.header.utilities'
+  | 'sidebar.right.pane.tab'
+  | 'sidebar.right.pane.tab.title'
 
 /** The client slots service face (register returns the disposer). */
 export interface SlotsService {
@@ -426,6 +428,81 @@ export interface TokenSpan {
 export interface Context {
   /** The slot registry (provided by dsh-client-runtime, mounted before this plugin). */
   slots: SlotsService
+}
+
+// ── DSH 原生右栏（dsh-client-ui-sidebar-right，0.1.5-rc.1+）─────────────────
+// 权威：<dsh install>/node_modules/@deepseek-ai/dsh-client-ui-sidebar-right/
+// lib/types/client/{service,tab-registry,contract/slots,tab-info}.d.ts。
+// 这些面不进 inject 数组（optional——缺席即走 legacy 腿），一律 ctx.get 探测。
+
+/** 原生 tab 类型注册表（ctx.sidebarRightTabs）。 */
+export interface NativeTabRegistry {
+  register(definition: NativeTabDefinition): () => void
+}
+
+export interface NativeTabDefinition {
+  /** 实现 id（槽 key），跨注册唯一——用包名前缀防碰撞。 */
+  id: string
+  /** 类型判别符：`openTab(kind)` 依此打开。 */
+  kind: string
+  patterns?: readonly string[]
+  priority?: 'extension' | 'builtin' | 'fallback'
+  canOpen?: (address: string) => boolean
+  /** tab 芯片初始文案，open 时被捕获进布局记录。 */
+  title: (address: string) => string
+  guide?: readonly NativeGuideEntry[]
+}
+
+export interface NativeGuideEntry {
+  order: number
+  title: () => string
+  description?: () => string
+  icon?: unknown
+}
+
+/** 原生 tab 记录（tab-info.d.ts 的 TabRecord 子集镜像）。 */
+export interface NativeTabRecord {
+  id: string
+  kind: string
+  title: string
+  visible: boolean
+  navigation: { address: string, params?: unknown }
+  /** record 消失（tab 关闭）或插件卸载时 abort（权威：tab-info.d.ts）。 */
+  readonly signal?: AbortSignal
+}
+
+/** useTabInfo() 的返回（槽框架注入的 tab 信息 hook）。 */
+export interface NativeTabInfo {
+  tab: NativeTabRecord
+  [key: string]: unknown
+}
+
+/** 槽框架加到每个 tab body/title 组件上的 props。 */
+export interface NativeTabFrameworkProps {
+  useTabInfo: () => NativeTabInfo
+}
+
+/**
+ * 原生右栏服务（ctx.sidebarRight；0.1.5-rc.2 的 controller 面）。
+ * 注意：
+ * - 快照枚举（getSnapshot/subscribe）在每会话的 surface store 上，**不在
+ *   controller 上**——插件侧不可达，不要试图枚举原生布局；存活面板枚举走
+ *   live registry（面板挂载自登记），关闭检测走 tab record 的 signal。
+ * - openTab 只写在屏会话；跨会话的 openTabIn/closeIn 在具体类上
+ *   （不在接口里），需要时结构化探测。
+ */
+export interface SidebarRightService {
+  openTab(kind: string, options?: { revealIfOpened?: boolean, params?: unknown }): void
+  close(tabId: string): void
+  isExpanded(): boolean
+  toggleExpanded(): void
+  focus(tabId: string): void
+}
+
+/** SessionListSnapshot.byId 行补 cwd（实例编号与 scope 合成用）。 */
+export interface SessionListRow {
+  blank?: boolean
+  cwd?: string
 }
 
 /** SessionInput completion for annotate: the live state store + the (unused) chip insert face. */
