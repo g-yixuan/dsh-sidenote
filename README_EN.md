@@ -10,7 +10,7 @@
   <a href="https://www.npmjs.com/package/dsh-sidenote"><img src="https://img.shields.io/npm/v/dsh-sidenote" alt="npm version"></a>
   <a href="https://github.com/g-yixuan/dsh-sidenote/actions/workflows/ci.yml"><img src="https://github.com/g-yixuan/dsh-sidenote/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/peer-dsh--better--sidebar-informational" alt="requires dsh-better-sidebar">
+  <img src="https://img.shields.io/badge/peer-none-informational" alt="no required peer dependencies">
 </p>
 
 <p align="center">
@@ -21,13 +21,11 @@
 
 ## Install
 
-Prerequisite: [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) (hard dependency).
-
 ```bash
 dsh plugin --profile web add dsh-sidenote
 ```
 
-Three steps: **①** install the dependency → **②** install this plugin → **③** click "Side" in the session header, or just select any reply text.
+**One step, no prerequisites.** Then click "Side" in the session header, or just select any reply text.
 
 For local development, mount with `dsh plugin --profile web add link:<repo path>` (client changes hot-reload; host changes need a `dsh web` restart).
 
@@ -74,12 +72,12 @@ For local development, mount with `dsh plugin --profile web add link:<repo path>
 
 ## Compatibility
 
-| DSH | dsh-better-sidebar | Status |
+| DSH | dsh-better-sidebar | Behavior |
 |---|---|---|
-| 0.1.1-rc.x | ≥ 0.12.3 | ✅ dual-lane CI matrix |
-| 0.1.2-rc.x | ≥ 0.18.0 | ✅ dual-lane CI matrix |
+| ≥ 0.1.5-rc.1 | not required | **direct on the DSH native right sidebar** |
+| ≤ 0.1.2-rc.x | ≤ 0.18.x (required) | legacy layout hosting |
 
-A weekly canary tracks new host releases; when a host capability is absent, the plugin degrades by capability instead of crashing.
+The plugin degrades by capability when a host face is absent (never crashes the page); it coexists with dsh-better-sidebar natively (independent registrations, no dependency).
 
 ## Design notes
 

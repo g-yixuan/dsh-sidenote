@@ -34,7 +34,7 @@
 import type { Context, ConversationService, SessionId, SessionInput } from '../host/contracts.ts'
 import { buildProtocolBlock } from './format.ts'
 import type { AnnotationStore } from './model.ts'
-import { buildReflowBlock, type ReflowStore } from '../reflow.ts'
+import { buildReflowBlock, tryInjectReflows, type ReflowItem, type ReflowStore } from '../reflow.ts'
 
 /** Resolve the per-session input facade, degrading to undefined (never throws). */
 export function resolveInput(ctx: Context, sessionId: SessionId): SessionInput | undefined {
@@ -94,6 +94,76 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     }
   }
 
+  /**
+   * 异步提交（Workitem_06）：inject 尝试（有界等待，见 tryInjectReflows）
+   * 在拼稿前——成功项以 plugin-source 事件进父会话日志（不进消息前缀），
+   * 且立即从 reflow store 移除（chip 消失表达「已注入」）；失败/超时项
+   * 照常搭车（拼进前缀）。正文取提交瞬间的最新草稿（注入等待窗口内的
+   * 用户输入不丢）。
+   */
+  const commitAsync = async (sessionId: SessionId, input: SessionInput, draftAtHijack: string, reflows: ReturnType<typeof reflow.list>, active: ReturnType<typeof store.listActive>): Promise<void> => {
+    // 1. reflow 注入尝试（Workitem_06）
+    const { injectedIds } = await tryInjectReflows(sessionId, reflows)
+    for (const id of injectedIds) reflow.remove(id)
+    const hitchhikers = reflows.filter(item => !injectedIds.has(item.id))
+
+    // 2. 拼稿：回流上下文（背景） → 注释协议块（具体锚点） → 用户正文。
+    const parts: string[] = []
+    for (const item of hitchhikers) parts.push(buildReflowBlock(item))
+    if (active.length > 0) parts.push(buildProtocolBlock(active))
+    // 失败回滚的基准是「拼稿前的当前草稿」（M-1：inject 等待窗口内的输入
+    // 不回滚吃掉）；draftAtHijack 只服务 submit 同步抛错（窗口刚开，两者等价）。
+    const draftBeforeCompose = input.state.getSnapshot().draft
+    const body = draftBeforeCompose.trim()
+    const full = [...parts, ...(body === '' ? [] : [body])].join('\n\n')
+    const sentIds = active.map(a => a.id)
+
+    // B-1（第 3 轮审查）：拼稿为空（纯回流 + 全注入成功 + 空草稿）——宿主
+    // submit 对空草稿是 no-op，什么都不发还会让确认面把空草稿误判成功、
+    // 回滚分支随后吞掉用户输入。此时没有消息要发：注入已入 inbox、chip 已
+    // 消失，直接收尾（不开事务、不订阅确认面）。
+    if (full === '') {
+      committing = false
+      return
+    }
+
+    input.setDraft(full)
+    try {
+      input.submit('queue')
+    } catch (error) {
+      // 提交抛错：精确剥离前缀回滚，内容保持 active。
+      console.warn('[dsh-sidenote] 提交失败，回滚草稿:', error)
+      const now = input.state.getSnapshot().draft
+      if (now.startsWith(full)) input.setDraft(draftAtHijack)
+      committing = false
+      return
+    }
+
+    // 确认面：订阅机器相位。回到 plain 后看草稿判定成败。
+    const off = input.state.subscribe(() => {
+      const state = input.state.getSnapshot()
+      if (state.phase !== 'plain') return
+      window.clearTimeout(watchdog)
+      off()
+      committing = false
+      if (state.draft.trim() === '') {
+        // 成功：只翻转当时拼进去的那批注释（窗口内新增的不动）。
+        store.markSent(sentIds)
+        reflow.clearSession(sessionId)
+        return
+      }
+      // 失败（宿主 notice + 留稿）：草稿仍以我们拼的前缀开头才剥离——
+      // 回滚到拼稿前的当前草稿（M-1），不是劫持瞬间的旧值。
+      const stuck = state.draft
+      if (stuck.startsWith(full)) input.setDraft(draftBeforeCompose)
+    })
+    // 看门狗：相位永远不回 plain（宿主异常）→ 解锁护栏，不动草稿（保守）。
+    const watchdog = window.setTimeout(() => {
+      off()
+      committing = false
+    }, 15_000)
+  }
+
   const hijack = (): boolean => {
     const sessionId = currentSessionId()
     if (sessionId === '') return false
@@ -113,49 +183,12 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     if (seat.querySelector('[role="listbox"]') !== null) return false
     if (seat.querySelector('[aria-expanded="true"]') !== null) return false
 
-    // 拼稿：回流上下文（背景） → 注释协议块（具体锚点） → 用户正文。
-    const parts: string[] = []
-    for (const item of reflows) parts.push(buildReflowBlock(item))
-    if (active.length > 0) parts.push(buildProtocolBlock(active))
-    const body = draft.trim()
-    const full = [...parts, ...(body === '' ? [] : [body])].join('\n\n')
-    const sentIds = active.map(a => a.id)
-
-    input.setDraft(full)
+    // 同步拦截成立，异步执行（inject 的有界等待不能在同步手势里）。
     committing = true
-    try {
-      input.submit('queue')
-    } catch (error) {
-      // 提交抛错：精确剥离前缀回滚，内容保持 active。
-      console.warn('[dsh-sidenote] 提交失败，回滚草稿:', error)
-      const now = input.state.getSnapshot().draft
-      if (now.startsWith(full)) input.setDraft(draft)
+    commitAsync(sessionId, input, draft, reflows, active).catch((error: unknown) => {
+      console.warn('[dsh-sidenote] 提交编排失败:', error)
       committing = false
-      return true
-    }
-
-    // 确认面：订阅机器相位。回到 plain 后看草稿判定成败。
-    const off = input.state.subscribe(() => {
-      const state = input.state.getSnapshot()
-      if (state.phase !== 'plain') return
-      window.clearTimeout(watchdog)
-      off()
-      committing = false
-      if (state.draft.trim() === '') {
-        // 成功：只翻转当时拼进去的那批注释（窗口内新增的不动）。
-        store.markSent(sentIds)
-        reflow.clearSession(sessionId)
-        return
-      }
-      // 失败（宿主 notice + 留稿）：草稿仍以我们拼的前缀开头才剥离。
-      const stuck = state.draft
-      if (stuck.startsWith(full)) input.setDraft(draft)
     })
-    // 看门狗：相位永远不回 plain（宿主异常）→ 解锁护栏，不动草稿（保守）。
-    const watchdog = window.setTimeout(() => {
-      off()
-      committing = false
-    }, 15_000)
     return true
   }
 

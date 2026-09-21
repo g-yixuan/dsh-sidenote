@@ -12,7 +12,7 @@
  * 注意：jsdom 的 dispatchEvent 不模拟浏览器对 disabled 控件的 click 抑制，
  * 因此这里验证的是**拦截器逻辑**，不是浏览器的投递行为。
  */
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context, SessionInput } from '../src/client/host/contracts.ts'
 import type { ReflowStore } from '../src/client/reflow.ts'
 import { createAnnotationStore } from '../src/client/annotate/model.ts'
@@ -25,13 +25,17 @@ interface Harness {
   submitted: string[]
   drafts: string[]
   removeAllAnnotations: () => void
+  /** 模拟用户输入（inject 等待窗口内的编辑）。 */
+  type: (text: string) => void
+  draft: () => string
+  removedReflow: number[]
 }
 
 /**
  * 复刻宿主 composer 的最小识别面：`[data-composer-seat]` › `[data-composer-card]`
  * 内两个按钮（`#extra` 常 disabled，`#send` 是 DOM 末位 = 主按钮）。
  */
-function makeHarness(options: { draft?: string; buttonDisabled?: boolean } = {}): Harness {
+function makeHarness(options: { draft?: string; buttonDisabled?: boolean; withAnnotation?: boolean; reflowItems?: { id: number; text: string; sideTitle: string }[] } = {}): Harness {
   const sendDisabled = options.buttonDisabled ?? true
   document.body.innerHTML = `
     <div data-composer-seat>
@@ -63,23 +67,36 @@ function makeHarness(options: { draft?: string; buttonDisabled?: boolean } = {})
     get: (name: string) => (name === 'conversation' ? { input: { for: () => input } } : undefined),
   } as unknown as Context
 
+  const reflowItems = options.reflowItems ?? []
+  const removed: number[] = []
   const reflow: ReflowStore = {
     getSnapshot: () => 0,
     subscribe: () => () => {},
     add: () => { throw new Error('unused in this spec') },
-    remove: () => {},
+    remove: (id: number) => { removed.push(id) },
     clearSession: () => {},
-    list: () => [],
+    list: () => reflowItems.map(item => ({
+      id: item.id,
+      sessionId: SESSION,
+      sideTitle: item.sideTitle,
+      text: item.text,
+      createdAt: 1,
+    })),
   }
 
   const store = createAnnotationStore()
-  store.add({ sessionId: SESSION, anchorKey: 'k1', text: '原文片段', anchorText: '原文片段', occurrence: 0, note: '' })
+  if (options.withAnnotation !== false) {
+    store.add({ sessionId: SESSION, anchorKey: 'k1', text: '原文片段', anchorText: '原文片段', occurrence: 0, note: '' })
+  }
 
   return {
     dispose: installSendInterceptor(ctx, store, reflow),
     submitted,
     drafts,
     removeAllAnnotations: () => { for (const a of store.listActive(SESSION)) store.remove(a.id) },
+    type: (text: string) => { state.draft += text },
+    draft: () => state.draft,
+    removedReflow: removed,
   }
 }
 
@@ -97,6 +114,8 @@ function click(element: Element): Event {
   return event
 }
 
+const flushMicrotasks = (): Promise<void> => new Promise(resolve => { setTimeout(resolve, 0) })
+
 describe('send interceptor — 空草稿补位（disabled 主按钮）', () => {
   let harness: Harness | undefined
 
@@ -106,9 +125,11 @@ describe('send interceptor — 空草稿补位（disabled 主按钮）', () => {
     document.body.innerHTML = ''
   })
 
-  it('接管因空草稿而 disabled 的主按钮：拼入协议块后提交', () => {
+  it('接管因空草稿而 disabled 的主按钮：拼入协议块后提交', async () => {
     harness = makeHarness({ draft: '', buttonDisabled: true })
     const event = pointerDown(document.querySelector('#send')!)
+    // Workitem_06：inject 尝试使提交落到 microtask 之后（有界等待）。
+    await flushMicrotasks()
     expect(harness.submitted).toEqual(['queue'])
     expect(harness.drafts).toHaveLength(1)
     expect(harness.drafts[0]).toContain('I annotated 1 passage(s) of the conversation above:')
@@ -155,9 +176,10 @@ describe('send interceptor — 空草稿补位（disabled 主按钮）', () => {
     expect(harness.submitted).toEqual([])
   })
 
-  it('吞掉同一次手势的尾随 click（否则宿主按「停止」取消本轮）', () => {
+  it('吞掉同一次手势的尾随 click（否则宿主按「停止」取消本轮）', async () => {
     harness = makeHarness({ draft: '', buttonDisabled: true })
     pointerDown(document.querySelector('#send')!)
+    await flushMicrotasks()
     expect(harness.submitted).toEqual(['queue'])
     // 提交后草稿已空 → 宿主主按钮按 primaryStops 变身「停止」，这一发必须被吞。
     const event = click(document.querySelector('#send')!)
@@ -169,5 +191,45 @@ describe('send interceptor — 空草稿补位（disabled 主按钮）', () => {
     harness.removeAllAnnotations()
     const event = click(document.querySelector('#send')!)
     expect(event.defaultPrevented).toBe(false)
+  })
+})
+
+describe('send interceptor — Workitem_06 注入通道', () => {
+  let harness: Harness | undefined
+
+  afterEach(() => {
+    harness?.dispose()
+    harness = undefined
+    document.body.innerHTML = ''
+  })
+
+  it('纯回流+空草稿+注入成功：不发消息、不吞后续输入（B-1 回归）', async () => {
+    harness = makeHarness({ draft: '', buttonDisabled: true, withAnnotation: false, reflowItems: [{ id: 1, text: '结论', sideTitle: '侧边' }] })
+    // fetch 成功（注入通道可用）
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 })))
+    const event = pointerDown(document.querySelector('#send')!)
+    await flushMicrotasks()
+    // 注入成功 → 拼稿为空 → 不开事务（submit 不被调）
+    expect(harness.submitted).toEqual([])
+    expect(harness.removedReflow).toEqual([1])
+    expect(event.defaultPrevented).toBe(true)
+    // 用户随后输入不被吞（护栏已解锁，草稿保持）
+    harness.type('后续输入')
+    expect(harness.draft()).toBe('后续输入')
+  })
+
+  it('注入等待窗口内的用户输入不被回滚吃掉（M-1 回归）', async () => {
+    harness = makeHarness({ draft: '正文', buttonDisabled: false })
+    // fetch 挂起（模拟慢注入）→ 窗口内输入 → 注入失败 → 搭车拼稿应含窗口内输入
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(
+      () => new Promise((_resolve, reject) => { setTimeout(() => reject(new Error('timeout')), 400) }),
+    ))
+    click(document.querySelector('#send')!)
+    harness.type('（窗口内补充）')
+    await flushMicrotasks()
+    await new Promise(resolve => setTimeout(resolve, 450))
+    await flushMicrotasks()
+    expect(harness.submitted).toEqual(['queue'])
+    expect(harness.drafts[0]).toContain('（窗口内补充）')
   })
 })

@@ -14,7 +14,8 @@
  */
 import type { Context } from '../host/contracts.ts'
 import { canForkFrom, collectSideTabs } from './model.ts'
-import { focusNativeTab, liveSideChatsOf, nativeSidebarHost } from './native.ts'
+import { betterSidebarOf, directNativeLeg, focusNativeTab, liveSideChatsOf } from './native.ts'
+import { sideChatMetasOf } from './metaStore.ts'
 import { createSideChat, reopenSideChat } from './open.ts'
 import { dropClosedSideChat, listClosedSideChats } from './recentClosed.ts'
 import { t } from '../locales.ts'
@@ -65,8 +66,14 @@ function makeContribution(ctx: Context, name: string) {
       kind: 'popupSelect' as const,
       options: (session: CommandSession) => {
         const options: SelectOption[] = []
-        const native = nativeSidebarHost(ctx)
+        const native = directNativeLeg(ctx)
+        // 存活枚举 = live registry（存活面板）∪ metaStore 记录（面板卸载但
+        // tab 仍在布局——聚焦即 openTab held 折叠）。与 open.ts 同源。
         const lives = native ? liveSideChatsOf(session.sessionId) : []
+        const liveIds = new Set(lives.map(live => live.tabId))
+        const unloaded = native
+          ? sideChatMetasOf(session.sessionId).filter(meta => !liveIds.has(meta.tabId))
+          : []
         // native 下同 kind 每 pane 单实例（dsh-client-ui-sidebar-right 的 held
         // 规则：page kind 的 contentId 恒为 sidebar://<kind>，openTab 必折叠为
         // 聚焦既有 tab）——已有存活实例时「新建」名不副实，不列。
@@ -80,9 +87,13 @@ function makeContribution(ctx: Context, name: string) {
           for (const live of lives) {
             options.push({ id: `focus:${live.tabId}`, label: t('cmdFocus', { title: live.readTitle() }), detail: t('cmdFocusDetail') })
           }
+          for (const meta of unloaded) {
+            const title = meta.number <= 1 ? t('tabBaseTitle') : `${t('tabBaseTitle')} ${meta.number}`
+            options.push({ id: `focus:${meta.tabId}`, label: t('cmdFocus', { title }), detail: t('cmdFocusDetail') })
+          }
         } else {
-          const snapshot = ctx.betterSidebar.getSnapshot()
-          if (snapshot.sessionId === session.sessionId && snapshot.state !== undefined) {
+          const snapshot = betterSidebarOf(ctx)?.getSnapshot()
+          if (snapshot !== undefined && snapshot.sessionId === session.sessionId && snapshot.state !== undefined) {
             for (const tab of collectSideTabs(snapshot.state)) {
               options.push({ id: `focus:${tab.id}`, label: t('cmdFocus', { title: tab.title }), detail: t('cmdFocusDetail') })
             }
@@ -107,8 +118,9 @@ function makeContribution(ctx: Context, name: string) {
         }
         if (option.id.startsWith('focus:')) {
           const tabId = option.id.slice('focus:'.length)
-          // native 宿主的 activateTab 是空操作——聚焦走 ISidebarRight.focus 探测。
-          if (!focusNativeTab(ctx, tabId)) ctx.betterSidebar.activateTab(tabId, { sessionId: session.sessionId })
+          // native 宿主的 activateTab 是空操作——聚焦走 ISidebarRight.focus 探测；
+          // betterSidebar 缺席（optional peer）时无回退面，跳过。
+          if (!focusNativeTab(ctx, tabId)) betterSidebarOf(ctx)?.activateTab(tabId, { sessionId: session.sessionId })
           return
         }
         if (option.id.startsWith('reopen:')) {

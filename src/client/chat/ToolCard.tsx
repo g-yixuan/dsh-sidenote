@@ -29,7 +29,7 @@ import {
 import type { ToolCardModel, ToolCallKind } from './cards.ts'
 import type { FoldStore } from './viewState.ts'
 import { t } from '../locales.ts'
-import { diffLabels, readLabels, searchLabels, terminalLabels, webLabels } from '../host/labels.ts'
+import { diffLabels, jsonTreeLabels, readLabels, searchLabels, terminalLabels, webLabels } from '../host/labels.ts'
 import css from '../sidechat/sidechat.module.css'
 
 /** ToolCallKind → 图标（宿主 ui-tool 同族映射；primitives 图标全集见 icons/index.d.ts）。 */
@@ -111,12 +111,12 @@ function ToolCardBody({ model, streaming }: { model: ToolCardModel; streaming?: 
         </div>
       )
     case 'diff':
-      return <DiffBlock {...({ labels: diffLabels() } as object)} diffs={model.diffs.map(d => ({ path: d.path, oldText: d.oldText, newText: d.newText }))} />
+      return <DiffBlock labels={diffLabels()} diffs={model.diffs.map(d => ({ path: d.path, oldText: d.oldText, newText: d.newText }))} />
     case 'read':
       return (
         <ReadBlock
           label={model.path}
-          {...({ labels: readLabels() } as object)}
+          labels={readLabels()}
           lines={model.lines.map(l => ({ number: l.number, text: l.text }))}
           totalLines={model.totalLines}
           {...(model.lang !== undefined ? { lang: model.lang } : {})}
@@ -126,12 +126,12 @@ function ToolCardBody({ model, streaming }: { model: ToolCardModel; streaming?: 
       // SearchBlock 契约：kind ← 我们的 shape（cards.ts 已改名归一），
       // files/paths/truncated/total 形状同构直通。
       return model.shape === 'matches'
-        ? <SearchBlock {...({ labels: searchLabels() } as object)} kind="matches" files={[...(model.files ?? [])].map(f => ({ path: f.path, matches: [...f.matches] }))} truncated={model.truncated} total={model.total} />
-        : <SearchBlock {...({ labels: searchLabels() } as object)} kind="paths" paths={[...(model.paths ?? [])]} truncated={model.truncated} total={model.total} />
+        ? <SearchBlock labels={searchLabels()} kind="matches" files={[...(model.files ?? [])].map(f => ({ path: f.path, matches: [...f.matches] }))} truncated={model.truncated} total={model.total} />
+        : <SearchBlock labels={searchLabels()} kind="paths" paths={[...(model.paths ?? [])]} truncated={model.truncated} total={model.total} />
     case 'web':
       return model.webKind === 'search'
-        ? <WebBlock {...({ labels: webLabels() } as object)} kind="search" sources={[...(model.sources ?? [])]} truncated={model.truncated === true} {...(model.answer !== undefined ? { answer: model.answer } : {})} />
-        : <WebBlock {...({ labels: webLabels() } as object)} kind="fetch" url={model.url ?? ''} statusCode={model.statusCode ?? 0} truncated={model.truncated === true} />
+        ? <WebBlock labels={webLabels()} kind="search" sources={[...(model.sources ?? [])]} truncated={model.truncated === true} {...(model.answer !== undefined ? { answer: model.answer } : {})} />
+        : <WebBlock labels={webLabels()} kind="fetch" url={model.url ?? ''} statusCode={model.statusCode ?? 0} truncated={model.truncated === true} />
     default: {
       // generic（宿主默认卡形态的自绘：标题行在壳上，体 = rawInput/正文/文件列表）。
       const m = model
@@ -141,7 +141,7 @@ function ToolCardBody({ model, streaming }: { model: ToolCardModel; streaming?: 
           {m.rawInput !== undefined && (
             typeof m.rawInput === 'string'
               ? <pre className={css.toolBodyText}>{m.rawInput}</pre>
-              : <JsonTree data={m.rawInput as object} />
+              : <JsonTree label={t('jsonTreeLabel')} labels={jsonTreeLabels()} data={m.rawInput as object} />
           )}
           {m.locations !== undefined && m.locations.length > 0 && (
             <div className={css.toolLocations}>

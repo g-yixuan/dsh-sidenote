@@ -44,10 +44,14 @@ describe('registerCompletionNotify', () => {
         effect(fn: () => void | (() => void)) { effects.push(fn) },
         betterSidebar: {
           subscribeState(fn: () => void) { stateListeners.add(fn); return () => { stateListeners.delete(fn) } },
-          // SidebarSnapshot 形状（model.ts collectTabs 契约）：splits 树 +
-          // kind:'leaf' 节点持 tabs 数组。
+          // SidebarSnapshot 真实形状（better-sidebar state.ts）：包装对象
+          // {sessionId, state, prefs}——state 才是 splits 树（M3 修复前的
+          // 夹具把包装对象伪造成 state，掩盖了生产形状的恒空 bug）。
           getSnapshot: () => ({
-            splits: { kind: 'leaf', tabs: sideTabs.map(t => ({ id: t.id, type: 'dsh-sidenote:side', title: t.title, meta: { childId: t.childId } })) },
+            sessionId: 's1',
+            state: {
+              splits: { kind: 'leaf', tabs: sideTabs.map(t => ({ id: t.id, type: 'dsh-sidenote:side', title: t.title, meta: { childId: t.childId } })) },
+            },
           }),
         },
         sessions: { binding: () => ({ session }) },

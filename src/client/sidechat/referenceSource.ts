@@ -12,6 +12,9 @@
  */
 import type { Context } from '../host/contracts.ts'
 import { collectSideTabs, parseSideChatMeta } from './model.ts'
+import { betterSidebarOf, directNativeLeg } from './native.ts'
+import { sideChatMetasAll, sideChatMetasOf } from './metaStore.ts'
+import { t } from '../locales.ts'
 import { transcriptOf, type ChatMessage } from '../chat/transcript.ts'
 import { chatSourceOf } from './lifecycle.ts'
 import { pairQuestions } from './model.ts'
@@ -39,9 +42,13 @@ export async function serializeSideChatRef(ctx: Context, childId: string): Promi
     parts.push(`<答>${m.text}</答>`)
   }
   const title = (() => {
-    // 从 betterSidebar 状态里找回 Tab 标题（childId → tab）。
+    // 找回 Tab 标题（childId → tab）：直连腿查 metaStore，legacy 查布局快照。
     try {
-      for (const tab of collectSideTabs(ctx.betterSidebar.getSnapshot().state)) {
+      if (directNativeLeg(ctx)) {
+        const meta = sideChatMetasAll().find(m => m.childId === childId)
+        if (meta !== undefined) return meta.number <= 1 ? t('tabBaseTitle') : `${t('tabBaseTitle')} ${meta.number}`
+      }
+      for (const tab of collectSideTabs(betterSidebarOf(ctx)?.getSnapshot().state)) {
         if (parseSideChatMeta(tab.meta).childId === childId) return tab.title
       }
     } catch { /* fall through */ }
@@ -68,10 +75,22 @@ export function registerSideChatReferenceSource(ctx: Context): void {
       // 候选 = 当前会话已开启的侧边聊天（按 Tab 标题）。
       candidates: (session: { sessionId?: string } | undefined) => {
         try {
-          const snapshot = ctx.betterSidebar.getSnapshot()
           // 防御：0.1.2 的会话投影形状漂移（实证：session 可能 undefined）。
           if (session?.sessionId === undefined) return Promise.resolve([])
-          if (snapshot.sessionId !== session.sessionId || snapshot.state === undefined) return Promise.resolve([])
+          // 直连腿：存活记录即候选（metaStore 枚举，childId 已登记的）。
+          if (directNativeLeg(ctx)) {
+            return Promise.resolve(
+              sideChatMetasOf(session.sessionId)
+                .filter(meta => meta.childId !== undefined)
+                .map(meta => ({
+                  name: meta.number <= 1 ? t('tabBaseTitle') : `${t('tabBaseTitle')} ${meta.number}`,
+                  description: '侧边聊天',
+                  icon: '💬',
+                })),
+            )
+          }
+          const snapshot = betterSidebarOf(ctx)?.getSnapshot()
+          if (snapshot === undefined || snapshot.sessionId !== session.sessionId || snapshot.state === undefined) return Promise.resolve([])
           return Promise.resolve(
             collectSideTabs(snapshot.state).map(tab => ({
               name: tab.title,
@@ -85,10 +104,25 @@ export function registerSideChatReferenceSource(ctx: Context): void {
       },
       // pick → 插入引用 chip（ref = childId；label/clipboardText 供渲染与复制）。
       onPick: (pick: { candidate: { name: string } }, session: { sessionId?: string } | undefined) => {
-        const snapshot = ctx.betterSidebar.getSnapshot()
         if (session?.sessionId === undefined) return undefined
-        if (snapshot.sessionId !== session.sessionId || snapshot.state === undefined) return undefined
-        const tab = collectSideTabs(snapshot.state).find(t => t.title === pick.candidate.name)
+        // 直连腿：按编号标题匹配 metaStore 记录（与 candidates 同源同序）。
+        if (directNativeLeg(ctx)) {
+          const meta = sideChatMetasOf(session.sessionId)
+            .filter(m => m.childId !== undefined)
+            .find(m => (m.number <= 1 ? t('tabBaseTitle') : `${t('tabBaseTitle')} ${m.number}`) === pick.candidate.name)
+          if (meta?.childId === undefined) return undefined
+          return {
+            insert: {
+              source: SOURCE,
+              ref: meta.childId,
+              label: pick.candidate.name,
+              clipboardText: `@${pick.candidate.name}`,
+            },
+          }
+        }
+        const snapshot = betterSidebarOf(ctx)?.getSnapshot()
+        if (snapshot === undefined || snapshot.sessionId !== session.sessionId || snapshot.state === undefined) return undefined
+        const tab = collectSideTabs(snapshot.state).find(tab => tab.title === pick.candidate.name)
         const childId = tab === undefined ? undefined : parseSideChatMeta(tab.meta).childId
         if (childId === undefined) return undefined
         return {

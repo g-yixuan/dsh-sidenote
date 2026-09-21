@@ -10,6 +10,8 @@
 import type { Context } from '../host/contracts.ts'
 import { collectSideTabs, parseSideChatMeta } from './model.ts'
 import { openSessionWindow } from './lifecycle.ts'
+import { betterSidebarOf, directNativeLeg } from './native.ts'
+import { sideChatMetaStore, sideChatMetasAll } from './metaStore.ts'
 import { showToast } from './toast.tsx'
 import { t } from '../locales.ts'
 
@@ -35,18 +37,34 @@ export function registerCompletionNotify(ctx: Context): void {
   ctx.effect(() => {
     const watchers = new Map<string, Watcher>()
 
+    // 枚举当前存活侧聊的 (childId, title)：直连腿读 metaStore（记录由面板
+    // reconcile 创建、关闭检测清场，有记录即存活；childId 在 fork 完成后
+    // 才登记）；legacy 腿读布局快照。
+    const collectAlive = (): Array<{ childId: string, title: string }> => {
+      if (directNativeLeg(ctx)) {
+        return sideChatMetasAll().flatMap((meta) => {
+          if (meta.childId === undefined) return []
+          const title = meta.number <= 1 ? t('tabBaseTitle') : `${t('tabBaseTitle')} ${meta.number}`
+          return [{ childId: meta.childId, title }]
+        })
+      }
+      const snapshot = betterSidebarOf(ctx)?.getSnapshot()
+      if (snapshot?.state === undefined) return []
+      return collectSideTabs(snapshot.state).flatMap((tab) => {
+        const childId = parseSideChatMeta(tab.meta).childId
+        return childId === undefined ? [] : [{ childId, title: tab.title }]
+      })
+    }
+
     const rescan = (): void => {
-      let tabs: ReturnType<typeof collectSideTabs> = []
+      let tabs: Array<{ childId: string, title: string }> = []
       try {
-        tabs = collectSideTabs(ctx.betterSidebar.getSnapshot())
+        tabs = collectAlive()
       } catch {
         return
       }
       const alive = new Set<string>()
-      for (const tab of tabs) {
-        const meta = parseSideChatMeta(tab.meta)
-        const childId = meta.childId
-        if (childId === undefined) continue
+      for (const { childId, title } of tabs) {
         alive.add(childId)
         if (watchers.has(childId)) continue
         // 新侧聊：binding 可能 throw（会话还没就绪）——本轮跳过，下轮重扫补。
@@ -54,7 +72,6 @@ export function registerCompletionNotify(ctx: Context): void {
           const session = ctx.sessions.binding(childId)?.session
           if (session === undefined) continue
           openSessionWindow(session)
-          const title = tab.title
           const watcher: Watcher = { unsub: () => {}, wasRunning: false, since: Date.now() }
           watcher.unsub = session.subscribe(() => {
             const snap = session.getSnapshot() as { running?: unknown } | null
@@ -80,7 +97,11 @@ export function registerCompletionNotify(ctx: Context): void {
       }
     }
 
-    const offState = ctx.betterSidebar.subscribeState(rescan)
+    // 重扫驱动：直连腿 = metaStore 变更（reconcile/childId 登记/关闭清场都会
+    // notify）；legacy 腿 = betterSidebar 布局状态订阅。
+    const offState = directNativeLeg(ctx)
+      ? sideChatMetaStore.subscribe(rescan)
+      : (betterSidebarOf(ctx)?.subscribeState(rescan) ?? (() => {}))
     rescan()
     return () => {
       offState()

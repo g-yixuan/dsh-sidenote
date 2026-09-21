@@ -3,7 +3,7 @@
  * bridge. Pure logic only — no DOM, no host.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { clearNativeRuntime, lastLiveSideChat, liveSideChat, liveSideChatsOf, markSideChatOpening, nativeSidebarHost, nativeTabShell, registerLiveSideChat, rootContext, setRootContext, sideChatOpening } from '../src/client/sidechat/native.ts'
+import { betterSidebarOf, clearNativeRuntime, directNativeLeg, lastLiveSideChat, liveSideChat, liveSideChatsOf, markSideChatOpening, nativeSidebarHost, nativeTabShell, registerLiveSideChat, rootContext, setRootContext, sideChatOpening } from '../src/client/sidechat/native.ts'
 import { projectedModelSelection, readModelSelection, remoteSessionFace, writeModelSelection } from '../src/client/sidechat/lifecycle.ts'
 import { createSideChat, openOrFocusSideChat, reopenSideChat, sideChatTargetTitle } from '../src/client/sidechat/open.ts'
 import { registerSideCommand } from '../src/client/sidechat/slash.ts'
@@ -22,6 +22,43 @@ describe('nativeSidebarHost', () => {
     expect(nativeSidebarHost(ctxWithVersion('0.18.9'))).toBe(false)
     expect(nativeSidebarHost(ctxWithVersion('nope'))).toBe(false)
     expect(nativeSidebarHost({} as Context)).toBe(false)
+  })
+})
+
+
+describe('directNativeLeg / betterSidebarOf（WI-05 分腿判据）', () => {
+  it('BS ≥ 0.19 → 直连；BS < 0.19 → legacy；BS 缺席 → 直连', () => {
+    const mk = (version: string | undefined): Context => ({
+      betterSidebar: version === undefined ? undefined : { version },
+      get: (name: string) => (name === 'betterSidebar' && version !== undefined ? { version } : undefined),
+    } as unknown as Context)
+    expect(directNativeLeg(mk('0.19.1'))).toBe(true)
+    expect(directNativeLeg(mk('1.0.0'))).toBe(true)
+    expect(directNativeLeg(mk('0.18.1'))).toBe(false)
+    expect(directNativeLeg(mk(undefined))).toBe(true)
+  })
+
+  it('属性访问抛错的 ctx（cordis 对未 inject 服务的真实门禁语义）：get 面兜底，不抛', () => {
+    // B-1 回归守护：cordis 对未 inject 服务属性访问抛 `cannot get property`——
+    // 消费点必须走 betterSidebarOf（get 优先），裸属性访问会在无-BS 环境炸掉
+    // 整个插件（该 bug 曾逃逸：旧 mock 把 betterSidebar 当普通属性）。
+    const ctx = {
+      get: (name: string) => (name === 'betterSidebar' ? undefined : undefined),
+    } as unknown as Context
+    Object.defineProperty(ctx, 'betterSidebar', {
+      get() { throw new Error('cannot get property "betterSidebar" without inject') },
+    })
+    expect(() => betterSidebarOf(ctx)).not.toThrow()
+    expect(betterSidebarOf(ctx)).toBeUndefined()
+    expect(directNativeLeg(ctx)).toBe(true) // BS 缺席 ⇒ 直连
+  })
+
+  it('get 面返回服务时直取（真实 cordis 主路径）；get 缺席时属性兜底（mock 形态）', () => {
+    const service = { version: '0.19.1' }
+    const viaGet = { get: (name: string) => (name === 'betterSidebar' ? service : undefined) } as unknown as Context
+    expect(betterSidebarOf(viaGet)).toBe(service)
+    const viaProp = { betterSidebar: service } as unknown as Context
+    expect(betterSidebarOf(viaProp)).toBe(service)
   })
 })
 

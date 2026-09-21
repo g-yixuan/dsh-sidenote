@@ -47,7 +47,10 @@ minimumReleaseAgeExclude:
   - dsh-sidenote
 EOF
 
-$DSH_CMD plugin --profile web add "dsh-better-sidebar@${BS_VERSION}"
+# BS_VERSION=none 跳过 better-sidebar（无-BS 直连档验证：optional peer 后主路径）。
+if [ "$BS_VERSION" != "none" ]; then
+  $DSH_CMD plugin --profile web add "dsh-better-sidebar@${BS_VERSION}"
+fi
 $DSH_CMD plugin --profile web add "file:$TARBALL"
 node "$SCRIPT_DIR/seed-session.mjs" "$DSH_HOME" "$WORKSPACE_DIR" >/dev/null
 

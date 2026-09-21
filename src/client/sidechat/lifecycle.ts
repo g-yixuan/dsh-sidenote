@@ -8,8 +8,9 @@
  */
 import type { Context, ConversationSnapshot, ModelSelection, RemoteSessionModelFace, SessionBinding, SessionFace, SessionModelsResult, UiConversationLike } from '../host/contracts.ts'
 import { parseSideChatMeta, type SideChatMeta } from './model.ts'
-import { readTab } from './open.ts'
-import { rootContext } from './native.ts'
+import { readTab, sidebarRightOf } from './open.ts'
+import { betterSidebarOf, directNativeLeg, rootContext } from './native.ts'
+import { readSideChatMeta, writeSideChatMeta } from './metaStore.ts'
 
 /**
  * 首开编排：fork（全量历史快照）→ 登记 meta（先行，绝不丢登记）→
@@ -41,7 +42,7 @@ export async function forkAndRegister(ctx: Context, parentSessionId: string, tab
   // meta 先行：fork resolve 后立即登记 childId（会话切换导致组件卸载时
   // updateTab 找不到 tab 也只是 no-op——否则 Tab 永远停在 forking 且下次
   // 挂载重复 fork 出孤儿会话）。
-  updateTabMeta(ctx, tabId, (current) => ({
+  updateTabMeta(ctx, parentSessionId, tabId, (current) => ({
     ...current,
     childId: forked,
     parentSessionId,
@@ -70,10 +71,51 @@ export async function forkAndRegister(ctx: Context, parentSessionId: string, tab
   return forked
 }
 
-/** Tab meta 读-改-写（布局持久化寄存处）；tab 已消失时 no-op。 */
-export function updateTabMeta(ctx: Context, tabId: string, mutate: (meta: SideChatMeta) => SideChatMeta): void {
-  const current = parseSideChatMeta(readTab(ctx, tabId)?.meta)
-  ctx.betterSidebar.updateTab(tabId, { meta: mutate(current) })
+/**
+ * Tab meta 读-改-写。双腿：直连原生腿的 meta 在自有 metaStore（原生无
+ * updateTab 面，布局 memory-only）；legacy 腿在布局快照 + betterSidebar.updateTab。
+ * 分腿判据统一为 directNativeLeg（对抗性审查 m1：判据单点化——metaStore
+ * 有无记录不能再当判据，否则记录缺失时 childId 登记会静默落到 no-op 的
+ * legacy 面）。直连腿记录缺失 = 异常态（reconcile 应先已建）：warn 并 no-op。
+ */
+export function updateTabMeta(ctx: Context, sessionId: string, tabId: string, mutate: (meta: SideChatMeta) => SideChatMeta): void {
+  if (directNativeLeg(ctx)) {
+    const direct = readSideChatMeta(sessionId, tabId)
+    if (direct === undefined) {
+      console.warn('[dsh-sidenote] meta 记录缺失（reconcile 应先已建），本次 meta 写入跳过:', tabId)
+      return
+    }
+    const next = mutate(parseSideChatMeta(direct))
+    // 缺键即删（clearPendingDraft 语义）：JSON.stringify 丢弃 undefined 键。
+    writeSideChatMeta({
+      tabId,
+      sessionId: direct.sessionId,
+      ...(next.childId !== undefined ? { childId: next.childId } : {}),
+      ...(next.parentSessionId !== undefined ? { parentSessionId: next.parentSessionId } : {}),
+      ...(next.pendingDraft !== undefined ? { pendingDraft: next.pendingDraft } : {}),
+      ...(next.boundarySeq !== undefined ? { boundarySeq: next.boundarySeq } : {}),
+      number: direct.number,
+      createdAt: direct.createdAt,
+      ...(direct.runId !== undefined ? { runId: direct.runId } : {}),
+    })
+    return
+  }
+  const bs = betterSidebarOf(ctx)
+  if (bs === undefined) return
+  const current = parseSideChatMeta(readTab(ctx, sessionId, tabId)?.meta)
+  bs.updateTab(tabId, { meta: mutate(current) })
+}
+
+/** 关闭侧聊 tab：直连腿走 ISidebarRight.close，legacy 走 betterSidebar.closeTab。 */
+export function closeSideTab(ctx: Context, tabId: string, sessionId: string): void {
+  if (directNativeLeg(ctx)) {
+    const face = sidebarRightOf(ctx)
+    if (face !== undefined) {
+      face.close(tabId)
+      return
+    }
+  }
+  betterSidebarOf(ctx)?.closeTab(tabId, { sessionId })
 }
 
 /**

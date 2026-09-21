@@ -10,7 +10,7 @@
   <a href="https://www.npmjs.com/package/dsh-sidenote"><img src="https://img.shields.io/npm/v/dsh-sidenote" alt="npm version"></a>
   <a href="https://github.com/g-yixuan/dsh-sidenote/actions/workflows/ci.yml"><img src="https://github.com/g-yixuan/dsh-sidenote/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/peer-dsh--better--sidebar-informational" alt="requires dsh-better-sidebar">
+  <img src="https://img.shields.io/badge/peer-none-informational" alt="no required peer dependencies">
 </p>
 
 <p align="center">
@@ -21,13 +21,11 @@
 
 ## 安装
 
-前置：已装 [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar)（硬依赖）。
-
 ```bash
 dsh plugin --profile web add dsh-sidenote
 ```
 
-三步上手：**①** 装依赖 → **②** 装本插件 → **③** 顶栏点「侧边」，或直接划选任意回复文本。
+**一步直装，无前置依赖。** 装完顶栏点「侧边」，或直接划选任意回复文本。
 
 本地开发挂载：`dsh plugin --profile web add link:<本仓库路径>`（client 改动热重载，host 改动需重启 `dsh web`）。
 
@@ -42,6 +40,13 @@ dsh plugin --profile web add dsh-sidenote
 
 ![侧边聊天面板：fork 历史 + 原生级工具卡 + 同能力 composer](docs/assets/04-side-chat-panel.png)
 
+## 回流主线——侧边结论不烂在支线
+
+- 侧边结论一键「回流到主会话」：**问答成对**（结论 + 它回答的问题）收为受控 chip 挂在主输入框上方，随下一条消息发给主线；`@` 也可直接引用侧边聊天；
+- 「保存为正式会话」转正进会话列表；`/side` 弹层重开最近关闭。
+
+![回流 chip：侧边结论挂进主输入框](docs/assets/06-reflow-chip.png)
+
 ## 划选注释——把「这句有问题」变成模型的上下文
 
 - 划选 assistant 回复 → 浮层 → 注解编辑器，右缘编号角标锚定原文；
@@ -52,12 +57,6 @@ dsh plugin --profile web add dsh-sidenote
 |---|---|
 | ![划选浮层](docs/assets/01-selection-popover.png) | ![注解编辑器](docs/assets/02-annotation-editor.png) |
 
-## 回流主线——侧边结论不烂在支线
-
-- 侧边结论一键「回流到主会话」：**问答成对**（结论 + 它回答的问题）收为受控 chip 挂在主输入框上方，随下一条消息发给主线；`@` 也可直接引用侧边聊天；
-- 「保存为正式会话」转正进会话列表；`/side` 弹层重开最近关闭。
-
-![回流 chip：侧边结论挂进主输入框](docs/assets/06-reflow-chip.png)
 
 <details>
 <summary><b>更多截图</b></summary>
@@ -74,15 +73,14 @@ dsh plugin --profile web add dsh-sidenote
 
 ## 兼容性
 
-| DSH | dsh-better-sidebar | 状态 |
+| DSH | dsh-better-sidebar | 行为 |
 |---|---|---|
-| 0.1.1-rc.x | ≥ 0.12.3 | ✅ CI 双档矩阵 |
-| 0.1.2-rc.x | ≥ 0.18.0 | ✅ CI 双档矩阵 |
-| 0.1.5-rc.x | ≥ 0.19.0 | ✅ 沙箱实测（见下） |
+| ≥ 0.1.5-rc.1 | 任意（无需安装） | **直连 DSH 原生右侧边栏** |
+| ≤ 0.1.2-rc.x | ≤ 0.18.x（必需） | legacy 布局承载 |
 
-每周 canary 跟进宿主新版本；宿主面缺席时插件按能力降级（不崩页面）。
+宿主面缺席时插件按能力降级（不崩页面）；与 dsh-better-sidebar 天然共存（各自注册、互不依赖）。
 
-**native 右栏（better-sidebar ≥ 0.19）语义差异**：侧边聊天 tab 托管给 DSH 原生右侧边栏，受宿主「page kind 每 pane 单实例」规则约束——同一会话同时只开一个侧边聊天（再次打开/新建 = 聚焦既有 tab；关闭后可经 /side 重开恢复原会话）。多开诉求可用原生侧栏的分栏（每 pane 一个）。
+**单实例语义（直连腿）**：受宿主「page kind 每 pane 单实例」规则约束——同一会话同时只开一个侧边聊天（再次打开/新建 = 聚焦既有 tab；关闭后可经 /side 重开恢复原会话）。多开诉求可用原生侧栏的分栏（每 pane 一个），多实例将随宿主 `multiple` 能力（0.1.6）恢复。
 
 ## 设计要点
 
