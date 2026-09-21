@@ -19,8 +19,24 @@
  * dsh-better-sidebar src/trust-fence.ts，BSD-3-Clause 同源复制）。
  */
 import type { IncomingHttpHeaders } from 'node:http'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { isTrustedApiRequest } from './trust-fence.ts'
+
+// createUserMessage 懒加载（审查 M-2）：dsh-llm 不在插件的依赖树里，运行时
+// 靠宿主 loader 的解析兜底——顶层静态 import 会让模块求值期直接崩（webServer
+// 面缺席的降级兜底都来不及跑）。handler 内 await import：解析失败仅本条
+// 路由降级（客户端回落搭车），宿主半包其余部分照常。
+type CreateUserMessage = (input: unknown) => unknown
+let createUserMessageCached: CreateUserMessage | null | undefined
+async function loadCreateUserMessage(): Promise<CreateUserMessage | null> {
+  if (createUserMessageCached !== undefined) return createUserMessageCached
+  try {
+    const mod = await import('@deepseek-ai/dsh-llm')
+    createUserMessageCached = mod.createUserMessage as CreateUserMessage
+  } catch {
+    createUserMessageCached = null
+  }
+  return createUserMessageCached
+}
 
 /** Plugin identity for cordis.yml rows. */
 export const name = 'dsh-sidenote'
@@ -97,9 +113,15 @@ interface ReflowPayload {
   items?: unknown
 }
 
-/** reflow 注入处理：父会话 agent 在 → inject；不在 → ok:false（客户端回落搭车）。 */
-function makeReflowHandler(ctx: HostContext) {
+/** reflow 注入处理：父会话 agent 在 → inject；不在 → ok:false（客户端回落搭车）。
+ *  导出供单测（宿主 handler 的 fence/校验/降级路径）。 */
+export function makeReflowHandler(ctx: HostContext) {
   return async (req: HttpRequestLike, res: HttpResponseLike): Promise<void> => {
+    const method = (req as { method?: string }).method
+    if (method !== 'POST') {
+      writeJson(res, 405, { ok: false, error: 'method-not-allowed' })
+      return
+    }
     const webRuntime = ctx.get('webRuntime') as WebRuntimeLike | undefined
     if (!isTrustedApiRequest(req, webRuntime?.trustedHosts ?? [])) {
       writeJson(res, 403, { ok: false, error: 'forbidden' })
@@ -125,19 +147,31 @@ function makeReflowHandler(ctx: HostContext) {
       writeJson(res, 200, { ok: false, error: 'no-live-agent' })
       return
     }
+    const createUserMessage = await loadCreateUserMessage()
+    if (createUserMessage === null) {
+      writeJson(res, 200, { ok: false, error: 'dsh-llm-unavailable' })
+      return
+    }
+    // summary 收敛到官方上限（CONTEXT_SUMMARY_MAX_CHARS=120；审查 m3）。
     for (const item of valid) {
       const sideTitle = typeof item.sideTitle === 'string' ? item.sideTitle : ''
-      agent.inject(createUserMessage({
-        content: [{ type: 'text', text: item.text as string }],
-        source: {
-          kind: 'plugin',
-          plugin: 'dsh-sidenote',
-          // form:'notice' + summary：折叠行直接显示回流摘要（不声明则 opaque
-          // 渲染、折叠行只显示原始 plugin 串——审查 M2）。
-          form: 'notice',
-          summary: sideTitle === '' ? '侧边聊天的结论回流' : `来自「${sideTitle}」的结论回流`,
-        },
-      }))
+      const summary = (sideTitle === '' ? '侧边聊天的结论回流' : `来自「${sideTitle}」的结论回流`).slice(0, 120)
+      try {
+        agent.inject(createUserMessage({
+          content: [{ type: 'text', text: item.text as string }],
+          source: {
+            kind: 'plugin',
+            plugin: 'dsh-sidenote',
+            // form:'notice' + summary：折叠行直接显示回流摘要（不声明则 opaque
+            // 渲染、折叠行只显示原始 plugin 串——审查 M2）。
+            form: 'notice',
+            summary,
+          },
+        }))
+      } catch (error) {
+        // agent 在 get 与 inject 之间被回收：本条注入失败，其余继续。
+        console.warn('[dsh-sidenote] reflow 注入单条失败:', error)
+      }
     }
     writeJson(res, 200, { ok: true })
   }

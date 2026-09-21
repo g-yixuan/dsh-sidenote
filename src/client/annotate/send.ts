@@ -36,10 +36,6 @@ import { buildProtocolBlock } from './format.ts'
 import type { AnnotationStore } from './model.ts'
 import { buildReflowBlock, tryInjectReflows, type ReflowItem, type ReflowStore } from '../reflow.ts'
 
-function idOf(item: ReflowItem): number {
-  return item.id
-}
-
 /** Resolve the per-session input facade, degrading to undefined (never throws). */
 export function resolveInput(ctx: Context, sessionId: SessionId): SessionInput | undefined {
   try {
@@ -109,15 +105,27 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     // 1. reflow 注入尝试（Workitem_06）
     const { injectedIds } = await tryInjectReflows(sessionId, reflows)
     for (const id of injectedIds) reflow.remove(id)
-    const hitchhikers = reflows.filter(item => !injectedIds.has(idOf(item)))
+    const hitchhikers = reflows.filter(item => !injectedIds.has(item.id))
 
     // 2. 拼稿：回流上下文（背景） → 注释协议块（具体锚点） → 用户正文。
     const parts: string[] = []
     for (const item of hitchhikers) parts.push(buildReflowBlock(item))
     if (active.length > 0) parts.push(buildProtocolBlock(active))
-    const body = input.state.getSnapshot().draft.trim()
+    // 失败回滚的基准是「拼稿前的当前草稿」（M-1：inject 等待窗口内的输入
+    // 不回滚吃掉）；draftAtHijack 只服务 submit 同步抛错（窗口刚开，两者等价）。
+    const draftBeforeCompose = input.state.getSnapshot().draft
+    const body = draftBeforeCompose.trim()
     const full = [...parts, ...(body === '' ? [] : [body])].join('\n\n')
     const sentIds = active.map(a => a.id)
+
+    // B-1（第 3 轮审查）：拼稿为空（纯回流 + 全注入成功 + 空草稿）——宿主
+    // submit 对空草稿是 no-op，什么都不发还会让确认面把空草稿误判成功、
+    // 回滚分支随后吞掉用户输入。此时没有消息要发：注入已入 inbox、chip 已
+    // 消失，直接收尾（不开事务、不订阅确认面）。
+    if (full === '') {
+      committing = false
+      return
+    }
 
     input.setDraft(full)
     try {
@@ -144,9 +152,10 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
         reflow.clearSession(sessionId)
         return
       }
-      // 失败（宿主 notice + 留稿）：草稿仍以我们拼的前缀开头才剥离。
+      // 失败（宿主 notice + 留稿）：草稿仍以我们拼的前缀开头才剥离——
+      // 回滚到拼稿前的当前草稿（M-1），不是劫持瞬间的旧值。
       const stuck = state.draft
-      if (stuck.startsWith(full)) input.setDraft(draftAtHijack)
+      if (stuck.startsWith(full)) input.setDraft(draftBeforeCompose)
     })
     // 看门狗：相位永远不回 plain（宿主异常）→ 解锁护栏，不动草稿（保守）。
     const watchdog = window.setTimeout(() => {
