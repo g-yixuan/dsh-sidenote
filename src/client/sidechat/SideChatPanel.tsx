@@ -20,7 +20,7 @@ import { appendDraftText, clearPendingDraft, parseSideChatMeta, phaseOf } from '
 import { transcriptOf } from '../chat/transcript.ts'
 import { EmptyState, MessageList, StateScreen } from './rows.tsx'
 import { chatSourceOf, closeSideTab, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, updateTabMeta } from './lifecycle.ts'
-import { nativeSidebarHost, registerLiveSideChat } from './native.ts'
+import { directNativeLeg, registerLiveSideChat } from './native.ts'
 import { dropClosedSideChat, recordClosedSideChat } from './recentClosed.ts'
 import { ToolCard } from '../chat/ToolCard.tsx'
 import { ComposerBar } from './ComposerBar.tsx'
@@ -181,7 +181,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
   useEffect(() => {
     if (pendingDraft === undefined || pendingDraft === '' || phase !== 'chat') return
     composer.appendDraft(pendingDraft)
-    updateTabMeta(ctx, tab.id, clearPendingDraft)
+    updateTabMeta(ctx, scope.sessionId, tab.id, clearPendingDraft)
     // 划选提问的落点体验：草稿注入后焦点直达输入框，用户接着打字即可。
     // visible 预聚焦 effect 只在可见性跳变时跑，已可见的 tab 覆盖不到。
     requestAnimationFrame(() => { rootRef.current?.querySelector('textarea')?.focus() })
@@ -204,7 +204,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
   useEffect(() => {
     // 后悔药自愈（native）：重挂载说明上次卸载是切会话/HMR 而非关闭，清掉误记。
     const metaNow = parseSideChatMeta(metaRef.current)
-    if (nativeSidebarHost(ctx) && metaNow.childId !== undefined) {
+    if (directNativeLeg(ctx) && metaNow.childId !== undefined) {
       dropClosedSideChat(scope.sessionId, metaNow.childId)
     }
     const dispose = registerLiveSideChat(
@@ -215,7 +215,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
         // 绑定后本地草稿被丢弃——改走 meta.pendingDraft，由既有 pendingDraft
         // effect 在相位就绪后应用（与 legacy 路径同机制）。
         if (phaseRef.current !== 'chat') {
-          updateTabMeta(ctx, tab.id, (m) => ({ ...m, pendingDraft: appendDraftText(m.pendingDraft ?? '', text) }))
+          updateTabMeta(ctx, scope.sessionId, tab.id, (m) => ({ ...m, pendingDraft: appendDraftText(m.pendingDraft ?? '', text) }))
           return
         }
         composerRef.current.appendDraft(text)
@@ -229,7 +229,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
       // 后悔药数据源（native）：用户 × 关 native tab 不经 descriptor.onClose
       // （tab-adapter 卸载只 records.drop），以面板卸载补记；误记由挂载时的
       // drop 自愈。legacy 由 descriptor.onClose 负责，不双写。
-      if (nativeSidebarHost(ctx)) {
+      if (directNativeLeg(ctx)) {
         const m = parseSideChatMeta(metaRef.current)
         if (m.childId !== undefined && m.parentSessionId !== undefined) {
           recordClosedSideChat(m.parentSessionId, {

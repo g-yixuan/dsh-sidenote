@@ -14,7 +14,7 @@
  */
 import type { Context } from '../host/contracts.ts'
 import { canForkFrom, collectSideTabs } from './model.ts'
-import { focusNativeTab, liveSideChatsOf, nativeSidebarHost } from './native.ts'
+import { directNativeLeg, focusNativeTab, liveSideChatsOf } from './native.ts'
 import { createSideChat, reopenSideChat } from './open.ts'
 import { dropClosedSideChat, listClosedSideChats } from './recentClosed.ts'
 import { t } from '../locales.ts'
@@ -65,7 +65,7 @@ function makeContribution(ctx: Context, name: string) {
       kind: 'popupSelect' as const,
       options: (session: CommandSession) => {
         const options: SelectOption[] = []
-        const native = nativeSidebarHost(ctx)
+        const native = directNativeLeg(ctx)
         const lives = native ? liveSideChatsOf(session.sessionId) : []
         // native 下同 kind 每 pane 单实例（dsh-client-ui-sidebar-right 的 held
         // 规则：page kind 的 contentId 恒为 sidebar://<kind>，openTab 必折叠为
@@ -81,8 +81,8 @@ function makeContribution(ctx: Context, name: string) {
             options.push({ id: `focus:${live.tabId}`, label: t('cmdFocus', { title: live.readTitle() }), detail: t('cmdFocusDetail') })
           }
         } else {
-          const snapshot = ctx.betterSidebar.getSnapshot()
-          if (snapshot.sessionId === session.sessionId && snapshot.state !== undefined) {
+          const snapshot = ctx.betterSidebar?.getSnapshot()
+          if (snapshot !== undefined && snapshot.sessionId === session.sessionId && snapshot.state !== undefined) {
             for (const tab of collectSideTabs(snapshot.state)) {
               options.push({ id: `focus:${tab.id}`, label: t('cmdFocus', { title: tab.title }), detail: t('cmdFocusDetail') })
             }
@@ -107,8 +107,9 @@ function makeContribution(ctx: Context, name: string) {
         }
         if (option.id.startsWith('focus:')) {
           const tabId = option.id.slice('focus:'.length)
-          // native 宿主的 activateTab 是空操作——聚焦走 ISidebarRight.focus 探测。
-          if (!focusNativeTab(ctx, tabId)) ctx.betterSidebar.activateTab(tabId, { sessionId: session.sessionId })
+          // native 宿主的 activateTab 是空操作——聚焦走 ISidebarRight.focus 探测；
+          // betterSidebar 缺席（optional peer）时无回退面，跳过。
+          if (!focusNativeTab(ctx, tabId)) ctx.betterSidebar?.activateTab(tabId, { sessionId: session.sessionId })
           return
         }
         if (option.id.startsWith('reopen:')) {

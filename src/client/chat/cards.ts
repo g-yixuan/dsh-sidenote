@@ -10,10 +10,10 @@
  *     warn 只打一次防刷屏；
  * 3. 测试在 node 跑纯函数，不碰 React。
  *
- * 类型来源：import type 自 api-remotes（client-runtime 同源的那份影子；
- * tools/connection/api-remotes 三处会漂移，钉这一个——architecture.md 第六节）。
+ * 类型来源：import type 自 @deepseek-ai/dsh-tools（0.1.5 起 presentation
+ * 类型从 api-remotes 迁此——0.1.1 时代的 import 源已不导出这两个类型）。
  */
-import type { ToolCallView, ToolResultView } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ToolCallView, ToolResultView } from '@deepseek-ai/dsh-tools'
 import { t } from '../locales.ts'
 
 /**

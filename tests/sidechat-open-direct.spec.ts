@@ -81,10 +81,10 @@ describe('openOrFocusSideChat（直连腿）', () => {
     expect(openOrFocusSideChat(ctx, SESSION, '这段什么意思')).toBe(true)
     expect(face.openTab).not.toHaveBeenCalled()
     expect(face.focus).toHaveBeenCalledWith('tab-old')
-    expect(readSideChatMeta('tab-old')?.pendingDraft).toBe('这段什么意思')
+    expect(readSideChatMeta(SESSION, 'tab-old')?.pendingDraft).toBe('这段什么意思')
     // 再投一次：换行追加（appendDraftText 语义）
     expect(openOrFocusSideChat(ctx, SESSION, '追问')).toBe(true)
-    expect(readSideChatMeta('tab-old')?.pendingDraft).toBe('这段什么意思\n追问')
+    expect(readSideChatMeta(SESSION, 'tab-old')?.pendingDraft).toBe('这段什么意思\n追问')
   })
 
   it('createSideChat 在单实例期折叠为 openOrFocus（聚焦既有 + 草稿投递）', () => {
@@ -92,7 +92,7 @@ describe('openOrFocusSideChat（直连腿）', () => {
     liveMeta('tab-old')
     expect(createSideChat(ctx, SESSION, '带草稿')).toBe(true)
     expect(face.openTab).not.toHaveBeenCalled()
-    expect(readSideChatMeta('tab-old')?.pendingDraft).toBe('带草稿')
+    expect(readSideChatMeta(SESSION, 'tab-old')?.pendingDraft).toBe('带草稿')
   })
 
   it('会话不在屏：拒绝（不越权开 tab）', () => {

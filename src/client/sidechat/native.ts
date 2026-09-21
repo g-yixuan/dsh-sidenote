@@ -38,13 +38,38 @@ export function rootContext(fallback: Context): Context {
 }
 
 /**
+ * 直连腿判定（WI-05）：tab 直连注册进原生右栏的条件。
+ * - betterSidebar ≥ 0.19 ⇒ 宿主必 ≥ 0.1.5（BS 0.19 只支持 0.1.5）⇒ 直连；
+ * - betterSidebar 整体缺席（optional peer 后的合法形态）⇒ 只能直连；
+ *   无 BS 且无原生面的非法环境（宿主 < 0.1.5）下注册静默不到、侧聊缺席，
+ *   其余功能（注释/回流搭车）存活——静默缺席优于崩。
+ */
+export function directNativeLeg(ctx: Context): boolean {
+  let bs: unknown
+  try {
+    bs = ctx.get('betterSidebar')
+  } catch {
+    // 无 get 面的测试 mock 等：回退属性访问（cordis 属性门禁对未声明服务抛错）。
+    try {
+      bs = ctx.betterSidebar
+    } catch {
+      bs = undefined
+    }
+  }
+  if (bs === undefined || bs === null) return true
+  return nativeSidebarHost(ctx)
+}
+
+/**
  * True when the host keeps sidebar tabs outside the legacy layout store
  * (better-sidebar >= 0.19). Version parse is best-effort: an unparsable
  * version reports false, which keeps the pre-0.19 behaviour.
  */
 export function nativeSidebarHost(ctx: Context): boolean {
   try {
-    const [major = 0, minor = 0] = ctx.betterSidebar.version.split('.').map(part => Number.parseInt(part, 10))
+    const version = ctx.betterSidebar?.version
+    if (version === undefined) return false
+    const [major = 0, minor = 0] = version.split('.').map(part => Number.parseInt(part, 10))
     return major > 0 || minor >= NATIVE_SIDEBAR_MINOR
   } catch {
     return false

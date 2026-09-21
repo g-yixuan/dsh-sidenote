@@ -4,13 +4,20 @@
  * 原生右栏（DSH ≥ 0.1.5）不替插件持久化 tab meta（布局 memory-only），
  * better-sidebar 转发层的 updateTab 在 native 下本就只到 seed.meta 为止——
  * 直连后 meta 全部自管：childId 绑定、parentSessionId、pendingDraft、
- * 实例编号与标题都落这里。
+ * 实例编号都落这里。
  *
- * 持久化：localStorage 按 tabId 分键（dsh-sidenote:side-meta:v1:<tabId>），
- * recentClosed 同款纪律（容错 revive、空删键、写失败不炸主流程）。
- * 原生布局本身是 memory-only（刷新后 tab 消失），所以本 store 的持久化
- * 只服务于「同一次页面生命周期内的重挂载」与「后悔药 reopen 读旧 meta」；
- * 孤键（tab 已不在布局）由面板挂载时的 reconcile 清场。
+ * 持久化：localStorage 按「会话 + tabId」分键（dsh-sidenote:side-meta:v1:
+ * <sessionId>:<tabId>）——**键必须带会话作用域**：原生 tab id 是每会话
+ * 独立计数器铸造（每个会话右栏首个 tab 都叫 tab2），裸 tabId 做键会跨
+ * 会话碰撞（对抗性审查 B1）。revive 容错、空删键、写失败吞错。
+ *
+ * 孤键清扫：原生布局 memory-only（页面刷新后 tab 消失、键残留），而
+ * 「有记录 ⇒ tab 存活」是编排层的判定——残留记录会把入口折叠成聚焦一个
+ * 不存在的 tab（死锁，对抗性审查 B2）。每条记录带本页面生命周期的
+ * runId，插件 apply 时清扫 runId 不匹配的残留（sweepOrphanedSideChatMeta）。
+ * 已知限制：同一 origin 开两个窗口时，后启动窗口的清扫会清掉先开窗口的
+ * 活记录（其面板 reconcile 幂等重建，childId 丢失退回首开 fork）——
+ * 多窗口为边角场景，记录在案。
  */
 export interface SideChatMetaRecord {
   readonly tabId: string
@@ -26,17 +33,29 @@ export interface SideChatMetaRecord {
   /** 实例编号（「侧边 2」的 2；单实例期恒 1）。 */
   readonly number: number
   readonly createdAt: number
+  /** 写入时的页面生命周期 id（孤键清扫判据；缺省 = 旧版记录，视为残留）。 */
+  readonly runId?: string
 }
 
 const KEY_PREFIX = 'dsh-sidenote:side-meta:v1:'
 
-function revive(tabId: string, value: unknown): SideChatMetaRecord | null {
+/** 本页面生命周期 id（模块级铸造，刷新即变）。 */
+export const SIDENOTE_RUN_ID: string = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+  ? crypto.randomUUID()
+  : `run-${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+function keyOf(sessionId: string, tabId: string): string {
+  return `${KEY_PREFIX}${sessionId}:${tabId}`
+}
+
+function revive(value: unknown): SideChatMetaRecord | null {
   if (typeof value !== 'object' || value === null) return null
   const r = value as Record<string, unknown>
   if (typeof r.sessionId !== 'string' || r.sessionId === '') return null
+  if (typeof r.tabId !== 'string' || r.tabId === '') return null
   if (typeof r.number !== 'number') return null
   return {
-    tabId,
+    tabId: r.tabId,
     sessionId: r.sessionId,
     ...(typeof r.childId === 'string' ? { childId: r.childId } : {}),
     ...(typeof r.parentSessionId === 'string' ? { parentSessionId: r.parentSessionId } : {}),
@@ -44,6 +63,7 @@ function revive(tabId: string, value: unknown): SideChatMetaRecord | null {
     ...(typeof r.boundarySeq === 'number' && Number.isInteger(r.boundarySeq) ? { boundarySeq: r.boundarySeq } : {}),
     number: r.number,
     createdAt: typeof r.createdAt === 'number' ? r.createdAt : 0,
+    ...(typeof r.runId === 'string' ? { runId: r.runId } : {}),
   }
 }
 
@@ -75,13 +95,13 @@ export function notifySideChatMetaListeners(): void {
   notify()
 }
 
-export function readSideChatMeta(tabId: string): SideChatMetaRecord | undefined {
+export function readSideChatMeta(sessionId: string, tabId: string): SideChatMetaRecord | undefined {
   const store = storage()
   if (store === null) return undefined
   try {
-    const raw = store.getItem(KEY_PREFIX + tabId)
+    const raw = store.getItem(keyOf(sessionId, tabId))
     if (raw === null) return undefined
-    return revive(tabId, JSON.parse(raw)) ?? undefined
+    return revive(JSON.parse(raw)) ?? undefined
   } catch {
     return undefined
   }
@@ -92,22 +112,27 @@ export function writeSideChatMeta(record: SideChatMetaRecord, options?: { silent
   const store = storage()
   if (store === null) return
   try {
-    store.setItem(KEY_PREFIX + record.tabId, JSON.stringify(record))
+    store.setItem(keyOf(record.sessionId, record.tabId), JSON.stringify(record))
     if (options?.silent !== true) notify()
   } catch { /* 隐私模式/写失败：meta 缺席降级为无绑定首开 */ }
 }
 
-export function dropSideChatMeta(tabId: string): void {
+export function dropSideChatMeta(sessionId: string, tabId: string): void {
   const store = storage()
   if (store === null) return
   try {
-    store.removeItem(KEY_PREFIX + tabId)
+    store.removeItem(keyOf(sessionId, tabId))
     notify()
   } catch { /* ignore */ }
 }
 
 /** 枚举一个主会话的全部 meta 记录（按创建序升序）。 */
 export function sideChatMetasOf(sessionId: string): SideChatMetaRecord[] {
+  return sideChatMetasAll().filter(r => r.sessionId === sessionId).sort((a, b) => a.createdAt - b.createdAt)
+}
+
+/** 枚举全部存活记录（跨会话；完成通知等全局监听用）。 */
+export function sideChatMetasAll(): SideChatMetaRecord[] {
   const store = storage()
   if (store === null) return []
   try {
@@ -115,10 +140,10 @@ export function sideChatMetasOf(sessionId: string): SideChatMetaRecord[] {
     for (let i = 0; i < store.length; i += 1) {
       const key = store.key(i)
       if (typeof key !== 'string' || !key.startsWith(KEY_PREFIX)) continue
-      const record = revive(key.slice(KEY_PREFIX.length), JSON.parse(store.getItem(key) ?? 'null'))
-      if (record !== null && record.sessionId === sessionId) out.push(record)
+      const record = revive(JSON.parse(store.getItem(key) ?? 'null'))
+      if (record !== null) out.push(record)
     }
-    return out.sort((a, b) => a.createdAt - b.createdAt)
+    return out
   } catch {
     return []
   }
@@ -132,4 +157,28 @@ export function sideChatMetasOf(sessionId: string): SideChatMetaRecord[] {
 export function nextSideChatNumber(sessionId: string): number {
   const existing = sideChatMetasOf(sessionId)
   return existing.length === 0 ? 1 : Math.max(...existing.map(r => r.number)) + 1
+}
+
+/**
+ * 孤键清扫：删掉 runId 与本页面生命周期不匹配的记录（上一页面周期的
+ * 残留——原生布局刷新即空，这些键指向的 tab 已不存在）。插件 apply 时
+ * 调用一次。返回清扫数。
+ */
+export function sweepOrphanedSideChatMeta(): number {
+  const store = storage()
+  if (store === null) return 0
+  try {
+    const staleKeys: string[] = []
+    for (let i = 0; i < store.length; i += 1) {
+      const key = store.key(i)
+      if (typeof key !== 'string' || !key.startsWith(KEY_PREFIX)) continue
+      const record = revive(JSON.parse(store.getItem(key) ?? 'null'))
+      if (record === null || record.runId !== SIDENOTE_RUN_ID) staleKeys.push(key)
+    }
+    for (const key of staleKeys) store.removeItem(key)
+    if (staleKeys.length > 0) notify()
+    return staleKeys.length
+  } catch {
+    return 0
+  }
 }

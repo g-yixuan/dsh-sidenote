@@ -17,7 +17,7 @@
  * 编排层折叠为聚焦既有（open.ts），注册层不感知；多实例等 Delivery_02
  * 的 multiple（0.1.6+）放开。
  */
-import { useEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react'
+import { Component, useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from 'react'
 import { IconNewChatOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   Context,
@@ -32,6 +32,7 @@ import type { ReflowStore } from '../reflow.ts'
 import { SideChatPanel } from './SideChatPanel.tsx'
 import { SIDE_TAB_TYPE } from './model.ts'
 import {
+  SIDENOTE_RUN_ID,
   dropSideChatMeta,
   nextSideChatNumber,
   notifySideChatMetaListeners,
@@ -39,7 +40,6 @@ import {
   sideChatMetaStore,
   writeSideChatMeta,
 } from './metaStore.ts'
-import { recordClosedSideChat } from './recentClosed.ts'
 import { t } from '../locales.ts'
 import css from './sidechat.module.css'
 
@@ -75,10 +75,11 @@ export function parseOpenParams(params: unknown): SideChatOpenParams | undefined
  * 若在 effect 里登记，子面板会先按「无 childId」错误地重新 fork 出孤儿会话。
  * @returns true = 本次新建了记录（调用方 effect 里补 notify）。
  */
-export function reconcileMeta(record: NativeTabRecord, sessionId: string): boolean {
-  if (readSideChatMeta(record.id) !== undefined) return false
+export function reconcileMeta(record: NativeTabRecord, sessionId: string): { created: boolean, meta: import('./metaStore.ts').SideChatMetaRecord } {
+  const existing = readSideChatMeta(sessionId, record.id)
+  if (existing !== undefined) return { created: false, meta: existing }
   const params = parseOpenParams(record.navigation.params)
-  writeSideChatMeta({
+  const meta = {
     tabId: record.id,
     sessionId,
     ...(params?.childId !== undefined ? { childId: params.childId } : {}),
@@ -86,13 +87,15 @@ export function reconcileMeta(record: NativeTabRecord, sessionId: string): boole
     ...(params?.pendingDraft !== undefined ? { pendingDraft: params.pendingDraft } : {}),
     number: nextSideChatNumber(sessionId),
     createdAt: Date.now(),
-  }, { silent: true })
-  return true
+    runId: SIDENOTE_RUN_ID,
+  }
+  writeSideChatMeta(meta, { silent: true })
+  return { created: true, meta }
 }
 
 /** 芯片标题：metaStore 的编号兑现（「侧边」/「侧边 N」）。 */
-export function titleOf(tabId: string): string {
-  const meta = readSideChatMeta(tabId)
+export function titleOf(sessionId: string, tabId: string): string {
+  const meta = readSideChatMeta(sessionId, tabId)
   if (meta === undefined || meta.number <= 1) return t('tabBaseTitle')
   return `${t('tabBaseTitle')} ${meta.number}`
 }
@@ -110,53 +113,70 @@ function NativeSideChatBody(props: NativeBodyInjected & NativeTabFrameworkProps)
   const info: NativeTabInfo = useTabInfo()
   const nativeTab = info.tab
 
-  // meta 初始登记（渲染期幂等；见 reconcileMeta 的时序说明）。
-  const reconciled = reconcileMeta(nativeTab, sessionId)
+  // meta 初始登记（渲染期幂等；见 reconcileMeta 的时序说明）。结果直接
+  // 作为本轮渲染的 meta 数据源（子面板 fork 相位依赖它），不等 store 回读。
+  // notify 补触发用 ref：StrictMode/并发下渲染期返回值在第二次渲染失真。
+  const { created, meta: reconciledMeta } = reconcileMeta(nativeTab, sessionId)
+  const createdRef = useRef(false)
+  if (created) createdRef.current = true
   useEffect(() => {
-    if (reconciled) notifySideChatMetaListeners()
-  }, [reconciled])
+    if (createdRef.current) {
+      createdRef.current = false
+      notifySideChatMetaListeners()
+    }
+  }, [])
 
   const cwd = useSessionCwd(ctx, sessionId)
   const scope = useMemo((): SessionScope => ({ sessionId, ...(cwd !== undefined ? { cwd } : {}) }), [sessionId, cwd])
 
-  // meta 变更驱动重渲（fork 登记 childId、草稿清除等）。
+  // meta 变更驱动重渲（fork 登记 childId、草稿清除等）；首轮用 reconcile 的
+  // 直接结果，之后跟 store（两者同键同源，切换无跳变）。
   useSyncExternalStore(sideChatMetaStore.subscribe, sideChatMetaStore.getSnapshot)
-  const meta = readSideChatMeta(nativeTab.id)
+  const meta = readSideChatMeta(sessionId, nativeTab.id) ?? reconciledMeta
 
-  // 关闭登记（后悔药数据源）：原生 tab 的 × 不经插件（0.1.5 无 close
-  // handler 面），而 tab record 的 signal 会在 record 消失时 abort——面板
-  // 卸载后一拍检查：已 abort = 真关闭（登记 + 清 meta）；未 abort = 切会话/
-  // 布局重挂载（不动，reconcile 幂等）。recentClosed 语义与 legacy 腿的
-  // descriptor.onClose 一致（会话本体仍归档在盘，重开走绑定恢复）。
+  // meta 清场：tab record 的 signal 在 record 消失（真关闭）时 abort——
+  // 面板卸载后一拍检查，真关闭清 meta；未 abort（切会话/重挂载）不动，
+  // reconcile 幂等。后悔药登记（recentClosed）由 SideChatPanel 的卸载
+  // effect 负责（挂载自愈清误记），这里不双写。
   const tabSignal = nativeTab.signal
   useEffect(() => () => {
     setTimeout(() => {
-      if (tabSignal?.aborted !== true) return
-      const closed = readSideChatMeta(nativeTab.id)
-      if (closed?.childId !== undefined && closed.parentSessionId !== undefined) {
-        recordClosedSideChat(closed.parentSessionId, {
-          childId: closed.childId,
-          parentSessionId: closed.parentSessionId,
-          title: titleOf(nativeTab.id),
-          closedAt: Date.now(),
-        })
-      }
-      dropSideChatMeta(nativeTab.id)
+      if (tabSignal.aborted) dropSideChatMeta(sessionId, nativeTab.id)
     }, 0)
   }, [nativeTab.id, tabSignal])
 
   const tab: SidebarTab = {
     id: nativeTab.id,
     type: SIDE_TAB_TYPE,
-    title: titleOf(nativeTab.id),
+    title: titleOf(sessionId, nativeTab.id),
     ...(meta === undefined ? {} : { meta }),
   }
 
   return (
     <div className={css.nativeHost} data-dsh-sidenote-native-host="">
-      <SideChatPanel ctx={ctx} store={undefined} scope={scope} tab={tab} visible={nativeTab.visible} reflow={reflow} />
+      <NativeTabBoundary>
+        <SideChatPanel ctx={ctx} store={undefined} scope={scope} tab={tab} visible={nativeTab.visible} reflow={reflow} />
+      </NativeTabBoundary>
     </div>
   )
+}
+
+/** 极简错误边界：渲染期 throw 兜成错误态，不逃到原生 seat（直连后不再有
+ *  better-sidebar 的 RenderBoundary 包裹）。 */
+class NativeTabBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
+  override state = { error: null }
+  static getDerivedStateFromError(error: unknown): { error: string } {
+    return { error: error instanceof Error ? error.message : String(error) }
+  }
+  override componentDidCatch(error: unknown): void {
+    console.warn('[dsh-sidenote] 侧聊面板渲染崩溃:', error)
+  }
+  override render(): ReactNode {
+    if (this.state.error !== null) {
+      return <div style={{ padding: 16, fontSize: 13 }}>{t('sideChatCrashed')}{this.state.error}</div>
+    }
+    return this.props.children
+  }
 }
 
 /** 芯片活标题：metaStore 订阅 + 编号标题。 */
@@ -164,7 +184,7 @@ function NativeSideChatTitle(props: NativeBodyInjected & NativeTabFrameworkProps
   const { useTabInfo } = props
   const info = useTabInfo()
   useSyncExternalStore(sideChatMetaStore.subscribe, sideChatMetaStore.getSnapshot)
-  return titleOf(info.tab.id)
+  return titleOf(props.sessionId, info.tab.id)
 }
 
 /** 会话工作区根（better-sidebar useSessionCwd 同款）。 */

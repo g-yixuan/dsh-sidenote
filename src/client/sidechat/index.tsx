@@ -23,7 +23,7 @@ import { SideChatPanel } from './SideChatPanel.tsx'
 import { SIDE_TAB_TYPE, canForkFrom, collectSideTabs, mintSideTabId, sideTabTitle } from './model.ts'
 import { parseSideChatMeta } from './model.ts'
 import { recordClosedSideChat } from './recentClosed.ts'
-import { liveSideChatsOf, nativeSidebarHost } from './native.ts'
+import { directNativeLeg, liveSideChatsOf, nativeSidebarHost } from './native.ts'
 import { registerNativeSideChatTab } from './native-tab.tsx'
 import { openOrFocusSideChat, sideChatTargetTitle } from './open.ts'
 import { t } from '../locales.ts'
@@ -38,11 +38,12 @@ export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
   // ⇒ 走直连（sidebarRightTabs 经 ctx.inject 等服务，晚到不双份）；
   // BS < 0.19 ⇒ 宿主 ≤ 0.1.2 ⇒ 无原生面，走 legacy registerTab。
   // （同 kind 双注册会被原生注册表判碰撞 throw，故必须互斥。）
-  if (nativeSidebarHost(ctx)) {
+  const bs = ctx.betterSidebar
+  if (directNativeLeg(ctx)) {
     registerNativeSideChatTab(ctx, reflow)
-  } else {
+  } else if (bs !== undefined) {
     ctx.effect(
-      () => ctx.betterSidebar.registerTab({
+      () => bs.registerTab({
         id: SIDE_TAB_TYPE,
         title: () => t('menuTitle'),
         icon: (size: number) => <IconNewChatOutline16 size={size} />,

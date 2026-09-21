@@ -290,7 +290,11 @@ export interface LocaleService {
 }
 
 export interface Context extends CordisContext {
-  betterSidebar: BetterSidebarService
+  /**
+   * better-sidebar 客户端服务（optional peer——WI-05 起可缺席；缺席时
+   * 侧聊走直连腿（directNativeLeg），legacy 路径一律先判空）。
+   */
+  betterSidebar?: BetterSidebarService
   sessions: SessionsService
   workspaces: WorkspacesService
   connection: ConnectionService
@@ -467,8 +471,12 @@ export interface NativeTabRecord {
   title: string
   visible: boolean
   navigation: { address: string, params?: unknown }
-  /** record 消失（tab 关闭）或插件卸载时 abort（权威：tab-info.d.ts）。 */
-  readonly signal?: AbortSignal
+  /**
+   * record 消失（tab 关闭）或插件卸载时 abort（权威：contract/slots.d.ts
+   * SidebarRightTabInfo.tab.signal——必填；标可选会让关闭检测在形态漂移时
+   * 静默失效）。
+   */
+  readonly signal: AbortSignal
 }
 
 /** useTabInfo() 的返回（槽框架注入的 tab 信息 hook）。 */
@@ -492,18 +500,13 @@ export interface NativeTabFrameworkProps {
  *   （不在接口里），需要时结构化探测。
  */
 export interface SidebarRightService {
-  openTab(kind: string, options?: { revealIfOpened?: boolean, params?: unknown }): void
+  openTab(kind: string, options?: { paneId?: string, replaceTab?: string, revealIfOpened?: boolean, params?: unknown }): void
   close(tabId: string): void
   isExpanded(): boolean
   toggleExpanded(): void
   focus(tabId: string): void
 }
 
-/** SessionListSnapshot.byId 行补 cwd（实例编号与 scope 合成用）。 */
-export interface SessionListRow {
-  blank?: boolean
-  cwd?: string
-}
 
 /** SessionInput completion for annotate: the live state store + the (unused) chip insert face. */
 export interface SessionInput {

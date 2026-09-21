@@ -1,6 +1,12 @@
 packages:
   - .
 
+# dsh 系包的 peer 链（dsh-tools 等）在 autoInstallPeers 下会把半个宿主
+# 依赖树拉进开发树并触发上游悬空范围（>=0.1.5 <0.2.0-0）解析失败——
+# 插件的 dsh-* 依赖只为类型面（import type），运行时由宿主 bundle 提供，
+# 不自动装 peer（better-sidebar 同款纪律）。
+autoInstallPeers: false
+
 # pnpm 的 strict-dep-builds 护栏放行：node-pty 来自 dsh-better-sidebar（peer，
 # 开发环境会装）；CI（pnpm 11）默认拦截其构建脚本。
 allowBuilds:

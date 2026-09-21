@@ -80,3 +80,19 @@ export function webLabels() {
     markdown: markdownChrome(),
   }
 }
+
+/** JsonTreeLabels（0.1.5 必填：label + labels 全套）。 */
+export function jsonTreeLabels() {
+  return {
+    copyValue: t('jsonCopyValue'),
+    copyJson: t('jsonCopyJson'),
+    copyPath: t('jsonCopyPath'),
+    copyPrettyJson: t('jsonCopyPretty'),
+    copyCompactJson: t('jsonCopyCompact'),
+    copied: t('codeCopied'),
+    copyFailed: t('jsonCopyFailed'),
+    collapseNode: t('jsonCollapse'),
+    expandNode: t('jsonExpand'),
+    copyButtonTitle: (action: string) => action,
+  }
+}
