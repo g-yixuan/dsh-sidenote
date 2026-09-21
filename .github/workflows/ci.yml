@@ -111,6 +111,8 @@ jobs:
 
   # 宿主版本 canary（weekly）：latest DSH × latest BS——新版发布早发现。
   # 与 plugin-mount 的差别：版本全部取 npm latest，不钉；失败即宿主又漂了。
+  # 0.4.0 起：canary 跑无-BS 直连档（latest 宿主 + 不装 BS）——mount.e2e.ts
+  # 是 legacy 布局选择器，在 0.1.5 原生栏形态下不适用；直连档才是主路径。
   host-canary:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
@@ -136,5 +138,5 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Canary mount smoke (latest hosts)
         env:
-          BS_VERSION: latest
+          BS_VERSION: none
         run: pnpm test:mount
