@@ -64,6 +64,12 @@ jobs:
             bs-version: '0.18.0'
           - dsh-version: '0.1.2-rc.1'
             bs-version: '0.18.0'
+          # 直连档（WI-07）：0.1.5 原生右栏、不装 better-sidebar——optional
+          # peer 后的主路径。跑 mount-direct.e2e.ts（e2e-mount.sh 按 BS_VERSION
+          # 分档）。0.1.5+BS0.19 共存档的选择器面与 legacy 不同（mount.e2e.ts
+          # 是 legacy 布局形态），矩阵化留后续。
+          - dsh-version: '0.1.5-rc.2'
+            bs-version: 'none'
     continue-on-error: ${{ matrix.experimental || false }}
     env:
       DSH_TELEMETRY_DISABLED: '1'
