@@ -33,7 +33,7 @@ dsh plugin --profile web add dsh-sidenote
 
 从当前主会话 **fork**（全量历史快照，不压缩）出独立侧边会话，在右侧栏多轮对话：
 
-- 顶栏「侧边」按钮 / `+` 菜单 / 斜杠命令 `/side` 三个入口，多实例并存；
+- 顶栏「侧边」按钮 / 右侧栏 guide / 斜杠命令 `/side` 三个入口；
 - 与主对话**同一套渲染材质**：工具卡、思考预览、任务卡、模型/权限切换、`@` 引用、图片附件；
 - 审批/提问**在面板内直接答复**，不用跳回主视图；跑完有 toast 通知；
 - 继承历史默认折叠成指示卡；折叠态/滚动位置刷新不丢；`Alt+J` 主↔侧切焦点。
@@ -93,7 +93,7 @@ dsh plugin --profile web add dsh-sidenote
 | 命令 | 说明 |
 |---|---|
 | `pnpm typecheck` | tsc --noEmit |
-| `pnpm test` | vitest 单测（136 例） |
+| `pnpm test` | vitest 单测（202 例） |
 | `pnpm build` | 类型声明 + tsdown（host ESM + client CJS bundle，纯度门） |
 | `pnpm test:mount` | 挂载冒烟：真实 `dsh web` + 伪造会话日志 + Playwright 十条 journey lane（`BS_VERSION`/`DSH_CMD` 切版本矩阵） |
 

@@ -11,9 +11,10 @@
     name: 'dsh-sidenote 侧边聊天',
     url: 'https://github.com/g-yixuan/dsh-sidenote',
     description: () => t('pluginSideChatDesc'),
-    // dsh-sidenote hard-depends on dsh-better-sidebar (required peer), so
-    // the install line installs the prerequisite first, then the plugin.
-    install: 'cd ~/.dsh && dsh plugin --profile web add dsh-better-sidebar && dsh plugin --profile web add dsh-sidenote@latest',
+    // dsh-sidenote runs standalone on DSH ≥ 0.1.5 (native right sidebar);
+    // dsh-better-sidebar is an optional peer, only consumed on older hosts
+    // (0.1.1/0.1.2) when present — no prerequisite install needed.
+    install: 'cd ~/.dsh && dsh plugin --profile web add dsh-sidenote@latest',
   },
 ```
 
@@ -21,12 +22,12 @@
 
 中文（zh 区）：
 ```ts
-  pluginSideChatDesc: 'Codex 风格侧边聊天与划选注释：从当前会话 fork 出独立侧边会话（归档隐藏、多实例、/side 命令、刷新恢复）；assistant 消息划选 → 编号角标 + 注解编辑器 →「N 条注释」chip 随消息发出，也可直接进入侧边聊天提问',
+  pluginSideChatDesc: 'Codex 风格侧边聊天与划选注释：从当前会话 fork 出独立侧边会话（归档隐藏、/side 命令、刷新恢复）；assistant 消息划选 → 编号角标 + 注解编辑器 →「N 条注释」chip 随消息发出，也可直接进入侧边聊天提问',
 ```
 
 英文（en 区）：
 ```ts
-  pluginSideChatDesc: 'Codex-style side chat & selection annotations: fork the current session into a persistent side panel (archived out of the session list, multi-instance, /side command, survives reload); select assistant text → numbered badges + note editor → an "N annotations" composer chip that rides your next message, or ask straight into a side chat',
+  pluginSideChatDesc: 'Codex-style side chat & selection annotations: fork the current session into a persistent side panel (archived out of the session list, /side command, survives reload); select assistant text → numbered badges + note editor → an "N annotations" composer chip that rides your next message, or ask straight into a side chat',
 ```
 
 ## 3. PR 标题与正文草稿
@@ -38,8 +39,8 @@
 收录一个新 Tab 插件：**dsh-sidenote**（Codex 风格侧边聊天 + 划选注释）。
 
 - 仓库：https://github.com/g-yixuan/dsh-sidenote （已打 `dsh-plugin` / `dsh-better-sidebar` topic）
-- 接入方式：消费 `ctx.betterSidebar`（`registerTab`，`inject = ['betterSidebar', ...]`），遵循 docs/external-plugin-guide.md
+- 接入方式：DSH ≥ 0.1.5 直连宿主原生右侧边栏（`sidebarRightTabs` 注册）；0.1.1/0.1.2 老宿主经**可选 peer** 消费 `ctx.betterSidebar`（`registerTab`，存在才注册、缺席自动走原生腿），遵循 docs/external-plugin-guide.md
 - npm：https://www.npmjs.com/package/dsh-sidenote
 - 条目：plugins-tabs.ts 按字母序插入 + locales.ts 双语 pluginSideChatDesc
-- 实测：`dsh plugin --profile web add dsh-better-sidebar@0.12.3` + 本插件在真实 DSH 挂载，Playwright 七条 journey lane 全绿（0.12.3 与 0.13.0 双版本）
+- 实测：`dsh plugin --profile web add dsh-sidenote` 在真实 DSH 挂载，CI 四条挂载泳道全绿——0.1.5-rc.2 无-BS 直连档 + 0.1.1/0.1.2 × dsh-better-sidebar 0.12.3/0.18.0 legacy 档
 ```

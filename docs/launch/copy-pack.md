@@ -4,6 +4,7 @@
 > 所有版本都遵循：朴素陈述、不拉票、不求 star、接受批评。
 > 已更新至 v0.2.0 卖点（2026-09-07）：回流通道（问答成对）、发送后留痕、顶栏入口。
 > v0.3.x 增量（2026-09-08，发帖时可择句补入）：侧边面板与主对话原生对齐——无缝工具卡（人话标题）、思考行首行预览、任务卡、胶囊 composer、模型/权限切换、Alt+J 焦点切换、保存转正 toast、双宿主版本（0.1.1/0.1.2）兼容矩阵。
+> v0.4.x 增量（2026-09-22）：直连 DSH 原生右侧边栏（DSH ≥ 0.1.5-rc.1），一步直装无前置插件；dsh-better-sidebar 降级为可选 peer（仅 0.1.1/0.1.2 老宿主需要）。直连腿暂为单实例语义（同会话同时一个侧边聊天，多开待宿主 `multiple` 能力恢复）。
 
 ---
 
@@ -15,9 +16,9 @@
 
 > I built this because I kept losing my main thread when a side question came up mid-conversation with an AI coding assistant.
 >
-> dsh-sidenote is a plugin for DeepSeek Harness (built on dsh-better-sidebar's tab service) that does three things and ties them together:
+> dsh-sidenote is a plugin for DeepSeek Harness that runs directly on the host's native right sidebar (DSH ≥ 0.1.5 — no companion plugin to install) and does three things well together:
 >
-> 1. **Side chat**: fork the current session into a persistent side panel — full history snapshot, no compression. It stays out of your session list, survives reloads, and you can run several at once.
+> 1. **Side chat**: fork the current session into a persistent side panel — full history snapshot, no compression. It stays out of your session list and survives reloads.
 > 2. **Selection annotations**: select text in an assistant reply, attach a note, and every annotation rides along with your next message as quoted context (XML blocks the model parses cleanly). Or send quote+note straight into a side chat.
 > 3. **Reflow**: bring a side-chat conclusion back to the main session as a controlled chip above the composer — it carries the question *and* the answer (Q&A pairs), so the model gets the full context, not an orphan conclusion. You preview and remove items before sending; nothing touches your draft text.
 >
@@ -37,9 +38,9 @@
 
 > 用 AI 编码助手时有个老毛病：主对话正推到关键处，突然想问个支线问题——问吧，打断主线；不问吧，憋着。
 >
-> 所以我写了 dsh-sidenote（DSH 插件，基于 dsh-better-sidebar 的 Tab 服务）：
+> 所以我写了 dsh-sidenote（DSH 插件，直连 DSH 原生右侧边栏，无需安装其他前置插件）：
 >
-> - **侧边聊天**：从当前会话 fork 出独立的侧边会话（全量历史快照，不是压缩摘要），在右侧栏开个「侧边」Tab 随便聊。可以多开，不进左侧会话列表，刷新/重启都还在，手动关掉才消失。
+> - **侧边聊天**：从当前会话 fork 出独立的侧边会话（全量历史快照，不是压缩摘要），在右侧栏开个「侧边」Tab 随便聊。不进左侧会话列表，刷新/重启都还在，手动关掉才消失。
 > - **划选注释**：在 assistant 的回复里划一段 → 写个注解 → 输入框出现「N 条注释」chip，随下一条消息一起发给模型（XML 协议块，模型读起来比引用符号更稳）。也可以划完直接「在侧边聊天中提问」。
 > - **回流**：侧边聊出结论后，点一下把它带回主会话——而且是**问答成对**地带（问题和答案一起回，模型拿到的不是没头没尾的结论）。发送前在输入框上方的 chip 里能预览、能逐条撤。发出后自己的气泡折叠成一条「含侧边回流上下文」留痕，协议块不占屏。
 >
@@ -61,15 +62,15 @@
 >
 > 痛点：主对话推到一半想问支线问题，怕打断上下文。
 >
-> dsh-sidenote 是 DSH（DeepSeek Harness）的插件，消费 dsh-better-sidebar 的侧边栏服务：
+> dsh-sidenote 是 DSH（DeepSeek Harness）的插件，直连 DSH 原生右侧边栏（≥ 0.1.5），无前置插件依赖：
 >
-> 1. 侧边聊天 = 真 fork（带全部历史）的独立会话挂在右侧栏，多开、归档不进会话列表、刷新不掉；
+> 1. 侧边聊天 = 真 fork（带全部历史）的独立会话挂在右侧栏，归档不进会话列表、刷新不掉；
 > 2. 划选注释 = 选中 assistant 的话 → 编号角标 + 注解 → 「N 条注释」chip 随消息发出；
 > 3. 两个是打通的：注释一键进侧边聊天提问，侧边的结论一键**回流**主会话（问答成对、受控 chip、可预览可撤）。
 >
 > 跟同类比：sidechain 也是真 fork 但没注释；dsh-annotation 只做注释没侧聊；sidebar-qa 是摘要压缩路线（有损）；heartmove/super-cabbage 有带回但方向是文本复制。我们这条是「注释 ⇄ 侧聊 ⇄ 回流」全闭环，且回流带问题上下文（问答成对）。
 >
-> 安装：`dsh plugin --profile web add dsh-sidenote`（需要先装 dsh-better-sidebar）
+> 安装：`dsh plugin --profile web add dsh-sidenote`（一步直装，无前置依赖）
 > 仓库：[GitHub 链接]
 >
 > 求试用求意见 🙏
@@ -103,8 +104,8 @@
 ## FAQ（评论区高频问题预案）
 
 - **Q: 和 dsh-sidebar-qa / dsh-sidechain / dsh-annotation 有什么区别？**
-  A: sidechain 同是真 fork 但无注释、无归档隐藏；sidebar-qa 是摘要压缩（轻但有损）；dsh-annotation 只做注释。我们是注释⇄侧聊⇄回流全闭环 + 归档隐藏 + 多实例。
-- **Q: 侧边会话占资源吗？** A: 每个侧边聊天是真实会话，开着不跑模型就不花 token；关闭 Tab 即从界面消失（会话本体归档留盘，后续会出恢复/真删除入口）。
+  A: sidechain 同是真 fork 但无注释、无归档隐藏；sidebar-qa 是摘要压缩（轻但有损）；dsh-annotation 只做注释。我们是注释⇄侧聊⇄回流全闭环 + 归档隐藏 + 直连原生右栏零前置安装。
+- **Q: 侧边会话占资源吗？** A: 每个侧边聊天是真实会话，开着不跑模型就不花 token；关闭 Tab 即从界面消失（会话本体归档留盘，可用 `/side` 重开最近关闭的侧边聊天）。
 - **Q: 注释刷新就没了？** A: 不会——localStorage 按会话持久化，刷新/重启都恢复；发送后注释转成气泡上的「批注 ×N」留痕（只读可回看）。
-- **Q: 装不上/没反应？** A: 确认先装了 dsh-better-sidebar；插件挂在它的侧边栏 `+` 菜单和主对话顶栏的「侧边」按钮里，也有 `/side` 斜杠命令。
+- **Q: 装不上/没反应？** A: DSH 需 ≥ 0.1.5-rc.1（更老的 0.1.1/0.1.2 宿主才会用到可选的 dsh-better-sidebar ≤ 0.18.x）；入口在主对话顶栏的「侧边」按钮和右侧栏 guide 里，也有 `/side` 斜杠命令。
 - **Q: 模型怎么选？** A: fork 时跟随主会话当前模型；侧边独立切换在路线图上（下一个大版本的主题就是侧边面板与主对话全对齐）。

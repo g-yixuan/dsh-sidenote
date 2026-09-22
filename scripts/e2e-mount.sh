@@ -3,7 +3,8 @@
 # dsh-sidenote 挂载冒烟编排（仿 dsh-better-sidebar scripts/e2e-mount.sh）：
 #
 #   1. 全新 scratch DSH_HOME（绝不触碰真实 ~/.dsh）+ web profile 模板；
-#   2. 官方 CLI 安装 npm 版 dsh-better-sidebar（本插件的硬依赖）与本插件
+#   2. 官方 CLI 安装 npm 版 dsh-better-sidebar（可选 peer，仅 legacy/共存
+#      泳道安装；BS_VERSION=none 的无-BS 直连档跳过）与本插件
 #      tarball（file:<tgz>）；
 #   3. 伪造一个含已完成 turn 的会话 jsonl（scripts/seed-session.mjs），
 #      使 fork 路径无需模型凭证即可验证；

@@ -200,7 +200,8 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
     // pendingDraft/相位变化时真正动作（清除后 pendingDraft 为 undefined，幂等）。
   }, [pendingDraft, phase, ctx, tab.id])
 
-  // Native right sidebar (better-sidebar >= 0.19): publish this panel so the
+  // Native right sidebar（DSH ≥ 0.1.5 原生栏直连腿；legacy 宿主上由
+  // better-sidebar ≥ 0.19 转发到同一原生栏）: publish this panel so the
   // programmatic entry points (/side, selection bridge) can reach its tab id and
   // seed the draft — the layout snapshot cannot see native tabs (see native.ts).
   // latest-ref：composer/meta/phase/title 每渲新引用，进 deps 会高频重注册。

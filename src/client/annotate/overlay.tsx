@@ -311,7 +311,8 @@ function SentViewer(props: {
 /**
  * 浮层水平落点（W03）：优先锚点右侧；右侧剩余空间不足（贴着展开的
  * better-sidebar 面板时必然不足——角标 gutter 就在消息列右缘）翻到左侧。
- * 右边界取面板左缘（[data-dsh-better-sidebar]，宿主 DOM 属性，查不到按视口）。
+ * 右边界取面板左缘（[data-dsh-better-sidebar]，better-sidebar 的根锚点——
+ * 仅在装了它的宿主上存在，查不到按视口）。
  */
 function popoverLeft(x: number, width: number): number {
   const panel = typeof document === 'undefined'

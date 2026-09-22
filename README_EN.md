@@ -33,7 +33,7 @@ For local development, mount with `dsh plugin --profile web add link:<repo path>
 
 **Fork** the current session (full history snapshot, no compression) into an independent side session living in the right-hand panel:
 
-- Three entries — header "Side" button, the `+` menu, the `/side` slash command — and multiple instances side by side;
+- Three entries — the header "Side" button, the right-sidebar guide, and the `/side` slash command;
 - **The same rendering material as the main chat**: tool cards, thinking previews, task cards, model/permission switching, `@` references, image attachments;
 - Answer approvals and questions **right inside the panel** — no jumping back to the main view; a toast lets you know when a reply lands;
 - Inherited history folds into a summary card; fold and scroll state survive reloads; `Alt+J` hops focus between main and side.
@@ -79,6 +79,8 @@ For local development, mount with `dsh plugin --profile web add link:<repo path>
 
 The plugin degrades by capability when a host face is absent (never crashes the page); it coexists with dsh-better-sidebar natively (independent registrations, no dependency).
 
+**Single-instance semantics (direct leg)**: the host allows one tab of a page-kind per pane — one side chat per session at a time (opening again focuses the live tab; after closing, `/side` reopens the recent one). Multi-instance returns with the host's `multiple` capability (0.1.6).
+
 ## Design notes
 
 - **A real fork, not a summary**: the side session is a genuine DSH session (full history snapshot) with the same capabilities as the main one — not a one-shot Q&A.
@@ -90,7 +92,7 @@ The plugin degrades by capability when a host face is absent (never crashes the 
 | Command | What it does |
 |---|---|
 | `pnpm typecheck` | tsc --noEmit |
-| `pnpm test` | vitest unit tests (136 cases) |
+| `pnpm test` | vitest unit tests (202 cases) |
 | `pnpm build` | type declarations + tsdown (host ESM + client CJS bundle, purity gates) |
 | `pnpm test:mount` | mount smoke: real `dsh web` + fabricated session log + ten Playwright journey lanes (`BS_VERSION`/`DSH_CMD` version matrix) |
 
