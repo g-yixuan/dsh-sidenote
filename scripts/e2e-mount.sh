@@ -79,7 +79,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# 步骤 1：scratch profile 模板（pnpm 11 strict-dep-builds 护栏同上游）
+# 步骤 1：scratch profile 模板（pnpm 11 strict-dep-builds 护栏同上游）。
+# patchReload 必须显式 "startup"：自定义 profile 缺省是 "live"，会拉起
+# Cordis HMR 服务做补丁热监听——无头 e2e 不需要，且在精简运行时下直接
+# 启动失败（dsh-app-boot watchUserPatches）。
 PROFILE_DIR="$DSH_HOME/profiles/web"
 cat > "$PROFILE_DIR/package.json" <<EOF
 {
@@ -88,7 +91,8 @@ cat > "$PROFILE_DIR/package.json" <<EOF
   "dependencies": {},
   "dsh": {
     "profile": {
-      "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app"]
+      "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app"],
+      "patchReload": "startup"
     }
   }
 }

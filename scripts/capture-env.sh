@@ -27,7 +27,7 @@ cat > "$PROFILE_DIR/package.json" <<'EOF'
   "name": "dsh-profile-web",
   "private": true,
   "dependencies": {},
-  "dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app"] } }
+  "dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app"], "patchReload": "startup" } }
 }
 EOF
 printf '[]\n' > "$PROFILE_DIR/cordis.patch.yml"

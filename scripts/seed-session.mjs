@@ -47,10 +47,9 @@ const t0 = Date.now() - 60_000
 const lines = [
   { type: 'session', version: 0, id: sessionId, createdAt: t0, cwd, delegationDepth: 0, agentPreset: 'standard' },
   { type: 'turn/start', seq: 0, time: t0 + 1, data: { turn: 1 } },
-  { type: 'session/title', seq: 1, time: t0 + 2, data: { title: 'Side chat plugin review', messageSeqs: [3], source: { kind: 'fallback' } } },
-  { type: 'step/start', seq: 2, time: t0 + 3, data: { turn: 1, step: 1 } },
+  { type: 'step/start', seq: 1, time: t0 + 2, data: { turn: 1, step: 1 } },
   {
-    type: 'user/message', seq: 3, time: t0 + 4,
+    type: 'user/message', seq: 2, time: t0 + 3,
     data: {
       content: [{ type: 'text', text: 'I forked the main session into a side panel. Review this approach and flag anything risky.' }],
       source: { kind: 'user', rpcId: 'e2e-seed', clientTimeZone: 'Asia/Shanghai' },
@@ -58,6 +57,9 @@ const lines = [
     },
     surfaceOp: 'append',
   },
+  // session/title 必须在它引用的消息之后：v0→v1 迁移校验 messageSeqs
+  // 指向更早的事件（dsh-session-format-v0-to-v1 准入规则），前指会被拒收。
+  { type: 'session/title', seq: 3, time: t0 + 4, data: { title: 'Side chat plugin review', messageSeqs: [2], source: { kind: 'fallback' } } },
   {
     type: 'assistant/message', seq: 4, time: t0 + 5,
     data: {
