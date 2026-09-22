@@ -19,24 +19,8 @@
  * dsh-better-sidebar src/trust-fence.ts，BSD-3-Clause 同源复制）。
  */
 import type { IncomingHttpHeaders } from 'node:http'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { isTrustedApiRequest } from './trust-fence.ts'
-
-// createUserMessage 懒加载（审查 M-2）：dsh-llm 不在插件的依赖树里，运行时
-// 靠宿主 loader 的解析兜底——顶层静态 import 会让模块求值期直接崩（webServer
-// 面缺席的降级兜底都来不及跑）。handler 内 await import：解析失败仅本条
-// 路由降级（客户端回落搭车），宿主半包其余部分照常。
-type CreateUserMessage = (input: unknown) => unknown
-let createUserMessageCached: CreateUserMessage | null | undefined
-async function loadCreateUserMessage(): Promise<CreateUserMessage | null> {
-  if (createUserMessageCached !== undefined) return createUserMessageCached
-  try {
-    const mod = await import('@deepseek-ai/dsh-llm')
-    createUserMessageCached = mod.createUserMessage as CreateUserMessage
-  } catch {
-    createUserMessageCached = null
-  }
-  return createUserMessageCached
-}
 
 /** Plugin identity for cordis.yml rows. */
 export const name = 'dsh-sidenote'
@@ -145,11 +129,6 @@ export function makeReflowHandler(ctx: HostContext) {
     if (agent === undefined || typeof agent.inject !== 'function') {
       // 父会话无 live agent（未在屏/冷）——客户端回落搭车形态。
       writeJson(res, 200, { ok: false, error: 'no-live-agent' })
-      return
-    }
-    const createUserMessage = await loadCreateUserMessage()
-    if (createUserMessage === null) {
-      writeJson(res, 200, { ok: false, error: 'dsh-llm-unavailable' })
       return
     }
     // summary 收敛到官方上限（CONTEXT_SUMMARY_MAX_CHARS=120；审查 m3）。
