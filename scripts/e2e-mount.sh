@@ -135,7 +135,7 @@ node -e '
   const missing = required.filter((b) => !bundles.includes(b));
   if (missing.length) { console.error("挂载未注册:", missing.join(", ")); process.exit(1); }
 ' "$PROFILE_DIR/package.json" "$BS_VERSION"
-say "挂载已注册（BS_VERSION=$BS_VERSION）"
+say "挂载已注册（BS_VERSION=${BS_VERSION}）"
 
 # 步骤 3：伪造含已完成 turn 的会话（fork 路径无需模型凭证）
 SEED_SESSION_ID="$(node "$SCRIPT_DIR/seed-session.mjs" "$DSH_HOME" "$WORKSPACE_DIR")"
