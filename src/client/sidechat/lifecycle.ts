@@ -13,12 +13,87 @@ import { betterSidebarOf, directNativeLeg, rootContext } from './native.ts'
 import { readSideChatMeta, writeSideChatMeta } from './metaStore.ts'
 
 /**
+ * 主线忙碌判定（fork 护栏）。2026-09-22 实证的宿主 fork 语义缺口：fork
+ * 一个 turn 在飞的会话，会把在飞消息以「未认领的 inbox splice」形态遗传
+ * 给子会话——子会话把它当成自己的首个任务执行，用户真正发的侧边消息
+ * 则排进不可见队列（用户视角 = 「发不了」+「主线最后一条消息被抄到
+ * 侧边」）。因此 fork 前必须等主线空闲。
+ *
+ * busy = running（Session 快照顶层，0.1.1/0.1.2/0.1.5 同在）或 pending
+ * 非空（审批/提问挂起：0.1.1 在 Session 快照顶层，0.1.2 起在
+ * uiConversation.chat 的 legacy 切片——双面都读，同面板 R8 链）。
+ * 探测失败一律按「空闲」放行（fork 错误面兜底），绝不因读不到状态而卡死。
+ */
+export function sessionBusyOf(ctx: Context, sessionId: string): boolean {
+  try {
+    const binding = ctx.sessions.binding(sessionId)
+    const snap = binding?.session?.getSnapshot?.() as { running?: boolean; pending?: readonly unknown[] } | null
+    if (snap?.running === true) return true
+    if ((snap?.pending?.length ?? 0) > 0) return true
+    const legacy = chatSourceOf(ctx, binding)?.getLegacy() as { pending?: readonly unknown[] } | null
+    return (legacy?.pending?.length ?? 0) > 0
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 等会话空闲：已空闲即同步返回；否则订阅 Session 快照 + chat 源（双通道
+ * 任一翻牌即重估），并以 1.5s 轮询兜底（订阅面缺席/不翻牌时不死等）。
+ * signal 中止（面板卸载/关 tab）→ reject AbortError。
+ *
+ * 已知残余竞态（需宿主修 fork 语义才能根除，此处把窗口从「整个运行期」
+ * 压到事件间隙）：观测到空闲到 fork 执行之间主线恰好起跑；以及在飞
+ * turn 结束后 next-turn 队列里还有待发消息（队列随 fork 遗传）。
+ */
+export async function waitForSessionIdle(ctx: Context, sessionId: string, signal?: AbortSignal): Promise<void> {
+  if (!sessionBusyOf(ctx, sessionId)) return
+  await new Promise<void>((resolve, reject) => {
+    let settled = false
+    const offs: Array<() => void> = []
+    let poll: ReturnType<typeof setInterval> | undefined
+    const finish = (error?: Error): void => {
+      if (settled) return
+      settled = true
+      for (const off of offs) off()
+      if (poll !== undefined) clearInterval(poll)
+      signal?.removeEventListener('abort', onAbort)
+      if (error === undefined) resolve()
+      else reject(error)
+    }
+    const recheck = (): void => {
+      if (!sessionBusyOf(ctx, sessionId)) finish()
+    }
+    const onAbort = (): void => finish(new DOMException('side chat fork wait aborted', 'AbortError'))
+    try {
+      const binding = ctx.sessions.binding(sessionId)
+      const session = binding?.session
+      if (typeof session?.subscribe === 'function') offs.push(session.subscribe(recheck))
+      const chat = chatSourceOf(ctx, binding)
+      if (chat !== undefined) offs.push(chat.subscribe(recheck))
+    } catch {
+      // 订阅面缺失由轮询兜住。
+    }
+    poll = setInterval(recheck, 1500)
+    if (signal?.aborted === true) {
+      onAbort()
+      return
+    }
+    signal?.addEventListener('abort', onAbort)
+    recheck()
+  })
+}
+
+/**
  * 首开编排：fork（全量历史快照）→ 登记 meta（先行，绝不丢登记）→
  * 归档隐藏出会话列表（best-effort）→ 模型跟随主会话（best-effort）。
  * fork 失败抛错（面板组件转错误态）；后两步失败只告警不阻断。
  * @returns fork 出的子会话 id。
  */
-export async function forkAndRegister(ctx: Context, parentSessionId: string, tabId: string): Promise<string> {
+export async function forkAndRegister(ctx: Context, parentSessionId: string, tabId: string, signal?: AbortSignal): Promise<string> {
+  // fork 护栏：主线 turn 在飞时先等空闲（机制见 waitForSessionIdle 注）。
+  await waitForSessionIdle(ctx, parentSessionId, signal)
+  if (signal?.aborted === true) throw new DOMException('side chat fork aborted', 'AbortError')
   // D1 折叠边界：fork 前读父会话当前最大节点 seq（fork 继承的内容到此为止）。
   // 读取走 chatSourceOf 双兼容面（0.1.2 的 Session 快照已无 nodes 顶层字段，
   // 内容在 uiConversation.legacy——直读 Session 会静默拿不到边界）。

@@ -92,7 +92,7 @@ The plugin degrades by capability when a host face is absent (never crashes the 
 | Command | What it does |
 |---|---|
 | `pnpm typecheck` | tsc --noEmit |
-| `pnpm test` | vitest unit tests (202 cases) |
+| `pnpm test` | vitest unit tests (213 cases) |
 | `pnpm build` | type declarations + tsdown (host ESM + client CJS bundle, purity gates) |
 | `pnpm test:mount` | mount smoke: real `dsh web` + fabricated session log + ten Playwright journey lanes (`BS_VERSION`/`DSH_CMD` version matrix) |
 

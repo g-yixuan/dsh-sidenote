@@ -19,7 +19,7 @@ import { useComposer, type Composer } from './composer.ts'
 import { appendDraftText, clearPendingDraft, parseSideChatMeta, phaseOf } from './model.ts'
 import { transcriptOf } from '../chat/transcript.ts'
 import { EmptyState, MessageList, StateScreen } from './rows.tsx'
-import { chatSourceOf, closeSideTab, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, updateTabMeta } from './lifecycle.ts'
+import { chatSourceOf, closeSideTab, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, sessionBusyOf, updateTabMeta } from './lifecycle.ts'
 import { directNativeLeg, registerLiveSideChat } from './native.ts'
 import { dropClosedSideChat, recordClosedSideChat } from './recentClosed.ts'
 import { ToolCard } from '../chat/ToolCard.tsx'
@@ -75,11 +75,13 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
     if (childId !== undefined || forkStarted.current) return
     forkStarted.current = true
     let cancelled = false
-    forkAndRegister(ctx, scope.sessionId, tab.id)
+    // 主线在飞时 forkAndRegister 会等其空闲（fork 护栏）；关 tab/卸载即中止等待。
+    const controller = new AbortController()
+    forkAndRegister(ctx, scope.sessionId, tab.id, controller.signal)
       .catch((error) => {
-        if (!cancelled) setForkError(error instanceof Error ? error.message : String(error))
+        if (!cancelled && !controller.signal.aborted) setForkError(error instanceof Error ? error.message : String(error))
       })
-    return () => { cancelled = true }
+    return () => { cancelled = true; controller.abort() }
   }, [ctx, scope.sessionId, tab.id, childId])
 
   // ── 列表订阅：phase（就绪与否）+ byId（在列与否）驱动「会话已不存在」判定 ──
@@ -355,6 +357,11 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
     )
   }
   if (phase === 'forking' || phase === 'loading') {
+    // fork 护栏等待中（主线 turn 在飞）：显性文案，否则用户会以为卡死。
+    // parentSnap 订阅驱动重渲，主线一空闲文案即随 fork 推进翻走。
+    if (phase === 'forking' && meta.parentSessionId !== undefined && sessionBusyOf(ctx, meta.parentSessionId)) {
+      return <StateScreen title={t('waitingParentTitle')} hint={t('waitingParentHint')} />
+    }
     return <StateScreen title={t('preparing')} />
   }
 

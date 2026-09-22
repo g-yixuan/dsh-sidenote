@@ -93,7 +93,7 @@ dsh plugin --profile web add dsh-sidenote
 | 命令 | 说明 |
 |---|---|
 | `pnpm typecheck` | tsc --noEmit |
-| `pnpm test` | vitest 单测（202 例） |
+| `pnpm test` | vitest 单测（213 例） |
 | `pnpm build` | 类型声明 + tsdown（host ESM + client CJS bundle，纯度门） |
 | `pnpm test:mount` | 挂载冒烟：真实 `dsh web` + 伪造会话日志 + Playwright 十条 journey lane（`BS_VERSION`/`DSH_CMD` 切版本矩阵） |
 
