@@ -6,6 +6,22 @@ name: Release
 # Trigger: a GitHub Release is published (tag vX.Y.Z). The tag MUST match
 # package.json `version`; the workflow verifies this before publishing.
 #
+# !! PUSHING A TAG DOES NOT PUBLISH !!  `on: release` fires only when a GitHub
+# Release object is created. `git push --tags` alone leaves the tag sitting
+# there and nothing reaches npm. Cutting a release is:
+#
+#   git commit -am "release: vX.Y.Z——<摘要>"       # bump package.json version
+#   git tag vX.Y.Z && git push origin main --tags  # still not published
+#   gh release create vX.Y.Z --title ... --notes-file ...   # <- this publishes
+#
+# After the run reports "✅ Published", the registry can still serve the old
+# version to `npm view` for 1-5 minutes (Fastly max-age=300). Trust the workflow
+# log, not `npm view`, and do not retry on that basis.
+#
+# No npm token is involved anywhere — not in CI, not locally. If publishing
+# fails, read the workflow log; do not go fix npm tokens. (npm is phasing out
+# bypass-2FA granular tokens entirely; Trusted Publishing is the supported path.)
+#
 # One-time npm-side setup (manual, on npmjs.com):
 #   1. package `dsh-sidenote` -> Settings -> Publishing access
 #      -> Trusted Publishers -> "Add Trusted Publisher".
