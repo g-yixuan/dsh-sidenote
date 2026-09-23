@@ -57,7 +57,8 @@ export interface Composer {
   setDraft(text: string): void
   /** 拼接一段外部文本（桥接注入的引文草稿）。 */
   appendDraft(text: string): void
-  /** 发送当前草稿（空草稿 no-op）。mode 缺省 = 机器/设置裁决（busy-Enter）。 */
+  /** 发送当前草稿（空草稿 no-op）。mode 缺省 = 机器/设置裁决（busy-Enter）。
+   *  首条消息前缀由 useComposer 的 firstSendPrefix 选项注入（Delivery_04）。 */
   submit(mode?: 'queue' | 'steer'): void
   /** 斜杠/@ 触发接线需要：机器相位 + 草稿版本号（缺机器时 undefined）。 */
   readonly phase: string | undefined
@@ -79,8 +80,12 @@ export interface Composer {
  * 与主输入框同语义），submit 走机器事务（序列化/裁决/默认 sink 全在机器内）。
  * 降级路径：草稿住本地 state，发送直连 session.prompt([...], 'queue')，
  * 失败时回填草稿并报错。
+ *
+ * firstSendPrefix（Delivery_04 busy fork）：首条消息发送瞬间现取的前缀块
+ * （主线进展快照）。拼进即消费（由调用方清标记）——机器路径的失败回填与
+ * 降级路径的重试都保留已拼文本，天然不会二次拼接。
  */
-export function useComposer(ctx: Context, session: SessionFace | undefined, childId: string | undefined): Composer {
+export function useComposer(ctx: Context, session: SessionFace | undefined, childId: string | undefined, options?: { firstSendPrefix?: () => string | null }): Composer {
   // 每个 childId 解析一次：机器可用性在会话生命周期内不变。
   const input = useMemo(
     () => (childId === undefined ? null : resolveSessionInput(ctx, childId)),
@@ -137,11 +142,16 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
   )
 
   const submit = useCallback((mode?: 'queue' | 'steer'): void => {
-    const text = draft.trim()
-    if (text === '') return
+    const body = draft.trim()
+    if (body === '') return
+    // 首条消息前缀（busy fork 的进展快照）：发送瞬间现取现拼。
+    const prefix = options?.firstSendPrefix?.() ?? null
+    const text = prefix === null ? body : `${prefix}\n\n${body}`
     if (input !== null) {
       // 机器路径：草稿清空、发送失败回填、通知条全由机器/sink 负责。
       // mode 缺省交给机器按宿主设置裁决（busy-Enter 偏好在机器内）。
+      // 拼了前缀先落机器草稿再交机器——回填/重试语义与未拼一致。
+      if (prefix !== null) input.setDraft(text)
       input.submit(mode)
       return
     }
@@ -159,7 +169,7 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
       setLocalDraft(d => (d === '' ? text : d))
       setSendError(error instanceof Error ? error.message : '发送失败')
     })
-  }, [draft, input, session])
+  }, [draft, input, session, options])
 
   return {
     machine: input !== null,

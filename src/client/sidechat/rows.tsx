@@ -4,7 +4,7 @@
  * 面板壳只留编排）。渲染规则：MessageRow 全族 memo（字段值比较器）。
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { IconCheckOutline16, IconNewChatOutline16, IconShareOutline16, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow, IconBranchOutline16, IconCheckOutline16, IconNewChatOutline16, IconShareOutline16, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatMessage } from '../chat/transcript.ts'
 import { partitionInherited } from '../chat/transcript.ts'
 import { ToolCard } from '../chat/ToolCard.tsx'
@@ -12,6 +12,7 @@ import { ReasoningRow } from '../chat/ReasoningRow.tsx'
 import { FoldCard } from '../chat/FoldCard.tsx'
 import type { FoldStore } from '../chat/viewState.ts'
 import { flattenReflowContent, splitProtocolPrefix } from '../annotate/format.ts'
+import { SNAPSHOT_BLOCK_MARK } from './snapshot.ts'
 import { markdownTextProps } from '../host/markdown.ts'
 import type { ReflowStore } from '../reflow.ts'
 import { pairQuestions } from './model.ts'
@@ -44,6 +45,43 @@ export function StateScreen(props: { title: string; detail?: string; hint?: stri
   )
 }
 
+/**
+ * 剥出首条侧边用户消息里的主线进展快照块（Delivery_04）：快照提升到继承卡
+ * 区域渲染（SnapshotCard），气泡只留用户正文（零污染）。块不完整（缺闭合
+ * 标签）视为无快照——消息原样渲染，绝不吃文本。
+ */
+export function splitSnapshotPrefix(text: string): { snapshot: string; takenAt: string | null; rest: string } | null {
+  if (!text.startsWith(SNAPSHOT_BLOCK_MARK)) return null
+  const closeMark = '</mainline-progress-snapshot>'
+  const close = text.indexOf(closeMark)
+  if (close < 0) return null
+  const block = text.slice(0, close + closeMark.length)
+  const takenAt = /taken-at="([^"]*)"/.exec(block)?.[1] ?? null
+  return { snapshot: block, takenAt, rest: text.slice(close + closeMark.length).trimStart() }
+}
+
+/** 主线进展快照卡：继承卡同族的可展开行（协议块原文，等宽换行）。 */
+function SnapshotCard({ takenAt, text, fold }: { takenAt: string | null; text: string; fold: FoldStore }) {
+  useLocaleTick()
+  const rowKey = 'mainline-snapshot'
+  const open = useSyncExternalStore((fn: () => void) => fold.subscribe(fn), () => fold.isOpen(rowKey))
+  return (
+    <div className={css.flowRow}>
+      <DisclosureRow
+        icon={<IconBranchOutline16 size={14} />}
+        title={takenAt !== null ? t('snapshotLabelAt', { at: takenAt }) : t('snapshotLabel')}
+        open={open}
+        expandable
+        expandOnRowClick
+        previewChevron
+        onToggle={() => { fold.toggle(rowKey) }}
+      >
+        <div className={css.snapshotBody}><pre className={css.snapshotText}>{text}</pre></div>
+      </DisclosureRow>
+    </div>
+  )
+}
+
 export function MessageList({ messages, fold, boundarySeq, reflow, parentSessionId, sideTitle, onPromote }: {
   messages: readonly ChatMessage[]
   fold: FoldStore
@@ -60,9 +98,22 @@ export function MessageList({ messages, fold, boundarySeq, reflow, parentSession
   // 内容走同一套 MessageRow——材质同源）。继承区默认不挂载（长 fork 历史的
   // 性能护栏）。
   const { inherited, fresh } = useMemo(() => partitionInherited(messages, boundarySeq), [messages, boundarySeq])
-  const renderRow = (message: ChatMessage) => (
-    <MessageRow key={message.key} message={message} question={questions.get(message.key)} fold={fold} reflow={reflow} parentSessionId={parentSessionId} sideTitle={sideTitle} />
-  )
+  // Delivery_04：首条新鲜用户消息的快照前缀块 → 提升到继承卡区域，
+  // 气泡只留用户正文。
+  const snapshotInfo = useMemo(() => {
+    const first = fresh.find(m => m.role === 'user')
+    if (first === undefined) return null
+    const split = splitSnapshotPrefix(first.text)
+    return split === null ? null : { key: first.key, ...split }
+  }, [fresh])
+  const renderRow = (message: ChatMessage) => {
+    const m = snapshotInfo !== null && message.key === snapshotInfo.key
+      ? { ...message, text: snapshotInfo.rest }
+      : message
+    return (
+      <MessageRow key={m.key} message={m} question={questions.get(m.key)} fold={fold} reflow={reflow} parentSessionId={parentSessionId} sideTitle={sideTitle} />
+    )
+  }
   // P1-4 密度管理：≥2 个可折叠项时出现「全部折叠/展开」开关（FoldCard/工具卡/
   // 思考块全部折叠态外置在 fold store，一键收敛长工具流）。
   const foldableKeys = useMemo(() => {
@@ -121,6 +172,9 @@ export function MessageList({ messages, fold, boundarySeq, reflow, parentSession
         <FoldCard count={inherited.length} rowKey="inherited" fold={fold}>
           {inherited.map(renderRow)}
         </FoldCard>
+      )}
+      {snapshotInfo !== null && (
+        <SnapshotCard takenAt={snapshotInfo.takenAt} text={snapshotInfo.snapshot} fold={fold} />
       )}
       {fresh.map(renderRow)}
     </div>

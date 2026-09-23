@@ -53,8 +53,21 @@ export interface SideChatMeta {
   /** 桥接（WI-03 划选提问）写入的待注入草稿；面板应用后清除。 */
   pendingDraft?: string
   /** D1 折叠边界：fork 时刻父会话的最大节点 seq（继承区 = seq ≤ 它）。
-   *  缺省（老 Tab）= 不折叠。 */
+   *  缺省（老 Tab）= 不折叠。busy fork 后会推进覆盖被 cancel 的遗传 turn
+   *  （中断 turn 的冻结节点带小数 seq——允许非整数）。 */
   boundarySeq?: number
+  /** busy fork 标记（Delivery_04）：fork 时主线 turn 在飞——首条侧边消息
+   *  发送时拼接主线进展快照（WI-02/03）。 */
+  forkedMidTurn?: boolean
+  /** 零完成轮兜底（Delivery_04）：主线首轮在飞无法 fork，子会话是
+   *  create 出来的纯快照会话（无继承历史，折叠卡不渲染）。 */
+  snapshotOnly?: boolean
+  /** 遗传 turn 监护的判别依据（Delivery_04）：fork 时刻主线在飞消息的
+   *  前缀（截 200 字符）——子会话首个 turn 的用户消息命中它才 cancel，
+   *  防误伤用户自己的首个 turn。 */
+  leakedPromptPrefix?: string
+  /** 遗传 turn 已中和（cancel + 折叠边界已覆盖）；缺省 = 未监护。 */
+  inheritedPurged?: boolean
 }
 
 /**
@@ -68,7 +81,11 @@ export function parseSideChatMeta(meta: unknown): SideChatMeta {
   if (typeof raw.childId === 'string' && raw.childId !== '') out.childId = raw.childId
   if (typeof raw.parentSessionId === 'string' && raw.parentSessionId !== '') out.parentSessionId = raw.parentSessionId
   if (typeof raw.pendingDraft === 'string' && raw.pendingDraft !== '') out.pendingDraft = raw.pendingDraft
-  if (typeof raw.boundarySeq === 'number' && Number.isInteger(raw.boundarySeq)) out.boundarySeq = raw.boundarySeq
+  if (typeof raw.boundarySeq === 'number' && Number.isFinite(raw.boundarySeq)) out.boundarySeq = raw.boundarySeq
+  if (raw.forkedMidTurn === true) out.forkedMidTurn = true
+  if (raw.snapshotOnly === true) out.snapshotOnly = true
+  if (typeof raw.leakedPromptPrefix === 'string' && raw.leakedPromptPrefix !== '') out.leakedPromptPrefix = raw.leakedPromptPrefix
+  if (raw.inheritedPurged === true) out.inheritedPurged = true
   return out
 }
 

@@ -28,8 +28,19 @@ export interface SideChatMetaRecord {
   readonly parentSessionId?: string
   /** 待投递草稿（面板 composer 就绪后应用并清除）。 */
   readonly pendingDraft?: string
-  /** D1 折叠边界：fork 时刻父会话的最大节点 seq。 */
+  /** D1 折叠边界：fork 时刻父会话的最大节点 seq（busy fork 后推进覆盖
+   *  被 cancel 的遗传 turn，允许小数——中断 turn 的冻结节点带小数 seq）。 */
   readonly boundarySeq?: number
+  /** busy fork 标记（Delivery_04）：fork 时主线 turn 在飞，首条侧边消息
+   *  发送时拼接主线进展快照。 */
+  readonly forkedMidTurn?: boolean
+  /** 零完成轮兜底（Delivery_04）：主线首轮在飞无法 fork，create 出来的
+   *  纯快照会话（无继承历史）。 */
+  readonly snapshotOnly?: boolean
+  /** 监护判别依据（Delivery_04）：fork 时刻主线在飞消息的前缀。 */
+  readonly leakedPromptPrefix?: string
+  /** 遗传 turn 已中和（cancel + 边界覆盖完成）。 */
+  readonly inheritedPurged?: boolean
   /** 实例编号（「侧边 2」的 2；单实例期恒 1）。 */
   readonly number: number
   readonly createdAt: number
@@ -73,7 +84,11 @@ function revive(value: unknown): SideChatMetaRecord | null {
     ...(typeof r.childId === 'string' ? { childId: r.childId } : {}),
     ...(typeof r.parentSessionId === 'string' ? { parentSessionId: r.parentSessionId } : {}),
     ...(typeof r.pendingDraft === 'string' ? { pendingDraft: r.pendingDraft } : {}),
-    ...(typeof r.boundarySeq === 'number' && Number.isInteger(r.boundarySeq) ? { boundarySeq: r.boundarySeq } : {}),
+    ...(typeof r.boundarySeq === 'number' && Number.isFinite(r.boundarySeq) ? { boundarySeq: r.boundarySeq } : {}),
+    ...(r.forkedMidTurn === true ? { forkedMidTurn: true } : {}),
+    ...(r.snapshotOnly === true ? { snapshotOnly: true } : {}),
+    ...(typeof r.leakedPromptPrefix === 'string' ? { leakedPromptPrefix: r.leakedPromptPrefix } : {}),
+    ...(r.inheritedPurged === true ? { inheritedPurged: true } : {}),
     number: r.number,
     createdAt: typeof r.createdAt === 'number' ? r.createdAt : 0,
     ...(typeof r.runId === 'string' ? { runId: r.runId } : {}),

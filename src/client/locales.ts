@@ -28,8 +28,6 @@ export const en = {
   sideChatCrashed: 'Side chat panel crashed: ',
   forkErrorTitle: "Couldn't create the side chat",
   forkErrorHint: 'The main session needs at least one completed turn to fork from. Close this tab with the × on the tab.',
-  waitingParentTitle: 'Waiting for the main session to finish…',
-  waitingParentHint: 'The side chat starts automatically once the main session is idle — forking mid-turn would drag the in-flight message into the side lane.',
   missingTitle: 'Session no longer exists',
   missingDetail: "This side chat's session was removed and can't be restored.",
   missingHint: 'Close this tab with the × on the tab.',
@@ -156,6 +154,8 @@ export const en = {
 
   // D1 父历史折叠卡
   inheritedLabel: 'Inherited from main session · up to the fork point · {n}',
+  snapshotLabel: 'Mainline progress snapshot',
+  snapshotLabelAt: 'Mainline progress snapshot · taken {at}',
 
   // P1-4 密度管理
   collapseAll: 'Collapse all',
@@ -206,8 +206,6 @@ export const zh: Record<CopyKey, string> = {
   sideChatCrashed: '侧边聊天面板崩溃了：',
   forkErrorTitle: '无法创建侧边聊天',
   forkErrorHint: '主会话需要至少一轮已完成的对话才能 fork。点击标签上的 × 可关闭此标签页。',
-  waitingParentTitle: '等待主线运行结束…',
-  waitingParentHint: '主线空闲后会自动开始，无需操作（运行中 fork 会把正在处理的消息带进侧边）。',
   missingTitle: '会话已不存在',
   missingDetail: '此侧边聊天的会话已被移除，无法恢复。',
   missingHint: '点击标签上的 × 关闭此标签页。',
@@ -323,6 +321,8 @@ export const zh: Record<CopyKey, string> = {
   termExpandAria: '展开全部（隐藏 {n} 行）',
 
   inheritedLabel: '继承自主会话 · 截至 fork 点 · {n} 条',
+  snapshotLabel: '主线进展快照',
+  snapshotLabelAt: '主线进展快照 · 截于 {at}',
 
   collapseAll: '全部折叠',
   expandAll: '全部展开',

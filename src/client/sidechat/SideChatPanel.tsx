@@ -19,7 +19,8 @@ import { useComposer, type Composer } from './composer.ts'
 import { appendDraftText, clearPendingDraft, parseSideChatMeta, phaseOf } from './model.ts'
 import { transcriptOf } from '../chat/transcript.ts'
 import { EmptyState, MessageList, StateScreen } from './rows.tsx'
-import { chatSourceOf, closeSideTab, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, sessionBusyOf, updateTabMeta } from './lifecycle.ts'
+import { armInheritedTurnPurge, chatSourceOf, closeSideTab, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, updateTabMeta } from './lifecycle.ts'
+import { buildMainlineSnapshot } from './snapshot.ts'
 import { directNativeLeg, registerLiveSideChat } from './native.ts'
 import { dropClosedSideChat, recordClosedSideChat } from './recentClosed.ts'
 import { ToolCard } from '../chat/ToolCard.tsx'
@@ -75,7 +76,8 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
     if (childId !== undefined || forkStarted.current) return
     forkStarted.current = true
     let cancelled = false
-    // 主线在飞时 forkAndRegister 会等其空闲（fork 护栏）；关 tab/卸载即中止等待。
+    // busy fork 的遗传 turn 监护在 forkAndRegister 内就位（meta 登记前）；
+    // 关 tab/卸载只中止编排，监护一旦 arm 独立存活（它护子会话，不护本组件）。
     const controller = new AbortController()
     forkAndRegister(ctx, scope.sessionId, tab.id, controller.signal)
       .catch((error) => {
@@ -97,6 +99,16 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
   useEffect(() => {
     openSessionWindow(session)
   }, [session])
+
+  // ── 遗传 turn 监护的重挂载补齐（Delivery_04）：首开路径的监护在
+  // forkAndRegister 里 arm；若监护 settle 前关了 tab（子会话尚未 boot），
+  // 重开时子会话此刻才 boot、泄漏 turn 起跑——靠 inheritedPurged 标记判定
+  // 重新 arm（armInheritedTurnPurge 幂等，首开路径已 arm 则不重复）。 ──
+  useEffect(() => {
+    if (meta.forkedMidTurn !== true || meta.inheritedPurged === true) return
+    if (childId === undefined || session === undefined) return
+    armInheritedTurnPurge(ctx, childId, scope.sessionId, tab.id, meta.leakedPromptPrefix, meta.boundarySeq)
+  }, [ctx, childId, session, meta.forkedMidTurn, meta.inheritedPurged, meta.leakedPromptPrefix, meta.boundarySeq, scope.sessionId, tab.id])
 
   const phase = phaseOf({
     childId,
@@ -175,7 +187,22 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
   )
 
   // ── composer（input 机器优先，降级本地草稿 + session.prompt） ──
-  const composer = useComposer(ctx, session, childId)
+  // Delivery_04：busy fork 的首条消息在发送瞬间拼接主线进展快照（现取，
+  // 不是 fork 时刻——主线还在跑，发送时才最新）；拼进即清标记，失败回填/
+  // 重试天然携带不二次拼接。
+  const tabMetaRef = useRef(meta)
+  tabMetaRef.current = meta
+  const composerOptions = useMemo(() => ({
+    firstSendPrefix: (): string | null => {
+      const m = tabMetaRef.current
+      if (m.forkedMidTurn !== true || m.parentSessionId === undefined) return null
+      const block = buildMainlineSnapshot(ctx, m.parentSessionId)
+      if (block === null) return null
+      updateTabMeta(ctx, scope.sessionId, tab.id, (cur) => ({ ...cur, forkedMidTurn: undefined }))
+      return block
+    },
+  }), [ctx, scope.sessionId, tab.id])
+  const composer = useComposer(ctx, session, childId, composerOptions)
 
   // ── 模型标签：读子会话当前模型（fork 时已同步主会话选择；读取失败保持默认文案） ──
   const [modelName, setModelName] = useState<string | null>(null)
@@ -357,11 +384,6 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
     )
   }
   if (phase === 'forking' || phase === 'loading') {
-    // fork 护栏等待中（主线 turn 在飞）：显性文案，否则用户会以为卡死。
-    // parentSnap 订阅驱动重渲，主线一空闲文案即随 fork 推进翻走。
-    if (phase === 'forking' && meta.parentSessionId !== undefined && sessionBusyOf(ctx, meta.parentSessionId)) {
-      return <StateScreen title={t('waitingParentTitle')} hint={t('waitingParentHint')} />
-    }
     return <StateScreen title={t('preparing')} />
   }
 

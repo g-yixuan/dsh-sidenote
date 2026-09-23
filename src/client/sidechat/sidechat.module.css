@@ -438,6 +438,23 @@
   opacity: 0.92;
 }
 
+/* 主线进展快照卡（Delivery_04）展开体：协议块原文，等宽 + 自动换行。 */
+.snapshotBody {
+  border-top: 1px dashed var(--dsw-alias-border-l2);
+  padding: 6px 0 2px;
+}
+.snapshotText {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--dsw-alias-font-mono, ui-monospace, monospace);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
 /* P1-4 密度管理 */
 .densityRow {
   display: flex;

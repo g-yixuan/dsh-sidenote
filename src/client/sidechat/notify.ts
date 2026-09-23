@@ -9,7 +9,7 @@
  */
 import type { Context } from '../host/contracts.ts'
 import { collectSideTabs, parseSideChatMeta } from './model.ts'
-import { openSessionWindow } from './lifecycle.ts'
+import { openSessionWindow, isPurgingInheritedTurn } from './lifecycle.ts'
 import { betterSidebarOf, directNativeLeg } from './native.ts'
 import { sideChatMetaStore, sideChatMetasAll } from './metaStore.ts'
 import { showToast } from './toast.tsx'
@@ -76,6 +76,12 @@ export function registerCompletionNotify(ctx: Context): void {
           watcher.unsub = session.subscribe(() => {
             const snap = session.getSnapshot() as { running?: unknown } | null
             const running = snap?.running === true
+            // busy fork 的遗传 turn 监护窗口（Delivery_04）：那个 turn 是主线
+            // 在飞消息的遗留副本、被我们 cancel——它的翻转不是「侧边回复完成」。
+            if (isPurgingInheritedTurn(childId)) {
+              watcher.wasRunning = running
+              return
+            }
             if (shouldNotify(watcher.wasRunning, running, watcher.since, Date.now())) {
               showToast(t('sideChatDone', { title }))
             }
