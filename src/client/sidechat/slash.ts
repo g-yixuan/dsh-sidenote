@@ -19,6 +19,7 @@ import { betterSidebarOf, directNativeLeg, focusNativeTab, liveSideChatsOf } fro
 import { sideChatMetasOf } from './metaStore.ts'
 import { createSideChat, reopenSideChat } from './open.ts'
 import { dropClosedSideChat, listClosedSideChats } from './recentClosed.ts'
+import { formatClosedAt, sideChatTitleOf } from './identity.ts'
 import { t } from '../locales.ts'
 
 /** dsh-client-ui-commands ClientSessionContext 的最小镜像（只有 sessionId）。 */
@@ -89,8 +90,7 @@ function makeContribution(ctx: Context, name: string) {
             options.push({ id: `focus:${live.tabId}`, label: t('cmdFocus', { title: live.readTitle() }), detail: t('cmdFocusDetail') })
           }
           for (const meta of unloaded) {
-            const title = meta.number <= 1 ? t('tabBaseTitle') : `${t('tabBaseTitle')} ${meta.number}`
-            options.push({ id: `focus:${meta.tabId}`, label: t('cmdFocus', { title }), detail: t('cmdFocusDetail') })
+            options.push({ id: `focus:${meta.tabId}`, label: t('cmdFocus', { title: sideChatTitleOf(meta) }), detail: t('cmdFocusDetail') })
           }
         } else {
           const snapshot = betterSidebarOf(ctx)?.getSnapshot()
@@ -103,9 +103,16 @@ function makeContribution(ctx: Context, name: string) {
         // D3 后悔药：最近关闭的可重开（Cmd+Shift+T 心智）。
         // native 单实例约束下，有存活实例时 reopen 必被 held 折叠（seed.meta
         // 丢弃且聚焦错对象）——此时不列重开项。
+        // Delivery_05：label 用内容身份（topic 优先，老条目回退原标题），
+        // detail 给相对关闭时间——此前五行全叫「侧边」+ 同一句静态文案，
+        // 完全不可区分。
         if (!(native && lives.length > 0)) {
           for (const entry of listClosedSideChats(session.sessionId)) {
-            options.push({ id: `reopen:${entry.childId}`, label: t('cmdReopen', { title: entry.title }), detail: t('cmdReopenDetail') })
+            options.push({
+              id: `reopen:${entry.childId}`,
+              label: t('cmdReopen', { title: entry.topic ?? entry.title }),
+              detail: formatClosedAt(entry.closedAt),
+            })
           }
         }
         return Promise.resolve(options)
@@ -126,7 +133,10 @@ function makeContribution(ctx: Context, name: string) {
         }
         if (option.id.startsWith('reopen:')) {
           const childId = option.id.slice('reopen:'.length)
-          if (reopenSideChat(ctx, session.sessionId, childId)) {
+          // topic 随重开恢复（Delivery_05）：option 只带 id，回查登记处取条目。
+          const entry = listClosedSideChats(session.sessionId).find(e => e.childId === childId)
+          const opts = entry?.topic !== undefined ? { topic: entry.topic } : undefined
+          if (reopenSideChat(ctx, session.sessionId, childId, opts)) {
             dropClosedSideChat(session.sessionId, childId)
           }
         }

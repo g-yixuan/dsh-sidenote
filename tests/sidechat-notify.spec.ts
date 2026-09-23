@@ -73,4 +73,32 @@ describe('registerCompletionNotify', () => {
     expect(showToast).toHaveBeenCalledTimes(1)
     expect(showToast.mock.calls[0]![0]).toContain('侧边')
   })
+
+  it('M1 回归：watcher 建立后 topic 才写入，toast 必须现查标题（不被闭包冻结）', () => {
+    const host = fakeHost([true, false])
+    let liveTitle = '侧边'
+    const effects: Array<() => void | (() => void)> = []
+    const ctx = {
+      effect(fn: () => void | (() => void)) { effects.push(fn) },
+      betterSidebar: {
+        subscribeState() { return () => {} },
+        getSnapshot: () => ({
+          sessionId: 's1',
+          state: {
+            splits: { kind: 'leaf', tabs: [{ id: 't1', type: 'dsh-sidenote:side', title: liveTitle, meta: { childId: 'child-1' } }] },
+          },
+        }),
+      },
+      sessions: { binding: () => ({ session: host.session }) },
+    } as never
+    registerCompletionNotify(ctx)
+    for (const fn of effects) void fn()
+    // watcher 已建（此刻标题还是裸「侧边」）；topic 随后写入
+    liveTitle = '侧边 · 部署泳道排查'
+    vi.useFakeTimers(); vi.setSystemTime(Date.now() + 2000)
+    host.tick()
+    vi.useRealTimers()
+    expect(showToast).toHaveBeenCalledTimes(1)
+    expect(showToast.mock.calls[0]![0]).toContain('部署泳道排查')
+  })
 })

@@ -27,6 +27,7 @@ import {
 import { readInputDraft, resolveSessionInput } from './composer.ts'
 import { betterSidebarOf, directNativeLeg, focusNativeTab, lastLiveSideChat, liveSideChatsOf, markSideChatOpening, nativeSidebarHost, nativeTabShell, sideChatOpening } from './native.ts'
 import { readSideChatMeta, sideChatMetasOf, writeSideChatMeta } from './metaStore.ts'
+import { sideChatTitleOf } from './identity.ts'
 import { t } from '../locales.ts'
 
 /** 直连腿的原生右栏面（off-face 探测；无面 = 不在直连腿或面缺席降级）。 */
@@ -62,7 +63,7 @@ export function readTab(ctx: Context, sessionId: string, tabId: string): Sidebar
     return {
       id: tabId,
       type: SIDE_TAB_TYPE,
-      title: live?.readTitle() ?? (direct.number <= 1 ? t('tabBaseTitle') : `${t('tabBaseTitle')} ${direct.number}`),
+      title: live?.readTitle() ?? sideChatTitleOf(direct),
       meta: direct,
     }
   }
@@ -246,7 +247,7 @@ export function sideChatTargetTitle(ctx: Context, sessionId: string): string | u
       if (live !== undefined) return live.readTitle()
       const metas = sideChatMetasOf(sessionId)
       const last = metas[metas.length - 1]
-      if (last !== undefined) return last.number <= 1 ? t('tabBaseTitle') : `${t('tabBaseTitle')} ${last.number}`
+      if (last !== undefined) return sideChatTitleOf(last)
       return t('tabBaseTitle')
     }
     const snapshot = betterSidebarOf(ctx)?.getSnapshot()
@@ -267,15 +268,21 @@ export function sideChatTargetTitle(ctx: Context, sessionId: string): string | u
  * parentSessionId——面板挂载后走绑定恢复路径（不重新 fork）。
  * 会话本体必须仍 archived 在列（若被清理，面板落「会话已不存在」态——
  * 有现成错误态兜着）。
+ * opts.topic（Delivery_05）：内容身份随恢复走——否则重开后 reconcile
+ * 铸造的是无 topic 的新记录，身份丢一次关闭就回不来了。
  */
-export function reopenSideChat(ctx: Context, sessionId: string, childId: string, title?: string): boolean {
+export function reopenSideChat(ctx: Context, sessionId: string, childId: string, opts?: { title?: string, topic?: string }): boolean {
   if (directLeg(ctx)) {
     try {
       if (ctx.sessions.list.getSnapshot().current !== sessionId) return false
       // 单实例（held）：有存活实例时重开无意义（弹层侧此时本就不列重开项）。
       if (sideChatMetasOf(sessionId).length > 0) return false
       sidebarRightOf(ctx)!.openTab(SIDE_TAB_TYPE, {
-        params: { parentSessionId: sessionId, childId },
+        params: {
+          parentSessionId: sessionId,
+          childId,
+          ...(opts?.topic !== undefined ? { topic: opts.topic } : {}),
+        },
       })
       markSideChatOpening(sessionId)
       return true
@@ -297,8 +304,9 @@ export function reopenSideChat(ctx: Context, sessionId: string, childId: string,
     const before = new Set(collectTabs(snapshot.state).map(tab => tab.id))
     // native（>= 0.19）：seed.meta 携带恢复信息（native 面采纳 seed.meta；
     // 面板挂载即走绑定恢复路径）。legacy 的 createTab 铸造忽略 seed.meta，
-    // 落快照后补写。
-    const meta = { childId, parentSessionId: sessionId }
+    // 落快照后补写。topic 在时标题直接以内容身份铸造，不走编号。
+    const meta = { childId, parentSessionId: sessionId, ...(opts?.topic !== undefined ? { topic: opts.topic } : {}) }
+    const title = opts?.title ?? (opts?.topic !== undefined ? sideChatTitleOf({ number: 1, topic: opts.topic }) : undefined)
     bs.openTab({ type: SIDE_TAB_TYPE, ...(title !== undefined ? { title } : {}), meta }, { sessionId })
     const created = collectSideTabs(bs.getSnapshot().state).find(tab => !before.has(tab.id))
     if (created === undefined) {

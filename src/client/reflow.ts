@@ -11,6 +11,7 @@
  * 与注释 store 同款纪律（刷新不丢、容错 revive、空删键）。
  */
 import { t } from './locales.ts'
+import { xmlAttr } from './protocol.ts'
 
 /**
  * reflow 注入通道（Workitem_06）：优先经宿主路由 /sidenote/reflow 以
@@ -109,7 +110,7 @@ export function buildReflowBlock(item: ReflowItem): string {
     parts.push(`<问>${item.question}</问>`)
   }
   parts.push(`<答>${item.text}</答>`)
-  return `<reflow source="${item.sideTitle}" reason="${t('reflowReason')}">\n${parts.join('\n')}\n</reflow>`
+  return `<reflow source="${xmlAttr(item.sideTitle)}" reason="${t('reflowReason')}">\n${parts.join('\n')}\n</reflow>`
 }
 
 function revive(value: unknown): ReflowItem | null {

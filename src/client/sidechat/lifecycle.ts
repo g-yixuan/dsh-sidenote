@@ -11,6 +11,7 @@ import { parseSideChatMeta, type SideChatMeta } from './model.ts'
 import { readTab, sidebarRightOf } from './open.ts'
 import { betterSidebarOf, directNativeLeg, rootContext } from './native.ts'
 import { readSideChatMeta, writeSideChatMeta } from './metaStore.ts'
+import { sideChatTitleOf } from './identity.ts'
 import { contentTextOf } from '../chat/transcript.ts'
 import { SNAPSHOT_BLOCK_MARK } from './snapshot.ts'
 
@@ -430,6 +431,7 @@ export function updateTabMeta(ctx: Context, sessionId: string, tabId: string, mu
       ...(next.snapshotOnly === true ? { snapshotOnly: true } : {}),
       ...(next.leakedPromptPrefix !== undefined ? { leakedPromptPrefix: next.leakedPromptPrefix } : {}),
       ...(next.inheritedPurged === true ? { inheritedPurged: true } : {}),
+      ...(next.topic !== undefined ? { topic: next.topic } : {}),
       number: direct.number,
       createdAt: direct.createdAt,
       ...(direct.runId !== undefined ? { runId: direct.runId } : {}),
@@ -440,6 +442,21 @@ export function updateTabMeta(ctx: Context, sessionId: string, tabId: string, mu
   if (bs === undefined) return
   const current = parseSideChatMeta(readTab(ctx, sessionId, tabId)?.meta)
   bs.updateTab(tabId, { meta: mutate(current) })
+}
+
+/**
+ * 写入内容身份（Delivery_05）：meta 双腿写 + legacy 腿补标题 patch
+ * （native 芯片标题槽订阅 metaStore，meta 落库即免费响应；legacy 标题是
+ * 布局快照里的静态字段，必须显式 patch；topic 在时编号不参与标题，
+ * 故 legacy 侧无需反推编号）。sticky 守卫沉在 mutate 里（同帧连发两次
+ * submit 时面板侧 ref 守卫有相位差，审查 L2）。
+ */
+export function setSideChatTopic(ctx: Context, sessionId: string, tabId: string, topic: string): void {
+  updateTabMeta(ctx, sessionId, tabId, (cur) => (cur.topic !== undefined ? cur : { ...cur, topic }))
+  if (directNativeLeg(ctx)) return
+  // legacy 标题 patch 必须用生效的 topic（sticky 守卫可能保留了旧值）。
+  const effective = parseSideChatMeta(readTab(ctx, sessionId, tabId)?.meta).topic ?? topic
+  betterSidebarOf(ctx)?.updateTab(tabId, { title: sideChatTitleOf({ number: 1, topic: effective }) })
 }
 
 /** 关闭侧聊 tab：直连腿走 ISidebarRight.close，legacy 走 betterSidebar.closeTab。 */

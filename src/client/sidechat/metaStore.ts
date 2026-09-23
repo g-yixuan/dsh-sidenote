@@ -41,6 +41,8 @@ export interface SideChatMetaRecord {
   readonly leakedPromptPrefix?: string
   /** 遗传 turn 已中和（cancel + 边界覆盖完成）。 */
   readonly inheritedPurged?: boolean
+  /** 内容身份（Delivery_05）：首条用户消息摘要，sticky。 */
+  readonly topic?: string
   /** 实例编号（「侧边 2」的 2；单实例期恒 1）。 */
   readonly number: number
   readonly createdAt: number
@@ -89,6 +91,7 @@ function revive(value: unknown): SideChatMetaRecord | null {
     ...(r.snapshotOnly === true ? { snapshotOnly: true } : {}),
     ...(typeof r.leakedPromptPrefix === 'string' ? { leakedPromptPrefix: r.leakedPromptPrefix } : {}),
     ...(r.inheritedPurged === true ? { inheritedPurged: true } : {}),
+    ...(typeof r.topic === 'string' && r.topic !== '' ? { topic: r.topic } : {}),
     number: r.number,
     createdAt: typeof r.createdAt === 'number' ? r.createdAt : 0,
     ...(typeof r.runId === 'string' ? { runId: r.runId } : {}),

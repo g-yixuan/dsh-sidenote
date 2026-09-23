@@ -19,7 +19,8 @@ import { useComposer, type Composer } from './composer.ts'
 import { appendDraftText, clearPendingDraft, parseSideChatMeta, phaseOf } from './model.ts'
 import { transcriptOf } from '../chat/transcript.ts'
 import { EmptyState, MessageList, StateScreen } from './rows.tsx'
-import { armInheritedTurnPurge, chatSourceOf, closeSideTab, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, updateTabMeta } from './lifecycle.ts'
+import { armInheritedTurnPurge, chatSourceOf, closeSideTab, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, setSideChatTopic, updateTabMeta } from './lifecycle.ts'
+import { topicOf } from './identity.ts'
 import { buildMainlineSnapshot } from './snapshot.ts'
 import { directNativeLeg, registerLiveSideChat } from './native.ts'
 import { dropClosedSideChat, recordClosedSideChat } from './recentClosed.ts'
@@ -201,6 +202,13 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
       updateTabMeta(ctx, scope.sessionId, tab.id, (cur) => ({ ...cur, forkedMidTurn: undefined }))
       return block
     },
+    // 内容身份（Delivery_05）：首条消息摘要落为 topic（sticky——已有
+    // topic 不再覆盖）。body 是干净用户文本（快照前缀不进 body）。
+    onSubmitText: (body: string): void => {
+      if (tabMetaRef.current.topic !== undefined) return
+      const topic = topicOf(body)
+      if (topic !== undefined) setSideChatTopic(ctx, scope.sessionId, tab.id, topic)
+    },
   }), [ctx, scope.sessionId, tab.id])
   const composer = useComposer(ctx, session, childId, composerOptions)
 
@@ -277,6 +285,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
             childId: m.childId,
             parentSessionId: m.parentSessionId,
             title: titleRef.current,
+            ...(m.topic !== undefined ? { topic: m.topic } : {}),
             closedAt: Date.now(),
           })
         }

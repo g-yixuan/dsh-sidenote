@@ -12,6 +12,7 @@ import { collectSideTabs, parseSideChatMeta } from './model.ts'
 import { openSessionWindow, isPurgingInheritedTurn } from './lifecycle.ts'
 import { betterSidebarOf, directNativeLeg } from './native.ts'
 import { sideChatMetaStore, sideChatMetasAll } from './metaStore.ts'
+import { sideChatTitleOf } from './identity.ts'
 import { showToast } from './toast.tsx'
 import { t } from '../locales.ts'
 
@@ -44,8 +45,7 @@ export function registerCompletionNotify(ctx: Context): void {
       if (directNativeLeg(ctx)) {
         return sideChatMetasAll().flatMap((meta) => {
           if (meta.childId === undefined) return []
-          const title = meta.number <= 1 ? t('tabBaseTitle') : `${t('tabBaseTitle')} ${meta.number}`
-          return [{ childId: meta.childId, title }]
+          return [{ childId: meta.childId, title: sideChatTitleOf(meta) }]
         })
       }
       const snapshot = betterSidebarOf(ctx)?.getSnapshot()
@@ -64,7 +64,7 @@ export function registerCompletionNotify(ctx: Context): void {
         return
       }
       const alive = new Set<string>()
-      for (const { childId, title } of tabs) {
+      for (const { childId } of tabs) {
         alive.add(childId)
         if (watchers.has(childId)) continue
         // 新侧聊：binding 可能 throw（会话还没就绪）——本轮跳过，下轮重扫补。
@@ -83,6 +83,9 @@ export function registerCompletionNotify(ctx: Context): void {
               return
             }
             if (shouldNotify(watcher.wasRunning, running, watcher.since, Date.now())) {
+              // 标题现查（Delivery_05 M1 修复）：watcher 建于 childId 登记时
+              // （topic 尚未写入），闭包冻结标题会让 toast 永远显示裸「侧边」。
+              const title = collectAlive().find(entry => entry.childId === childId)?.title ?? t('tabBaseTitle')
               showToast(t('sideChatDone', { title }))
             }
             watcher.wasRunning = running

@@ -68,6 +68,9 @@ export interface SideChatMeta {
   leakedPromptPrefix?: string
   /** 遗传 turn 已中和（cancel + 折叠边界已覆盖）；缺省 = 未监护。 */
   inheritedPurged?: boolean
+  /** 内容身份（Delivery_05）：首条用户消息摘要，sticky——只在首条
+   *  发送时写入，之后不随对话漂移。 */
+  topic?: string
 }
 
 /**
@@ -86,6 +89,7 @@ export function parseSideChatMeta(meta: unknown): SideChatMeta {
   if (raw.snapshotOnly === true) out.snapshotOnly = true
   if (typeof raw.leakedPromptPrefix === 'string' && raw.leakedPromptPrefix !== '') out.leakedPromptPrefix = raw.leakedPromptPrefix
   if (raw.inheritedPurged === true) out.inheritedPurged = true
+  if (typeof raw.topic === 'string' && raw.topic !== '') out.topic = raw.topic
   return out
 }
 

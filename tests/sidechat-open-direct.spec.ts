@@ -43,12 +43,13 @@ function directCtx(opts?: { withBs?: boolean }): { ctx: Context, face: MockFace 
   return { ctx, face }
 }
 
-function liveMeta(tabId: string, extra?: { childId?: string, number?: number }): void {
+function liveMeta(tabId: string, extra?: { childId?: string, number?: number, topic?: string }): void {
   writeSideChatMeta({
     tabId,
     sessionId: SESSION,
     parentSessionId: SESSION,
     ...(extra?.childId !== undefined ? { childId: extra.childId } : {}),
+    ...(extra?.topic !== undefined ? { topic: extra.topic } : {}),
     number: extra?.number ?? 1,
     createdAt: 1,
   }, { silent: true })
@@ -124,6 +125,14 @@ describe('reopenSideChat（直连腿）', () => {
     })
   })
 
+  it('topic 随恢复走（Delivery_05）：openTab params 携带 topic，reconcile 落进新记录', () => {
+    const { ctx, face } = directCtx()
+    expect(reopenSideChat(ctx, SESSION, 'child-9', { topic: '部署泳道排查' })).toBe(true)
+    expect(face.openTab).toHaveBeenCalledWith(SIDE_TAB_TYPE, {
+      params: { parentSessionId: SESSION, childId: 'child-9', topic: '部署泳道排查' },
+    })
+  })
+
   it('有存活实例：拒绝（held 折叠会丢恢复信息，弹层本就不列）', () => {
     const { ctx, face } = directCtx()
     liveMeta('tab-live')
@@ -138,6 +147,12 @@ describe('sideChatTargetTitle（直连腿）', () => {
     expect(sideChatTargetTitle(ctx, SESSION)).toBe('Side')
     liveMeta('tab-2', { number: 2 })
     expect(sideChatTargetTitle(ctx, SESSION)).toBe('Side 2')
+  })
+
+  it('有 topic 的存活记录优先显示内容身份（Delivery_05）', () => {
+    const { ctx } = directCtx()
+    liveMeta('tab-3', { topic: '部署泳道排查' })
+    expect(sideChatTargetTitle(ctx, SESSION)).toBe('Side · 部署泳道排查')
   })
 })
 

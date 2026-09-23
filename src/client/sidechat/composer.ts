@@ -84,8 +84,11 @@ export interface Composer {
  * firstSendPrefix（Delivery_04 busy fork）：首条消息发送瞬间现取的前缀块
  * （主线进展快照）。拼进即消费（由调用方清标记）——机器路径的失败回填与
  * 降级路径的重试都保留已拼文本，天然不会二次拼接。
+ *
+ * onSubmitText（Delivery_05 内容身份）：每次 submit 拿到干净 body（不含
+ * 快照前缀），供面板捕获首条消息主题为 topic；是否首条的判定归调用方。
  */
-export function useComposer(ctx: Context, session: SessionFace | undefined, childId: string | undefined, options?: { firstSendPrefix?: () => string | null }): Composer {
+export function useComposer(ctx: Context, session: SessionFace | undefined, childId: string | undefined, options?: { firstSendPrefix?: () => string | null, onSubmitText?: (body: string) => void }): Composer {
   // 每个 childId 解析一次：机器可用性在会话生命周期内不变。
   const input = useMemo(
     () => (childId === undefined ? null : resolveSessionInput(ctx, childId)),
@@ -144,6 +147,8 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
   const submit = useCallback((mode?: 'queue' | 'steer'): void => {
     const body = draft.trim()
     if (body === '') return
+    // 内容身份钩子（Delivery_05）：拿到的是不含快照前缀的干净 body。
+    options?.onSubmitText?.(body)
     // 首条消息前缀（busy fork 的进展快照）：发送瞬间现取现拼。
     const prefix = options?.firstSendPrefix?.() ?? null
     const text = prefix === null ? body : `${prefix}\n\n${body}`

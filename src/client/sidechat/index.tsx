@@ -78,6 +78,7 @@ export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
               childId: meta.childId,
               parentSessionId: meta.parentSessionId,
               title: closedTab.title,
+              ...(meta.topic !== undefined ? { topic: meta.topic } : {}),
               closedAt: Date.now(),
             })
           }

@@ -9,6 +9,8 @@ export interface ClosedSideEntry {
   readonly childId: string
   readonly parentSessionId: string
   readonly title: string
+  /** 内容身份（Delivery_05）：首条消息摘要；老条目缺省，菜单回退 title。 */
+  readonly topic?: string
   readonly closedAt: number
 }
 

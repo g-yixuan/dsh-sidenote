@@ -215,12 +215,22 @@ describe('open.ts native 编排', () => {
 
   it('reopenSideChat：native 下 seed.meta 携带 childId/parentSessionId 并乐观返回', () => {
     const { ctx, calls } = fakeNativeCtx('s-reopen')
-    expect(reopenSideChat(ctx, 's-reopen', 'child-9', '侧边 2')).toBe(true)
+    expect(reopenSideChat(ctx, 's-reopen', 'child-9', { title: '侧边 2' })).toBe(true)
     expect(calls.openSeeds).toHaveLength(1)
     expect(calls.openSeeds[0]).toMatchObject({
       type: SIDE_TAB_TYPE,
       title: '侧边 2',
       meta: { childId: 'child-9', parentSessionId: 's-reopen' },
+    })
+  })
+
+  it('reopenSideChat：topic 随恢复走——seed.meta 携带并以内容身份铸造标题（Delivery_05）', () => {
+    const { ctx, calls } = fakeNativeCtx('s-reopen-topic')
+    expect(reopenSideChat(ctx, 's-reopen-topic', 'child-9', { topic: '部署泳道排查' })).toBe(true)
+    expect(calls.openSeeds[0]).toMatchObject({
+      type: SIDE_TAB_TYPE,
+      title: 'Side · 部署泳道排查',
+      meta: { childId: 'child-9', parentSessionId: 's-reopen-topic', topic: '部署泳道排查' },
     })
   })
 

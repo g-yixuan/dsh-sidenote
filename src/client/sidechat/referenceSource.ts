@@ -14,7 +14,8 @@ import type { Context } from '../host/contracts.ts'
 import { collectSideTabs, parseSideChatMeta } from './model.ts'
 import { betterSidebarOf, directNativeLeg } from './native.ts'
 import { sideChatMetasAll, sideChatMetasOf } from './metaStore.ts'
-import { t } from '../locales.ts'
+import { sideChatTitleOf } from './identity.ts'
+import { xmlAttr } from '../protocol.ts'
 import { transcriptOf, type ChatMessage } from '../chat/transcript.ts'
 import { chatSourceOf } from './lifecycle.ts'
 import { pairQuestions } from './model.ts'
@@ -26,6 +27,30 @@ interface InputTriggersService {
 
 const TRIGGER = '@'
 const SOURCE = 'sidenote-side-chats'
+
+/**
+ * 候选名 → childId 的映射缓存，按会话分键（Delivery_05 碰撞护栏）：onPick
+ * 只能拿到候选 name 字符串（宿主 API 形状），topic 化标题后撞名成为可能
+ * （legacy 多实例两个同主题）。candidates() 每次计算时重建本会话的映射
+ * 并对重名追加序号消歧；onPick 只按 (sessionId, name) 查——跨会话复用
+ * 陈旧候选拿不到 ref（审查 M2：全局单映射会把 A 会话的 childId 插进 B）。
+ */
+const lastCandidateRefs = new Map<string, Map<string, string>>()
+
+/** 候选名消歧（导出纯可测）：重名依次追加「 · 2」「 · 3」，本批内唯一。 */
+export function dedupeName(name: string, taken: Set<string>): string {
+  if (!taken.has(name)) {
+    taken.add(name)
+    return name
+  }
+  for (let n = 2; ; n += 1) {
+    const candidate = `${name} · ${n}`
+    if (!taken.has(candidate)) {
+      taken.add(candidate)
+      return candidate
+    }
+  }
+}
 
 /** 侧聊内容 → 结构化引用块（问答成对，全文不截断）。 */
 export async function serializeSideChatRef(ctx: Context, childId: string): Promise<string> {
@@ -46,7 +71,7 @@ export async function serializeSideChatRef(ctx: Context, childId: string): Promi
     try {
       if (directNativeLeg(ctx)) {
         const meta = sideChatMetasAll().find(m => m.childId === childId)
-        if (meta !== undefined) return meta.number <= 1 ? t('tabBaseTitle') : `${t('tabBaseTitle')} ${meta.number}`
+        if (meta !== undefined) return sideChatTitleOf(meta)
       }
       for (const tab of collectSideTabs(betterSidebarOf(ctx)?.getSnapshot().state)) {
         if (parseSideChatMeta(tab.meta).childId === childId) return tab.title
@@ -54,7 +79,7 @@ export async function serializeSideChatRef(ctx: Context, childId: string): Promi
     } catch { /* fall through */ }
     return childId
   })()
-  return `<side-chat-reference source="${title}" note="用户 @ 引用的侧边聊天内容（问答成对）">\n${parts.join('\n')}\n</side-chat-reference>`
+  return `<side-chat-reference source="${xmlAttr(title)}" note="用户 @ 引用的侧边聊天内容（问答成对）">\n${parts.join('\n')}\n</side-chat-reference>`
 }
 
 /** 注册「@ 侧聊」触发源；服务缺席静默降级（不影响其他入口）。 */
@@ -72,58 +97,49 @@ export function registerSideChatReferenceSource(ctx: Context): void {
       trigger: TRIGGER,
       name: SOURCE,
       order: 50,
-      // 候选 = 当前会话已开启的侧边聊天（按 Tab 标题）。
+      // 候选 = 当前会话已开启的侧边聊天（topic 化标题，重名消歧）。
       candidates: (session: { sessionId?: string } | undefined) => {
+        // 早退统一先把本会话映射清空——陈旧名字不得再被 pick（审查 M2）。
+        if (session?.sessionId === undefined) return Promise.resolve([])
+        const sessionId = session.sessionId
         try {
-          // 防御：0.1.2 的会话投影形状漂移（实证：session 可能 undefined）。
-          if (session?.sessionId === undefined) return Promise.resolve([])
-          // 直连腿：存活记录即候选（metaStore 枚举，childId 已登记的）。
+          // 直连腿：存活记录即候选（metaStore 枚举，childId 已登记的）；
+          // legacy 腿：布局快照（标题已被 setSideChatTopic patch 成 topic 化）。
+          const base: Array<{ name: string, childId: string }> = []
           if (directNativeLeg(ctx)) {
-            return Promise.resolve(
-              sideChatMetasOf(session.sessionId)
-                .filter(meta => meta.childId !== undefined)
-                .map(meta => ({
-                  name: meta.number <= 1 ? t('tabBaseTitle') : `${t('tabBaseTitle')} ${meta.number}`,
-                  description: '侧边聊天',
-                  icon: '💬',
-                })),
-            )
+            for (const meta of sideChatMetasOf(sessionId)) {
+              if (meta.childId !== undefined) base.push({ name: sideChatTitleOf(meta), childId: meta.childId })
+            }
+          } else {
+            const snapshot = betterSidebarOf(ctx)?.getSnapshot()
+            if (snapshot === undefined || snapshot.sessionId !== sessionId || snapshot.state === undefined) {
+              lastCandidateRefs.set(sessionId, new Map())
+              return Promise.resolve([])
+            }
+            for (const tab of collectSideTabs(snapshot.state)) {
+              const childId = parseSideChatMeta(tab.meta).childId
+              if (childId !== undefined) base.push({ name: tab.title, childId })
+            }
           }
-          const snapshot = betterSidebarOf(ctx)?.getSnapshot()
-          if (snapshot === undefined || snapshot.sessionId !== session.sessionId || snapshot.state === undefined) return Promise.resolve([])
-          return Promise.resolve(
-            collectSideTabs(snapshot.state).map(tab => ({
-              name: tab.title,
-              description: '侧边聊天',
-              icon: '💬',
-            })),
-          )
+          const taken = new Set<string>()
+          const refs = new Map<string, string>()
+          const out = base.map((entry) => {
+            const name = dedupeName(entry.name, taken)
+            refs.set(name, entry.childId)
+            return { name, description: '侧边聊天', icon: '💬' }
+          })
+          lastCandidateRefs.set(sessionId, refs)
+          return Promise.resolve(out)
         } catch {
+          lastCandidateRefs.set(sessionId, new Map())
           return Promise.resolve([])
         }
       },
       // pick → 插入引用 chip（ref = childId；label/clipboardText 供渲染与复制）。
       onPick: (pick: { candidate: { name: string } }, session: { sessionId?: string } | undefined) => {
         if (session?.sessionId === undefined) return undefined
-        // 直连腿：按编号标题匹配 metaStore 记录（与 candidates 同源同序）。
-        if (directNativeLeg(ctx)) {
-          const meta = sideChatMetasOf(session.sessionId)
-            .filter(m => m.childId !== undefined)
-            .find(m => (m.number <= 1 ? t('tabBaseTitle') : `${t('tabBaseTitle')} ${m.number}`) === pick.candidate.name)
-          if (meta?.childId === undefined) return undefined
-          return {
-            insert: {
-              source: SOURCE,
-              ref: meta.childId,
-              label: pick.candidate.name,
-              clipboardText: `@${pick.candidate.name}`,
-            },
-          }
-        }
-        const snapshot = betterSidebarOf(ctx)?.getSnapshot()
-        if (snapshot === undefined || snapshot.sessionId !== session.sessionId || snapshot.state === undefined) return undefined
-        const tab = collectSideTabs(snapshot.state).find(tab => tab.title === pick.candidate.name)
-        const childId = tab === undefined ? undefined : parseSideChatMeta(tab.meta).childId
+        // 名称 ↔ childId 的映射按会话查最近一次 candidates() 缓存（碰撞护栏）。
+        const childId = lastCandidateRefs.get(session.sessionId)?.get(pick.candidate.name)
         if (childId === undefined) return undefined
         return {
           insert: {

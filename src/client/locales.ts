@@ -87,7 +87,12 @@ export const en = {
   cmdFocus: 'Focus "{title}"',
   cmdFocusDetail: 'Existing side chat',
   cmdReopen: 'Reopen "{title}"',
-  cmdReopenDetail: 'Recently closed side chat',
+  closedJustNow: 'Closed just now',
+  closedMinutesAgo: 'Closed {n} min ago',
+  closedHoursAgo: 'Closed {n}h ago',
+  closedYesterday: 'Closed yesterday',
+  closedOnDate: 'Closed {month}/{day}',
+  closedOnDateYear: 'Closed {year}/{month}/{day}',
 
   // annotate overlay
   addToConversation: 'Add to conversation',
@@ -263,7 +268,12 @@ export const zh: Record<CopyKey, string> = {
   cmdFocus: '聚焦「{title}」',
   cmdFocusDetail: '已存在的侧边聊天',
   cmdReopen: '重开「{title}」',
-  cmdReopenDetail: '最近关闭的侧边聊天',
+  closedJustNow: '刚刚关闭',
+  closedMinutesAgo: '{n} 分钟前关闭',
+  closedHoursAgo: '{n} 小时前关闭',
+  closedYesterday: '昨天关闭',
+  closedOnDate: '{month}月{day}日关闭',
+  closedOnDateYear: '{year}年{month}月{day}日关闭',
 
   addToConversation: '添加到对话',
   askInSideChat: '在侧边聊天中提问',

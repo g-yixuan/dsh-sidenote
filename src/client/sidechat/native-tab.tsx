@@ -31,6 +31,7 @@ import type {
 import type { ReflowStore } from '../reflow.ts'
 import { SideChatPanel } from './SideChatPanel.tsx'
 import { SIDE_TAB_TYPE } from './model.ts'
+import { sideChatTitleOf } from './identity.ts'
 import {
   SIDENOTE_RUN_ID,
   dropSideChatMeta,
@@ -54,6 +55,8 @@ export interface SideChatOpenParams {
   pendingDraft?: string
   /** 后悔药重开：既有子会话（走绑定恢复，不重新 fork）。 */
   childId?: string
+  /** 后悔药重开：内容身份随恢复走（Delivery_05）——否则重开即丢 topic。 */
+  topic?: string
 }
 
 export function parseOpenParams(params: unknown): SideChatOpenParams | undefined {
@@ -64,6 +67,7 @@ export function parseOpenParams(params: unknown): SideChatOpenParams | undefined
     parentSessionId: p.parentSessionId,
     ...(typeof p.pendingDraft === 'string' && p.pendingDraft !== '' ? { pendingDraft: p.pendingDraft } : {}),
     ...(typeof p.childId === 'string' && p.childId !== '' ? { childId: p.childId } : {}),
+    ...(typeof p.topic === 'string' && p.topic !== '' ? { topic: p.topic } : {}),
   }
 }
 
@@ -85,6 +89,7 @@ export function reconcileMeta(record: NativeTabRecord, sessionId: string): { cre
     ...(params?.childId !== undefined ? { childId: params.childId } : {}),
     parentSessionId: params?.parentSessionId ?? sessionId,
     ...(params?.pendingDraft !== undefined ? { pendingDraft: params.pendingDraft } : {}),
+    ...(params?.topic !== undefined ? { topic: params.topic } : {}),
     number: nextSideChatNumber(sessionId),
     createdAt: Date.now(),
     runId: SIDENOTE_RUN_ID,
@@ -93,11 +98,9 @@ export function reconcileMeta(record: NativeTabRecord, sessionId: string): { cre
   return { created: true, meta }
 }
 
-/** 芯片标题：metaStore 的编号兑现（「侧边」/「侧边 N」）。 */
+/** 芯片标题：metaStore 兑现（topic 优先，编号回退——Delivery_05 单源）。 */
 export function titleOf(sessionId: string, tabId: string): string {
-  const meta = readSideChatMeta(sessionId, tabId)
-  if (meta === undefined || meta.number <= 1) return t('tabBaseTitle')
-  return `${t('tabBaseTitle')} ${meta.number}`
+  return sideChatTitleOf(readSideChatMeta(sessionId, tabId))
 }
 
 /** Body 注册的注入（插件根 ctx + 会话身份 + reflow store，经槽 inject 工厂）。 */
