@@ -71,6 +71,11 @@ cleanup() {
     kill "$SERVER_PID" 2>/dev/null || true
     wait "$SERVER_PID" 2>/dev/null || true
   fi
+  if [ "$code" -ne 0 ] && [ -f "$WEB_LOG" ]; then
+    mkdir -p "$ROOT/test-results"
+    sed -E 's/(\?token=)[A-Za-z0-9_-]+/\1[redacted]/g' "$WEB_LOG" > "$ROOT/test-results/host-web.log"
+    cat "$ROOT/test-results/host-web.log" >&2
+  fi
   if [ -z "${KEEP_HOME:-}" ]; then
     rm -rf "$SCRATCH"
   else
@@ -98,7 +103,29 @@ cat > "$PROFILE_DIR/package.json" <<EOF
   }
 }
 EOF
-printf '[]\n' > "$PROFILE_DIR/cordis.patch.yml"
+# 老宿主的运行依赖放到 profile 自己的解析路径：0.1.1 的 HMR 必须保留
+# registerConfig；0.1.5 的 sandbox-local 仅列在 CLI devDependencies 中。
+DSH_VERSION="$($DSH_CMD --version)"
+node - "$PROFILE_DIR/package.json" "$DSH_VERSION" <<'JS'
+const fs = require('node:fs')
+const file = process.argv[2]
+const version = process.argv[3]
+const profile = JSON.parse(fs.readFileSync(file, 'utf8'))
+if (version.startsWith('0.1.1-')) profile.dependencies['@deepseek-ai/cordis-plugin-hmr'] = '1.0.16'
+if (version === '0.1.5-rc.2') profile.dependencies['@deepseek-ai/dsh-sandbox-local'] = version
+fs.writeFileSync(file, JSON.stringify(profile, null, 2) + '\n')
+JS
+case "$DSH_VERSION" in
+  0.1.1-*)
+    cat > "$PROFILE_DIR/cordis.patch.yml" <<'EOF'
+- id: hmr
+  disabled: false
+  config:
+    root: []
+EOF
+    ;;
+  *) printf '[]\n' > "$PROFILE_DIR/cordis.patch.yml" ;;
+esac
 cat > "$PROFILE_DIR/pnpm-workspace.yaml" <<'EOF'
 packages:
   - .
@@ -109,6 +136,7 @@ autoInstallPeers: false
 allowBuilds:
   node-pty: true
   protobufjs: true
+  koffi: true
 
 minimumReleaseAgeExclude:
   - dsh-better-sidebar
@@ -183,6 +211,6 @@ else
   SPEC_FILTER="mount.e2e.ts"
 fi
 DSH_E2E_URL="$URL" DSH_E2E_WORKSPACE="$WORKSPACE_DIR" DSH_E2E_SEED_SESSION="$SEED_SESSION_ID" \
-  pnpm exec playwright test "$SPEC_FILTER" ${GREP_FILTER:+--grep "$GREP_FILTER"}
+  pnpm exec playwright test "$SPEC_FILTER" annotations.e2e.ts ${GREP_FILTER:+--grep "$GREP_FILTER"}
 
 say "通过：dsh-sidenote 挂载到真实 DSH 后无头渲染未崩溃"

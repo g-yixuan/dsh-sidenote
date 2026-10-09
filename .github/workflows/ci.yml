@@ -33,10 +33,10 @@ jobs:
         run: pnpm check:arch
       - name: Typecheck
         run: pnpm typecheck
-      - name: Test
-        run: pnpm test
       - name: Build
         run: pnpm build
+      - name: Test
+        run: pnpm test
 
   # Pack the plugin as an npm tarball, mount it into a REAL DSH instance
   # through the official `dsh plugin --profile web add` channel (together with
@@ -69,6 +69,8 @@ jobs:
           # 分档）。0.1.5+BS0.19 共存档的选择器面与 legacy 不同（mount.e2e.ts
           # 是 legacy 布局形态），矩阵化留后续。
           - dsh-version: '0.1.5-rc.2'
+            bs-version: 'none'
+          - dsh-version: '0.1.7-rc.2'
             bs-version: 'none'
     continue-on-error: ${{ matrix.experimental || false }}
     env:

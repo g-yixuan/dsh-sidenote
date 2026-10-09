@@ -222,6 +222,7 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
       />
       {editingAnnotation !== undefined && editor !== null && (
         <AnnotationEditor
+          key={`${editor.annotationId}:${editor.mode}`}
           annotation={editingAnnotation}
           mode={editor.mode}
           x={editor.x}
@@ -542,9 +543,12 @@ function BadgeLayer(props: {
 
 /**
  * The annotation editor popover. 新建态: input + ✓ 确认 (允许空注解直接保存;
- * 点击外部/Esc 取消且无显式取消按钮). 重开态: 已有注解 + 🗑 删除 + 取消/保存.
+ * 点击外部 = 确认、Esc = 取消，无显式取消按钮). 重开态: 已有注解 + 🗑 删除 +
+ * 取消/保存.
+ *
+ * 导出供单测直接挂载（tests/annotate-editor.spec.tsx）。
  */
-function AnnotationEditor(props: {
+export function AnnotationEditor(props: {
   annotation: Annotation
   mode: 'new' | 'edit'
   x: number
@@ -556,6 +560,10 @@ function AnnotationEditor(props: {
   useLocaleTick()
   const [note, setNote] = useState(props.annotation.note)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  // 外点确认读「当前」注解：下面的 effect 是空依赖闭包，直接捕获 note 会永远停在
+  // 首次渲染的值——用户敲完注解再点别处，那段注解会静默丢掉。
+  const noteRef = useRef(note)
+  noteRef.current = note
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -571,7 +579,11 @@ function AnnotationEditor(props: {
       // 本插件自身的 DOM（角标/工具条）不算「外部」：点击角标由它自己的
       // click 处理器接管编辑器，不能先被外部点击取消掉。
       if (event.target instanceof Element && event.target.closest('[data-dsh-sidenote]') !== null) return
-      props.onCancel()
+      // 新建态点外部 = 确认这一条：点输入框准备写问题是最常见的下一步动作，以前这里
+      // 走 onCancel → 刚创建的注释被整条删除，用户划选的引用凭空消失（Esc 才是显式放弃）。
+      // 重开态点外部仍是取消——只关编辑器，已有注解不受影响。
+      if (props.mode === 'new') props.onSave(noteRef.current)
+      else props.onCancel()
     }
     document.addEventListener('keydown', onKeyDown, true)
     document.addEventListener('mousedown', onMouseDown, true)
