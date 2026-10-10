@@ -93,13 +93,15 @@ dsh plugin --profile web add dsh-sidenote
 | 命令 | 说明 |
 |---|---|
 | `pnpm typecheck` | tsc --noEmit |
-| `pnpm test` | vitest 单测（222 例） |
+| `pnpm test` | vitest 单测（先运行 build） |
 | `pnpm build` | 类型声明 + tsdown（host ESM + client CJS bundle，纯度门） |
-| `pnpm test:mount` | 挂载冒烟：真实 `dsh web` + 伪造会话日志 + Playwright 十条 journey lane（`BS_VERSION`/`DSH_CMD` 切版本矩阵） |
+| `pnpm test:mount` | 真实 `dsh web` + 种子会话 + Playwright 挂载与交互验收（`BS_VERSION`/`DSH_CMD` 切版本矩阵） |
 
-问题与建议欢迎 [Issue](https://github.com/g-yixuan/dsh-sidenote/issues)。
+## 参与贡献
 
-维护者发布流程见[发布指南](docs/releasing.md)。
+欢迎报告问题、提出需求、协助复现、改进文档和提交代码。请从 [Issue 入口](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose) 或[贡献指南](CONTRIBUTING.md)开始；中文和 English 都可以。
+
+维护者见[仓库维护](docs/maintaining.md)和[发布指南](docs/releasing.md)。
 
 ## License
 

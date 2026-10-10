@@ -1,0 +1,44 @@
+name: Bug 报告 / Bug report
+description: 报告异常行为或回归 / Report unexpected behavior or a regression
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！请先搜索已有 Issue；中文和 English 都可以。安全漏洞请使用私密报告入口。
+        Thanks for reporting. Search existing issues first. For security vulnerabilities, use private reporting.
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 实际与预期行为 / Actual and expected behavior
+      description: 哪里出了问题，你期望怎样？ / What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      description: 从哪个入口开始，做了哪些操作？必要时补充截图、录屏或最小示例。 / Include the entry point and actions; screenshots, recordings, or a minimal example help.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 版本与环境 / Versions and environment
+      description: 不清楚的项目可写 unknown；未安装 better-sidebar 写 none。 / Use unknown when unsure, and none if better-sidebar is not installed.
+      placeholder: |
+        dsh-sidenote:
+        DSH (dsh --version):
+        dsh-better-sidebar:
+        OS / browser:
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 补充证据 / Additional evidence
+      description: 可附错误日志、截图或发生频率。去除凭证、启动链接中的 token 和私人会话内容。 / Optional logs, screenshots, or frequency; remove credentials and private session content.

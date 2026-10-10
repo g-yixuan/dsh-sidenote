@@ -1,0 +1,34 @@
+name: 需求建议 / Feature request
+description: 描述使用场景与要解决的问题 / Describe the use case and problem
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        新功能或较大改动请先讨论方向；不需要先写实现方案。中文和 English 都可以。
+        Discuss new features or substantial changes before implementing; a technical design is not required.
+  - type: textarea
+    id: problem
+    attributes:
+      label: 使用场景与问题 / Use case and problem
+      description: 你正在做什么，当前流程哪里不方便？ / What are you doing, and what is difficult in the current workflow?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 期望达到的效果 / Desired outcome
+      description: 从用户视角说明怎样才算解决，可附交互示例。 / Describe success from the user's perspective; examples are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 现有替代方式 / Alternatives
+      description: 是否试过宿主已有能力或其他操作？ / Have you tried an existing host capability or another workaround?
+  - type: checkboxes
+    id: participation
+    attributes:
+      label: 参与方式 / Participation
+      options:
+        - label: 我愿意协助测试、补充示例或实现 / I can help test, provide examples, or implement this.
