@@ -98,6 +98,8 @@ The plugin degrades by capability when a host face is absent (never crashes the 
 
 Issues and ideas are welcome in [Issues](https://github.com/g-yixuan/dsh-sidenote/issues).
 
+Maintainers: see the [release guide (Chinese)](docs/releasing.md).
+
 ## License
 
 MIT

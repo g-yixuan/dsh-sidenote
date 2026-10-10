@@ -99,31 +99,7 @@ dsh plugin --profile web add dsh-sidenote
 
 问题与建议欢迎 [Issue](https://github.com/g-yixuan/dsh-sidenote/issues)。
 
-## 发版
-
-发布走 [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers)（OIDC）：**不需要 npm token，不需要 OTP，本地不需要登录 npm**。`.github/workflows/release.yml` 拿 GitHub Actions 的 OIDC 身份直接换发布权限，并附 SLSA provenance。
-
-> **触发条件是「发布一个 GitHub Release」，不是推 tag。**
-> 只 `git push --tags` 不会发布任何东西——tag 会静静躺在那里。
-
-```bash
-# 1. 改 package.json 的 version，提交
-git commit -am "release: vX.Y.Z——<摘要>"
-
-# 2. 打 tag 并推送（这一步还没有发布）
-git tag vX.Y.Z && git push origin main --tags
-
-# 3. 创建 GitHub Release —— 这一步才真正触发发布
-gh release create vX.Y.Z --title "vX.Y.Z — <标题>" --notes-file <notes.md>
-```
-
-workflow 随后自动跑 build → typecheck → test → `pnpm publish --provenance`，并校验 tag 与 `package.json` 版本一致（不一致直接失败）。
-
-几个已知的坑：
-
-- **registry 有复制延迟**：workflow 显示 `✅ Published` 后，`npm view` 仍可能有 1–5 分钟看到旧版本（Fastly `max-age=300`）。以 workflow 日志为准，不要据此判断失败而重试。
-- **别去折腾 npm token**：npm 正在[系统性废止 bypass-2FA 的 granular token](https://github.blog/changelog/2026-07-31-restricting-npm-bypass-2fa-granular-access-tokens/)。本仓库不依赖任何 token，发布失败请先看 workflow 日志，而不是 token 配置。
-- **CI 的 `plugin-mount` lane 失败不阻塞发版**：那是独立 workflow，Release 流程只跑单测，不跑 e2e。
+维护者发布流程见[发布指南](docs/releasing.md)。
 
 ## License
 

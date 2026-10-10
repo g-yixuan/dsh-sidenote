@@ -1,37 +1,7 @@
 name: Release
 
-# Publishes `dsh-sidenote` to npm via npm Trusted Publishing (OIDC) —
-# no NPM_TOKEN secret required, provenance is attached to the tarball.
-#
-# Trigger: a GitHub Release is published (tag vX.Y.Z). The tag MUST match
-# package.json `version`; the workflow verifies this before publishing.
-#
-# !! PUSHING A TAG DOES NOT PUBLISH !!  `on: release` fires only when a GitHub
-# Release object is created. `git push --tags` alone leaves the tag sitting
-# there and nothing reaches npm. Cutting a release is:
-#
-#   git commit -am "release: vX.Y.Z——<摘要>"       # bump package.json version
-#   git tag vX.Y.Z && git push origin main --tags  # still not published
-#   gh release create vX.Y.Z --title ... --notes-file ...   # <- this publishes
-#
-# After the run reports "✅ Published", the registry can still serve the old
-# version to `npm view` for 1-5 minutes (Fastly max-age=300). Trust the workflow
-# log, not `npm view`, and do not retry on that basis.
-#
-# No npm token is involved anywhere — not in CI, not locally. If publishing
-# fails, read the workflow log; do not go fix npm tokens. (npm is phasing out
-# bypass-2FA granular tokens entirely; Trusted Publishing is the supported path.)
-#
-# One-time npm-side setup (manual, on npmjs.com):
-#   1. package `dsh-sidenote` -> Settings -> Publishing access
-#      -> Trusted Publishers -> "Add Trusted Publisher".
-#   2. Provider: GitHub Actions
-#      Organization or user: g-yixuan
-#      Repository:           dsh-sidenote
-#      Workflow filename:    release.yml
-#      Environment:          (blank)
-#   3. Save. Do NOT add an NPM_TOKEN secret — Trusted Publishing replaces it.
-# Canonical reference: https://docs.npmjs.com/trusted-publishers
+# Publishes dsh-sidenote with npm Trusted Publishing (OIDC).
+# Maintainer procedure and authorization requirements: docs/releasing.md.
 
 on:
   release:
@@ -98,9 +68,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
         run: pnpm publish --dry-run --no-git-checks
 
-      # The first publish happens manually (npm Trusted Publishing requires the
-      # package to exist). If the version is already on npm, skip instead of
-      # failing the release run.
+      # Skip publishing if the package version already exists on npm.
       - name: Check whether this version is already on npm
         id: published
         run: |
