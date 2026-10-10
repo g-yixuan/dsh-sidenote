@@ -92,13 +92,15 @@ The plugin degrades by capability when a host face is absent (never crashes the 
 | Command | What it does |
 |---|---|
 | `pnpm typecheck` | tsc --noEmit |
-| `pnpm test` | vitest unit tests (213 cases) |
+| `pnpm test` | vitest unit tests (run build first) |
 | `pnpm build` | type declarations + tsdown (host ESM + client CJS bundle, purity gates) |
-| `pnpm test:mount` | mount smoke: real `dsh web` + fabricated session log + ten Playwright journey lanes (`BS_VERSION`/`DSH_CMD` version matrix) |
+| `pnpm test:mount` | real `dsh web` + seeded session + Playwright mounting and interaction checks (`BS_VERSION`/`DSH_CMD` version matrix) |
 
-Issues and ideas are welcome in [Issues](https://github.com/g-yixuan/dsh-sidenote/issues).
+## Contributing
 
-Maintainers: see the [release guide (Chinese)](docs/releasing.md).
+Bug reports, feature ideas, reproductions, documentation, and code are welcome. Start with the [issue chooser](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose) or [contributing guide](CONTRIBUTING_EN.md). English and Chinese are both welcome.
+
+Maintainers: see [repository maintenance](docs/maintaining_EN.md) and the [release guide](docs/releasing_EN.md).
 
 ## License
 

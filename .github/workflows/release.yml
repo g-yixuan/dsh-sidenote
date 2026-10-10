@@ -7,11 +7,6 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: Pack and verify everything, but do not publish
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -55,6 +50,14 @@ jobs:
             exit 1
           fi
 
+      - name: Verify release commit is on main
+        if: github.event_name == 'release'
+        run: |
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::Release commit must be merged into main through a PR."
+            exit 1
+          fi
+
       - name: Build
         run: pnpm build
 
@@ -65,7 +68,7 @@ jobs:
         run: pnpm test
 
       - name: Dry-run publish (validation only)
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
+        if: github.event_name == 'workflow_dispatch'
         run: pnpm publish --dry-run --no-git-checks
 
       # Skip publishing if the package version already exists on npm.
@@ -77,5 +80,5 @@ jobs:
           fi
 
       - name: Publish to npm
-        if: (github.event_name == 'release' || github.event.inputs.dry_run != 'true') && steps.published.outputs.exists != 'true'
+        if: github.event_name == 'release' && steps.published.outputs.exists != 'true'
         run: pnpm publish --provenance --access public --no-git-checks

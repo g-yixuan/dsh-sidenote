@@ -1,5 +1,7 @@
 # 发布指南
 
+[English](releasing_EN.md) · 中文
+
 本指南适用于 `g-yixuan/dsh-sidenote` 仓库及 npm 包 `dsh-sidenote` 的维护者。
 
 ## 前提
@@ -11,16 +13,16 @@
 
 ## 发布步骤
 
-1. 更新 `package.json` 的版本，提交并推送到 `main`，准备发布说明。
-2. 确认待发布提交的 CI 通过，包括 `ci` 检查和全部 `plugin-mount` 宿主兼容矩阵。
-3. 在该提交上创建与版本对应的 `vX.Y.Z` tag，并推送到仓库：
+1. 从 `main` 创建发布分支，更新 `package.json` 的版本并准备发布说明，提交 `release:` PR。不要直接推送版本变更到 `main`。
+2. 确认发布 PR 的 `ci` 和全部 `plugin-mount` 宿主兼容矩阵通过，再合并到 `main`；确认合并后该提交的 CI 也通过。
+3. 在 `main` 上的该版本提交创建对应的 `vX.Y.Z` tag，并推送到仓库：
 
    ```bash
    git tag vX.Y.Z
    git push origin vX.Y.Z
    ```
 
-4. 在 GitHub Releases 中选择该 tag、填写发布说明并发布 Release。单独推送 tag 不会触发发布 workflow。
+4. 在 GitHub Releases 中选择该 tag、填写发布说明并发布 Release。用中英文简述变化、兼容性和已知限制；可使用 Generate release notes 汇总 PR 和贡献者。单独推送 tag 不会触发发布 workflow。
 5. 检查 Release workflow 成功，并确认 npm 上的版本：
 
    ```bash
@@ -29,6 +31,6 @@
 
 ## 自动化
 
-[`release.yml`](../.github/workflows/release.yml) 校验 Release tag 与 `package.json` 版本一致，随后构建、检查类型、运行单测并发布带 provenance 的 npm 包。该版本已在 npm 上存在时，跳过发布。
+[`release.yml`](../.github/workflows/release.yml) 校验 Release tag 与 `package.json` 版本一致，并确认版本提交已合入 `main`，随后构建、检查类型、运行单测并发布带 provenance 的 npm 包。该版本已在 npm 上存在时，跳过发布。
 
-workflow 也支持手动运行：`dry_run=true` 只做验证，`dry_run=false` 会发布所选 ref 对应的版本。
+手动运行 workflow 只做构建、检查与 dry-run，不发布；正式发布由 GitHub Release 触发。

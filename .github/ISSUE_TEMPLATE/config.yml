@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 贡献指南 / Contributing guide
+    url: https://github.com/g-yixuan/dsh-sidenote/blob/main/CONTRIBUTING.md
+    about: 开发、PR 与协作说明 / Development, PR, and collaboration guidance
+  - name: 私密安全报告 / Private security report
+    url: https://github.com/g-yixuan/dsh-sidenote/security/advisories/new
+    about: 请勿在公开 Issue 中提交漏洞或凭证 / Do not report vulnerabilities or credentials in public issues

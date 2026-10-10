@@ -1,0 +1,30 @@
+name: 使用提问 / Usage question
+description: 安装、兼容性或使用问题 / Installation, compatibility, or usage questions
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        欢迎提问。请先查看 README 和已有 Issue；中文和 English 都可以。
+        Questions are welcome. Check the README and existing issues first.
+  - type: textarea
+    id: question
+    attributes:
+      label: 你想完成什么？ / What are you trying to do?
+      description: 说明目标和卡住的位置。 / Describe your goal and where you are stuck.
+    validations:
+      required: true
+  - type: textarea
+    id: attempted
+    attributes:
+      label: 已尝试的方法 / What have you tried?
+      description: 可附相关文档或操作步骤。 / Include relevant docs or steps if available.
+  - type: textarea
+    id: environment
+    attributes:
+      label: 版本与环境 / Versions and environment
+      placeholder: |
+        dsh-sidenote:
+        DSH:
+        dsh-better-sidebar (or none):
+        OS / browser:
