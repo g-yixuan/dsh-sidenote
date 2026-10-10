@@ -14,6 +14,9 @@
 <!-- 列出实际运行的命令与结果；测试不适用时说明原因；未覆盖的范围也请写明。 -->
 <!-- List commands actually run and their results. Explain when tests do not apply and state validation limits. -->
 
+<!-- 公开功能、流程、命令或兼容性事实变化请同步两版文档；可说明需要维护者协助翻译。 -->
+<!-- Update both guide versions for public feature, process, command, or compatibility changes; mention if translation help is needed. -->
+
 ## 交互与兼容性 / Interaction and compatibility
 
 <!-- UI 改动附截图或录屏；宿主改动注明 DSH / better-sidebar 版本。无关时可删除。 -->

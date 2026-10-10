@@ -100,7 +100,7 @@ The plugin degrades by capability when a host face is absent (never crashes the 
 
 Bug reports, feature ideas, reproductions, documentation, and code are welcome. Start with the [issue chooser](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose) or [contributing guide](CONTRIBUTING_EN.md). English and Chinese are both welcome.
 
-Maintainers: see [repository maintenance](docs/maintaining.md) and the [release guide](docs/releasing.md) (Chinese).
+Maintainers: see [repository maintenance](docs/maintaining_EN.md) and the [release guide](docs/releasing_EN.md).
 
 ## License
 

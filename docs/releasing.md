@@ -1,5 +1,7 @@
 # 发布指南
 
+[English](releasing_EN.md) · 中文
+
 本指南适用于 `g-yixuan/dsh-sidenote` 仓库及 npm 包 `dsh-sidenote` 的维护者。
 
 ## 前提
@@ -20,7 +22,7 @@
    git push origin vX.Y.Z
    ```
 
-4. 在 GitHub Releases 中选择该 tag、填写发布说明并发布 Release。可使用 Generate release notes 汇总 PR 和贡献者；补充兼容性和已知限制。单独推送 tag 不会触发发布 workflow。
+4. 在 GitHub Releases 中选择该 tag、填写发布说明并发布 Release。用中英文简述变化、兼容性和已知限制；可使用 Generate release notes 汇总 PR 和贡献者。单独推送 tag 不会触发发布 workflow。
 5. 检查 Release workflow 成功，并确认 npm 上的版本：
 
    ```bash

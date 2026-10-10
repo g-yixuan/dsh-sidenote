@@ -1,5 +1,7 @@
 # 仓库维护
 
+[English](maintaining_EN.md) · 中文
+
 适用于有本仓库写入、合并或发布权限的维护者与其使用的 agent。贡献入口见 [CONTRIBUTING](../CONTRIBUTING.md)。当前主要维护者为 [@g-yixuan](https://github.com/g-yixuan)。
 
 ## 开发与合并
@@ -43,6 +45,8 @@
 
 ## 发布与规则演进
 
-版本变更也走发布 PR；通过检查并合入后，按[发布指南](releasing.md) 创建 GitHub Release。发布说明描述变化、兼容性与已知限制，链接相关 PR 并保留贡献者署名。可使用 GitHub 的 Generate release notes 和 [分类配置](../.github/release.yml)。
+版本变更也走发布 PR；通过检查并合入后，按[发布指南](releasing.md) 创建 GitHub Release。发布说明用中英文简述变化、兼容性与已知限制，链接相关 PR 并保留贡献者署名。可使用 GitHub 的 Generate release notes 和 [分类配置](../.github/release.yml)。
 
 新增规则、提高审批人数、兼容范围变化和维护职责调整均通过 PR 公开说明。当前不要求 CLA、DCO 签署、自动评审机器人或额外贡献账户认证。
+
+公开规则的事实、命令和流程变化在同一 PR 同步中英文版本；维护者可以协助贡献者补齐翻译。单语言润色、日常 Issue/PR 讨论和本地工作记录不要求双语。参见[文档语言](../CONTRIBUTING.md#文档语言)。

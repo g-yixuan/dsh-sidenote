@@ -75,4 +75,12 @@ AI assistance is allowed. You are responsible for understanding and explaining t
 
 Follow the [community standards](CODE_OF_CONDUCT.md). Discuss evidence and respect contributors' and maintainers' time. Maintainers work as time allows; there is no guaranteed response or release schedule.
 
-Preserve contributor authorship when merging and retain co-author information for joint work. GitHub tracks contributors automatically. People who consistently help with reproductions, questions, reviews, and delivery can also participate in [repository maintenance (Chinese)](docs/maintaining.md).
+Preserve contributor authorship when merging and retain co-author information for joint work. GitHub tracks contributors automatically. People who consistently help with reproductions, questions, reviews, and delivery can also participate in [repository maintenance](docs/maintaining_EN.md).
+
+## Documentation languages
+
+The README, contributing, maintenance, and release guides have linked Chinese and English versions. Issue/PR templates, community standards, and security guidance include both languages in one file.
+
+When changing facts about features, procedures, permissions, commands, or compatibility, update both versions in the same PR. Wording or formatting improvements only need to change the relevant version. You do not need to know both languages: point out what needs translating, and maintainers can help complete it.
+
+Issues, PRs, comments, and commit descriptions may use either language without translating every message. Keep label names, commands, and configuration identifiers unchanged.
