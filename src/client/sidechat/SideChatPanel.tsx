@@ -21,7 +21,7 @@ import { EmptyState, MessageList, StateScreen } from './rows.tsx'
 import { armInheritedTurnPurge, chatSourceOf, closeSideTab, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, retainSession, setSideChatTopic, unarchiveSideSession, updateTabMeta } from './lifecycle.ts'
 import { topicOf } from './identity.ts'
 import { buildMainlineSnapshot } from './snapshot.ts'
-import { directNativeLeg, registerLiveSideChat } from './native.ts'
+import { directNativeLeg, registerLiveSideChat, notifyLiveSideChats } from './native.ts'
 import { dropClosedSideChat, recordClosedSideChat } from './recentClosed.ts'
 import { ToolCard } from '../chat/ToolCard.tsx'
 import { ComposerBar } from './ComposerBar.tsx'
@@ -29,6 +29,7 @@ import { ReasoningRow } from '../chat/ReasoningRow.tsx'
 import { FoldCard } from '../chat/FoldCard.tsx'
 import { createFoldStore } from '../chat/viewState.ts'
 import type { ReflowStore } from '../reflow.ts'
+import type { AnnotationStore } from '../annotations/model.ts'
 import { showToast } from './toast.tsx'
 import { createPendingStore } from './pending.ts'
 import { PendingCardList } from './PendingCard.tsx'
@@ -45,7 +46,7 @@ const WRITE_TOOLS = new Set(['edit', 'write', 'str-replace-editor', 'str_replace
 /** 首次写提示的一次性 localStorage 键。 */
 const WRITE_NOTICE_KEY = 'dsh-sidenote:write-notice:v1'
 
-export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }) {
+export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; annotations: AnnotationStore; quoteRequestId?: string }) {
   useLocaleTick()
   const { ctx, scope, tab, visible } = props
   const meta = parseSideChatMeta(tab.meta)
@@ -215,18 +216,21 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
 
   // ── composer（input 机器优先，降级本地草稿 + session.prompt） ──
   // Delivery_04：busy fork 的首条消息在发送瞬间拼接主线进展快照（现取，
-  // 不是 fork 时刻——主线还在跑，发送时才最新）；拼进即清标记，失败回填/
-  // 重试天然携带不二次拼接。
+  // 不是 fork 时刻——主线还在跑，发送时才最新）；只有宿主真正接受后才
+  // 清标记，失败剥离临时前缀、保留正文，重试时重新读取最新进展。
   const tabMetaRef = useRef(meta)
   tabMetaRef.current = meta
   const composerOptions = useMemo(() => ({
+    annotations: props.annotations,
     firstSendPrefix: (): string | null => {
       const m = tabMetaRef.current
       if (m.forkedMidTurn !== true || m.parentSessionId === undefined) return null
       const block = buildMainlineSnapshot(ctx, m.parentSessionId)
       if (block === null) return null
-      updateTabMeta(ctx, scope.sessionId, tab.id, (cur) => ({ ...cur, forkedMidTurn: undefined }))
       return block
+    },
+    onAccepted: (): void => {
+      updateTabMeta(ctx, scope.sessionId, tab.id, (cur) => ({ ...cur, forkedMidTurn: undefined }))
     },
     // 内容身份（Delivery_05）：首条消息摘要落为 topic（sticky——已有
     // topic 不再覆盖）。body 是干净用户文本（快照前缀不进 body）。
@@ -235,7 +239,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
       const topic = topicOf(body)
       if (topic !== undefined) setSideChatTopic(ctx, scope.sessionId, tab.id, topic)
     },
-  }), [ctx, scope.sessionId, tab.id])
+  }), [ctx, scope.sessionId, tab.id, props.annotations])
   const composer = useComposer(ctx, session, childId, composerOptions)
 
   // ── 模型标签：读子会话当前模型（fork 时已同步主会话选择；读取失败保持默认文案） ──
@@ -274,6 +278,9 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
   metaRef.current = tab.meta
   const phaseRef = useRef(phase)
   phaseRef.current = phase
+  const statusRef = useRef({ phase, childId, error: forkError ?? undefined, requestId: props.quoteRequestId })
+  statusRef.current = { phase, childId, error: forkError ?? undefined, requestId: props.quoteRequestId }
+  useEffect(() => { notifyLiveSideChats() }, [phase, childId, forkError, props.quoteRequestId])
   const titleRef = useRef(tab.title)
   titleRef.current = tab.title
   useEffect(() => {
@@ -298,6 +305,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
       },
       () => metaRef.current,
       () => titleRef.current,
+      () => statusRef.current,
     )
     return () => {
       dispose()
@@ -493,7 +501,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
           {t('jumpToLatest')}
         </button>
       )}
-      <ComposerBar ctx={ctx} session={session} composer={composer} running={running} visible={visible} modelName={modelName} childId={childId} onModelSwitched={setModelName} />
+      <ComposerBar ctx={ctx} session={session} composer={composer} running={running} visible={visible} modelName={modelName} childId={childId} onModelSwitched={setModelName} annotations={props.annotations} />
     </div>
   )
 }

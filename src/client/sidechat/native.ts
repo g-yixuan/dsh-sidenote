@@ -98,10 +98,18 @@ interface LiveSideChat {
   readMeta(): unknown
   /** Current tab title（聚焦列表/编号数据源的读取面）。 */
   readTitle(): string
+  readStatus(): { phase: string; childId?: string; error?: string; requestId?: string }
 }
 
 /** Native tab id → live panel. Native layouts are memory-only, so is this. */
 const liveSideChats = new Map<string, LiveSideChat>()
+const panelKey = (sessionId: string, tabId: string): string => JSON.stringify([sessionId, tabId])
+const liveListeners = new Set<() => void>()
+export function notifyLiveSideChats(): void { for (const listener of [...liveListeners]) listener() }
+export function subscribeLiveSideChats(listener: () => void): () => void {
+  liveListeners.add(listener)
+  return () => { liveListeners.delete(listener) }
+}
 
 /**
  * tabId → 首次注册序号（打开序的近似）。tab.id 跨重挂载稳定，重注册不改写
@@ -120,18 +128,23 @@ export function registerLiveSideChat(
   seedDraft: (text: string) => void,
   readMeta: () => unknown,
   readTitle: () => string,
+  readStatus: LiveSideChat['readStatus'] = () => ({ phase: 'loading' }),
 ): () => void {
-  const entry: LiveSideChat = { tabId, sessionId, seedDraft, readMeta, readTitle }
-  liveSideChats.set(tabId, entry)
-  if (!birthOrder.has(tabId)) birthOrder.set(tabId, ++birthSeq)
+  const entry: LiveSideChat = { tabId, sessionId, seedDraft, readMeta, readTitle, readStatus }
+  const key = panelKey(sessionId, tabId)
+  liveSideChats.set(key, entry)
+  if (!birthOrder.has(key)) birthOrder.set(key, ++birthSeq)
   // 挂载即回放在 openTab→注册窗口内暂存的草稿（seedDraft 内有相位门）。
   const opening = openings.get(sessionId)
   if (opening !== undefined) {
+    opening.target = entry
     openings.delete(sessionId)
     for (const draft of opening.drafts) seedDraft(draft)
   }
+  notifyLiveSideChats()
   return () => {
-    if (liveSideChats.get(tabId) === entry) liveSideChats.delete(tabId)
+    if (liveSideChats.get(key) === entry) liveSideChats.delete(key)
+    notifyLiveSideChats()
   }
 }
 
@@ -147,6 +160,7 @@ interface OpeningMark {
   readonly at: number
   /** 窗口内到达的待投递草稿（面板注册时经 seedDraft 回放）。 */
   readonly drafts: string[]
+  target?: LiveSideChat
 }
 
 const openings = new Map<string, OpeningMark>()
@@ -168,15 +182,17 @@ export function sideChatOpening(sessionId: string): OpeningMark | undefined {
 }
 
 /** Live panel for a native tab id (undefined for legacy layout tabs). */
-export function liveSideChat(tabId: string): LiveSideChat | undefined {
-  return liveSideChats.get(tabId)
+export function liveSideChat(tabId: string, sessionId?: string): LiveSideChat | undefined {
+  if (sessionId !== undefined) return liveSideChats.get(panelKey(sessionId, tabId))
+  const candidates = [...liveSideChats.values()].filter(panel => panel.tabId === tabId)
+  return candidates.length === 1 ? candidates[0] : undefined
 }
 
 /** 一个会话的全部存活面板（按打开序升序；native 下枚举 side tab 的唯一数据源）。 */
 export function liveSideChatsOf(sessionId: string): LiveSideChat[] {
   return [...liveSideChats.values()]
     .filter(entry => entry.sessionId === sessionId)
-    .sort((a, b) => (birthOrder.get(a.tabId) ?? 0) - (birthOrder.get(b.tabId) ?? 0))
+    .sort((a, b) => (birthOrder.get(panelKey(a.sessionId, a.tabId)) ?? 0) - (birthOrder.get(panelKey(b.sessionId, b.tabId)) ?? 0))
 }
 
 /**
@@ -195,11 +211,12 @@ export function clearNativeRuntime(): void {
   liveSideChats.clear()
   openings.clear()
   birthOrder.clear()
+  notifyLiveSideChats()
 }
 
 /** Native tab shell for reads that go through the layout snapshot (`readTab`). */
-export function nativeTabShell(tabId: string, type: string): { id: string; type: string; title: string; meta: unknown } | undefined {
-  const entry = liveSideChats.get(tabId)
+export function nativeTabShell(tabId: string, type: string, sessionId?: string): { id: string; type: string; title: string; meta: unknown } | undefined {
+  const entry = liveSideChat(tabId, sessionId)
   if (entry === undefined) return undefined
   return { id: entry.tabId, type, title: '', meta: entry.readMeta() }
 }

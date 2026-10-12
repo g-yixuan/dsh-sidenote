@@ -13,7 +13,7 @@ import { writeSideChatMeta } from '../src/client/sidechat/metaStore.ts'
 interface Candidate { name: string }
 interface SourceFace {
   candidates(session: { sessionId?: string }, signal: AbortSignal): Promise<readonly Candidate[]>
-  onPick(pick: { candidate: Candidate }, session: { sessionId?: string }): { insert: { ref: string } } | undefined
+  onPick(pick: { candidate: Candidate; session: { sessionId?: string } }): { insert: { ref: string } } | undefined
 }
 
 function fakeCtx(): { ctx: Context, source: () => SourceFace } {
@@ -46,9 +46,9 @@ describe('@引用候选的会话作用域（M2）', () => {
     const cands = await source().candidates({ sessionId: 'sess-A' }, new AbortController().signal)
     expect(cands.map(c => c.name)).toEqual(['Side · 部署泳道'])
     // 同会话：正常取到 childId
-    expect(source().onPick({ candidate: cands[0]! }, { sessionId: 'sess-A' })?.insert.ref).toBe('child-A')
+    expect(source().onPick({ candidate: cands[0]!, session: { sessionId: 'sess-A' } })?.insert.ref).toBe('child-A')
     // 跨会话：同名候选不得解析（旧全局缓存会把 child-A 插进 sess-B）
-    expect(source().onPick({ candidate: cands[0]! }, { sessionId: 'sess-B' })).toBeUndefined()
+    expect(source().onPick({ candidate: cands[0]!, session: { sessionId: 'sess-B' } })).toBeUndefined()
   })
 
   it('candidates 早退后陈旧名字不再可 pick', async () => {
@@ -59,7 +59,7 @@ describe('@引用候选的会话作用域（M2）', () => {
     // 会话清空（tab 关闭）→ 重新 candidates 得空列表 → 旧名失效
     localStorage.clear()
     await source().candidates({ sessionId: 'sess-A' }, new AbortController().signal)
-    expect(source().onPick({ candidate: cands[0]! }, { sessionId: 'sess-A' })).toBeUndefined()
+    expect(source().onPick({ candidate: cands[0]!, session: { sessionId: 'sess-A' } })).toBeUndefined()
   })
 
   it('同名候选消歧后按名取到各自 childId', async () => {
@@ -69,7 +69,7 @@ describe('@引用候选的会话作用域（M2）', () => {
     liveMeta('sess-A', 't2', 'child-2', '部署泳道')
     const cands = await source().candidates({ sessionId: 'sess-A' }, new AbortController().signal)
     expect(cands.map(c => c.name)).toEqual(['Side · 部署泳道', 'Side · 部署泳道 · 2'])
-    expect(source().onPick({ candidate: cands[0]! }, { sessionId: 'sess-A' })?.insert.ref).toBe('child-1')
-    expect(source().onPick({ candidate: cands[1]! }, { sessionId: 'sess-A' })?.insert.ref).toBe('child-2')
+    expect(source().onPick({ candidate: cands[0]!, session: { sessionId: 'sess-A' } })?.insert.ref).toBe('child-1')
+    expect(source().onPick({ candidate: cands[1]!, session: { sessionId: 'sess-A' } })?.insert.ref).toBe('child-2')
   })
 })

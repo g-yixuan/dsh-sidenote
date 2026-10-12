@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { AnnotationEditor } from '../src/client/annotate/overlay.tsx'
-import type { Annotation } from '../src/client/annotate/model.ts'
+import type { Annotation } from '../src/client/annotations/model.ts'
 
 // React 18 act 环境标记（jsdom 下手渲需要）。
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true

@@ -15,7 +15,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context, SessionInput } from '../src/client/host/contracts.ts'
 import type { ReflowStore } from '../src/client/reflow.ts'
-import { createAnnotationStore } from '../src/client/annotate/model.ts'
+import { createAnnotationStore } from '../src/client/annotations/model.ts'
 import { installSendInterceptor } from '../src/client/annotate/send.ts'
 
 const SESSION = 's1'
@@ -48,6 +48,12 @@ function makeHarness(options: { draft?: string; buttonDisabled?: boolean; withAn
   const state = { draft: options.draft ?? '', phase: 'plain' as const }
   const submitted: string[] = []
   const drafts: string[] = []
+  const sessionState = { sessionId: SESSION, running: false, nodes: [] as unknown[] }
+  const sessionListeners = new Set<() => void>()
+  const session = {
+    getSnapshot: () => sessionState,
+    subscribe: (fn: () => void) => { sessionListeners.add(fn); return () => { sessionListeners.delete(fn) } },
+  }
 
   const input = {
     state: {
@@ -55,13 +61,19 @@ function makeHarness(options: { draft?: string; buttonDisabled?: boolean; withAn
       subscribe: () => () => {},
     },
     setDraft: (text: string) => { drafts.push(text); state.draft = text },
-    submit: (mode?: string) => { submitted.push(mode ?? '') },
+    submit: (mode?: string) => {
+      submitted.push(mode ?? 'queue')
+      sessionState.nodes.push({ kind: 'user', seq: sessionState.nodes.length + 1, content: [{ type: 'text', text: state.draft }] })
+      state.draft = ''
+      for (const fn of sessionListeners) fn()
+    },
     notify: () => {},
   } as unknown as SessionInput
 
   const ctx = {
     sessions: {
       scope: () => ({}),
+      binding: () => ({ session }),
       list: { getSnapshot: () => ({ current: SESSION }) },
     },
     get: (name: string) => (name === 'conversation' ? { input: { for: () => input } } : undefined),
@@ -231,5 +243,16 @@ describe('send interceptor — Workitem_06 注入通道', () => {
     await flushMicrotasks()
     expect(harness.submitted).toEqual(['queue'])
     expect(harness.drafts[0]).toContain('（窗口内补充）')
+  })
+
+  it('回流全部成功注入时仍通过原生机器发送已有正文', async () => {
+    harness = makeHarness({ draft: '继续处理正文', buttonDisabled: false, withAnnotation: false, reflowItems: [{ id: 1, text: '结论', sideTitle: '侧边' }] })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 })))
+    click(document.querySelector('#send')!)
+    await flushMicrotasks()
+    expect(harness.removedReflow).toEqual([1])
+    expect(harness.submitted).toEqual(['queue'])
+    expect(harness.drafts).toEqual([])
+    expect(harness.draft()).toBe('')
   })
 })

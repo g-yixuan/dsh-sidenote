@@ -24,7 +24,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { test, expect, type Page } from '@playwright/test'
 import { gotoPage } from './host'
-import { dismissOnboarding, openSeedSession, registerSeedWorkspace } from './journey'
+import { dismissOnboarding, openSeedSession, registerSeedWorkspace, userMessagesOf } from './journey'
 
 const PLUGIN_CONSOLE = /dsh-sidenote|Unhandled/
 
@@ -315,7 +315,8 @@ test('annotate journey: 划选 → 浮层 → 注解编辑器 → 角标 → chi
 
   // 气泡留痕（C2 P0-3 回归）：种子会话 turn 2 的用户消息携带 v3 协议前缀
   // ——协议区必须被隐藏、显示「1 annotated」标签，正文仍在。
-  const seededBubble = page.locator('[data-chat-flow-kind="user"]', { hasText: 'Looks good overall' })
+  const seededBubble = page.locator('[data-chat-flow-kind="user"]').filter({ hasText: 'Looks good overall' }).filter({ hasText: 'the seeded protocol quote' })
+  await expect(seededBubble).toHaveCount(1)
   await expect(seededBubble, '种子协议气泡未出现').toBeVisible({ timeout: 10_000 })
   await expect(seededBubble.getByText('1 annotated'), '气泡「批注 ×N」标签未出现（手术未命中）').toBeVisible({ timeout: 10_000 })
   // 协议区被隐藏（display:none 的包层 span；文本仍在 DOM 但不可见）。
@@ -404,7 +405,7 @@ test('annotate journey: 划选 → 浮层 → 注解编辑器 → 角标 → chi
   expect(consoleErrors.filter((t) => PLUGIN_CONSOLE.test(t)), 'plugin console errors').toEqual([])
 })
 
-test('linkage journey: 划选 → 在侧边聊天中提问 → 编辑器 → 侧边聊天带引用草稿', async ({ page }) => {
+test('linkage journey: 划选 → 侧边受控注释 → 干净正文 → 实际接受', async ({ page }) => {
   test.skip(!process.env.DSH_E2E_SEED_SESSION, 'no seeded session id')
   const pageErrors: string[] = []
   const consoleErrors: string[] = []
@@ -414,6 +415,7 @@ test('linkage journey: 划选 → 在侧边聊天中提问 → 编辑器 → 侧
   })
 
   await openSeedSession(page)
+  await page.locator('[data-chat-flow-kind="assistant-step"] li').filter({ hasText: 'full history snapshot' }).first().scrollIntoViewIfNeeded()
   await injectSelection(page)
 
   // 「在侧边聊天中提问」→ 先弹注解编辑器（WI-03 裁定：与「添加到对话」一致）。
@@ -431,17 +433,23 @@ test('linkage journey: 划选 → 在侧边聊天中提问 → 编辑器 → 侧
     sidebar.getByText(/full history snapshot/).first(),
     '侧边聊天未打开或未渲染 fork 历史（折叠卡展开后）',
   ).toBeVisible({ timeout: 15_000 })
-  const sideComposer = sidebar.getByRole('textbox').first()
-  const sideDraft = await sideComposer.evaluate((el) => (
-    el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.value : (el.textContent ?? '')
-  ))
-  expect(sideDraft, '侧边聊天草稿缺少引用').toContain('full history snapshot')
-  expect(sideDraft).toContain('discuss this point')
+  const side = sidebar.locator('[data-sidenote-chat-session]').first()
+  const child = await side.getAttribute('data-sidenote-chat-session')
+  expect(child).toBeTruthy()
+  const sideComposer = side.getByRole('textbox').first()
+  await expect(sideComposer).toHaveValue('')
+  const stored = () => page.evaluate(id => JSON.parse(localStorage.getItem('dsh-sidenote:annotations:v1:' + id) ?? '[]'), child!)
+  await expect.poll(stored).toMatchObject([{ text: 'full history snapshot', note: 'discuss this point', sessionId: child, sourceSessionId: process.env.DSH_E2E_SEED_SESSION }])
+  await expect(side.getByRole('button', { name: '1 annotation', exact: true })).toBeVisible()
+  // Source badge is on the main quote; only the child's composer owns the active chip.
+  await page.locator('[data-chat-flow-kind="assistant-step"] li').filter({ hasText: 'full history snapshot' }).first().scrollIntoViewIfNeeded()
+  await expect(overlay.getByRole('button', { name: '1', exact: true })).toBeVisible()
+  await expect(page.locator('[data-composer-seat]').getByText(/^\d+ annotations?$/)).toHaveCount(0)
   await dumpStep(page, '09-linkage')
-
-  // 互斥：主对话不产生注释（无角标、无 chip）。
-  await expect(overlay.getByText('1', { exact: true })).toHaveCount(0)
-  await expect(page.getByText(/^\d+ annotations?$/).filter({ visible: true })).toHaveCount(0)
+  await side.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect.poll(() => userMessagesOf(child!).filter(text => text.includes('<note>discuss this point</note>'))).toHaveLength(1)
+  await expect.poll(stored).toMatchObject([{ state: 'sent' }])
+  await expect(sideComposer).toHaveValue('')
 
   expect(pageErrors, 'pageerrors during linkage journey').toEqual([])
   expect(consoleErrors.filter((t) => PLUGIN_CONSOLE.test(t)), 'plugin console errors').toEqual([])

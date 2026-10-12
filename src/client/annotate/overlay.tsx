@@ -13,19 +13,18 @@
  * error boundary around the tree; layout math is wrapped in anchor.ts).
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { Component } from 'react'
 import type { ReactNode } from 'react'
 import { IconCheckOutline16, IconTrashOutline16 } from '../host/icons.ts'
 import type { Context } from '../host/contracts.ts'
 import { currentSessionIdOf } from '../host/currentSession.ts'
-import { sideChatBridge } from '../bridge.ts'
+import { sideChatBridge, type SideChatBridge } from '../bridge.ts'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
 import { badgeAnchorOf, gutterAnchorOf, highlightRectsOf, resolveRange, spreadBadgePoint } from './anchor.ts'
-import { buildSideChatQuote } from './format.ts'
 import { FirstUseHint } from './hint.tsx'
-import type { Annotation, AnnotationStore } from './model.ts'
+import type { Annotation, AnnotationStore } from '../annotations/model.ts'
 import type { SelectionController, SelectionSnapshot } from './selection.ts'
+import { AnnotationBoundary } from '../annotations/boundary.tsx'
 import css from './annotate.module.css'
 
 /** Editor state: which annotation is being edited, and where the popover sits. */
@@ -37,34 +36,21 @@ interface EditorState {
 }
 
 /** 「Ask in side chat」的注解收集态：先弹编辑器（与「Add to conversation」一致，
- *  允许空注解），保存后才经 bridge 注入侧边聊天草稿——不产生主对话注释
- *  （无高亮/角标/chip，两个去向互斥）。 */
+ *  允许空注解），保存后经 bridge 等待真实子会话，创建共享注释对象；正文保持干净。 */
 interface SideDraftState {
   readonly snapshot: SelectionSnapshot
   readonly x: number
   readonly y: number
   /** 目标侧边聊天 Tab 标题（编辑器上标明「发送至：侧边 N」）。 */
   readonly targetTitle?: string
+  readonly abort: AbortController
+  readonly target: ReturnType<SideChatBridge['captureTarget']> | undefined
 }
 
 interface OverlayProps {
   readonly ctx: Context
   readonly store: AnnotationStore
   readonly controller: SelectionController
-}
-
-/** Crash guard: a render failure must never take the host page down. */
-export class AnnotateErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
-  override state = { failed: false }
-  static getDerivedStateFromError(): { failed: boolean } {
-    return { failed: true }
-  }
-  override componentDidCatch(error: unknown): void {
-    console.error('[dsh-sidenote] annotate overlay crashed:', error)
-  }
-  override render(): ReactNode {
-    return this.state.failed ? null : this.props.children
-  }
 }
 
 /** Badge anchor of a freshly captured selection (editor placement on create). */
@@ -79,9 +65,9 @@ function selectionBadgePoint(snapshot: SelectionSnapshot): { x: number; y: numbe
 
 export function AnnotateOverlay(props: OverlayProps): ReactNode {
   return (
-    <AnnotateErrorBoundary>
+    <AnnotationBoundary>
       <AnnotateOverlayInner {...props} />
-    </AnnotateErrorBoundary>
+    </AnnotationBoundary>
   )
 }
 
@@ -153,6 +139,8 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
     const anchor = selectionBadgePoint(snapshot)
     const annotation = store.add({
       sessionId: snapshot.sessionId,
+      sourceSessionId: snapshot.sessionId,
+      sourceSurface: 'main',
       anchorKey: snapshot.anchorKey,
       text: snapshot.text,
       anchorText: snapshot.anchorText,
@@ -167,29 +155,38 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
   }
 
   const askInSideChat = (snapshot: SelectionSnapshot): void => {
-    // WI-03 联动：先弹注解编辑器收集注解（可空），保存后经 bridge 注入侧边
-    // 聊天草稿；本路径不产生主对话注释（无高亮/角标/chip）。
+    // 收集注解（可空），等选定的实际目标就绪后递交共享对象。
     const anchor = selectionBadgePoint(snapshot)
-    const targetTitle = sideChatBridge.current?.peekTargetTitle(snapshot.sessionId)
-    setSideDraft({ snapshot, x: anchor.x, y: anchor.y, ...(targetTitle !== undefined ? { targetTitle } : {}) })
+    const target = sideChatBridge.current?.captureTarget(snapshot.sessionId)
+    const targetTitle = target?.title
+    setSideDraft({ snapshot, x: anchor.x, y: anchor.y, abort: new AbortController(), target, ...(targetTitle !== undefined ? { targetTitle } : {}) })
     controller.clear()
     window.getSelection()?.removeAllRanges()
   }
 
-  const commitSideDraft = (note: string): boolean => {
+  const commitSideDraft = async (note: string): Promise<boolean> => {
     if (sideDraft === null) return false
-    const ok = sideChatBridge.current?.askInSideChat(
-      sideDraft.snapshot.sessionId,
-      buildSideChatQuote(sideDraft.snapshot.text, note),
-    ) === true
-    if (ok) setSideDraft(null)
-    return ok
+    if (sideDraft.target === undefined) return false
+    try {
+      const target = await sideDraft.target.resolve(sideDraft.abort.signal)
+      if (sideDraft.abort.signal.aborted || currentSessionIdOf(ctx) !== sideDraft.snapshot.sessionId || !target.isOpen()) return false
+      const snapshot = sideDraft.snapshot
+      const annotation = store.add({
+        sessionId: target.childId, sourceSessionId: snapshot.sessionId, sourceSurface: 'main',
+        anchorKey: snapshot.anchorKey, text: snapshot.text, anchorText: snapshot.anchorText,
+        occurrence: snapshot.occurrence, note,
+      })
+      rangeCache.current.set(annotation.id, snapshot.range.cloneRange())
+      setSideDraft(current => current === sideDraft ? null : current)
+      return true
+    } catch { return false }
   }
 
   // sent 态注释的只读回看卡片（角标灰态点开的落点）。
   const [viewer, setViewer] = useState<{ annotationId: number; x: number; y: number } | null>(null)
 
   const reopenAnnotation = (annotation: Annotation, point: { x: number; y: number }): void => {
+    if (store.getSubmission(annotation.sessionId).pending) return
     if (annotation.state === 'sent') {
       setViewer({ annotationId: annotation.id, x: point.x, y: point.y })
       return
@@ -252,7 +249,7 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
           y={sideDraft.y}
           targetTitle={sideDraft.targetTitle}
           onSave={commitSideDraft}
-          onCancel={() => { setSideDraft(null) }}
+          onCancel={() => { sideDraft.abort.abort(); setSideDraft(null) }}
         />
       )}
       {viewingAnnotation !== undefined && viewer !== null && (
@@ -337,28 +334,36 @@ export function SideChatNoteEditor(props: {
   x: number
   y: number
   targetTitle?: string
-  onSave: (note: string) => boolean
+  onSave: (note: string) => boolean | Promise<boolean>
   onCancel: () => void
 }): ReactNode {
   useLocaleTick()
   const [note, setNote] = useState('')
   const [failed, setFailed] = useState(false)
+  const [pending, setPending] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const latest = useRef({ note, onSave: props.onSave, onCancel: props.onCancel })
   latest.current = { note, onSave: props.onSave, onCancel: props.onCancel }
   const saved = useRef(false)
   const failedRef = useRef(false)
+  const cancelled = useRef(false)
+  useEffect(() => { cancelled.current = false; return () => { cancelled.current = true } }, [])
   const save = (outside = false): void => {
-    if (saved.current || (outside && failedRef.current)) return
+    if (saved.current || cancelled.current || (outside && failedRef.current)) return
     // Lock before the bridge runs: focusing its composer must not submit twice.
     saved.current = true
-    try {
-      saved.current = latest.current.onSave(latest.current.note)
-    } catch {
-      saved.current = false
+    const finish = (ok: boolean): void => {
+      if (cancelled.current) return
+      saved.current = ok
+      failedRef.current = !ok
+      setFailed(!ok)
+      setPending(false)
     }
-    failedRef.current = !saved.current
-    setFailed(failedRef.current)
+    try {
+      const result = latest.current.onSave(latest.current.note)
+      if (typeof result === 'boolean') finish(result)
+      else { setPending(true); void result.then(finish, () => { finish(false) }) }
+    } catch { finish(false) }
   }
   const saveRef = useRef(save)
   saveRef.current = save
@@ -367,7 +372,8 @@ export function SideChatNoteEditor(props: {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.stopPropagation()
-        if (!saved.current) latest.current.onCancel()
+        cancelled.current = true
+        latest.current.onCancel()
       }
     }
     const onMouseDown = (event: MouseEvent): void => {
@@ -402,6 +408,7 @@ export function SideChatNoteEditor(props: {
           placeholder={t('sideNotePlaceholder')}
           aria-label={t('sideNoteAria')}
           autoFocus
+          disabled={pending}
           onChange={(event) => {
             setNote(event.target.value)
             failedRef.current = false
@@ -421,11 +428,13 @@ export function SideChatNoteEditor(props: {
           title={t('confirmTitle')}
           aria-label={t('confirmAskAria')}
           onClick={() => { save() }}
+          disabled={pending}
         >
           <IconCheckOutline16 size={14} />
         </button>
       </div>
       {failed && <div className={css.editorError}>{t('openSideFailed')}</div>}
+      {pending && <div className={css.editorTarget} role="status">{t('sideTargetWaiting')}</div>}
     </div>
   )
 }
@@ -492,7 +501,8 @@ function BadgeLayer(props: {
   editingId: number | null
   onOpen: (annotation: Annotation, point: { x: number; y: number }) => void
 }): ReactNode {
-  const annotations = props.sessionId === '' ? [] : props.store.list(props.sessionId)
+  const annotations = props.sessionId === '' ? [] : props.store.sessions().flatMap(id => props.store.list(id))
+    .filter(annotation => (annotation.sourceSessionId ?? annotation.sessionId) === props.sessionId && (annotation.sourceSurface ?? 'main') === 'main')
   const badges: ReactNode[] = []
   const placed: { x: number; y: number }[] = []
   let highlight: ReactNode = null

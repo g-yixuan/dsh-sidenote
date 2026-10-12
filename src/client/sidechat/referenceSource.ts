@@ -136,7 +136,8 @@ export function registerSideChatReferenceSource(ctx: Context): void {
         }
       },
       // pick → 插入引用 chip（ref = childId；label/clipboardText 供渲染与复制）。
-      onPick: (pick: { candidate: { name: string } }, session: { sessionId?: string } | undefined) => {
+      onPick: (pick: { candidate: { name: string }; session?: { sessionId?: string } }) => {
+        const session = pick.session
         if (session?.sessionId === undefined) return undefined
         // 名称 ↔ childId 的映射按会话查最近一次 candidates() 缓存（碰撞护栏）。
         const childId = lastCandidateRefs.get(session.sessionId)?.get(pick.candidate.name)

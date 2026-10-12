@@ -12,6 +12,7 @@ import type { Context } from './host/contracts.ts'
 import { probeHost } from './host/probes.ts'
 import { attachLocale, type LocaleServiceLike } from './locales.ts'
 import { createReflowStore } from './reflow.ts'
+import { createAnnotationStore } from './annotations/model.ts'
 import { registerSideChat } from './sidechat/index.tsx'
 import { registerAnnotations } from './annotate/index.tsx'
 import { clearNativeRuntime, setRootContext } from './sidechat/native.ts'
@@ -38,6 +39,7 @@ export function apply(ctx: Context): void {
   // 回流 store 两个模块共享：sidechat 生产（回流按钮），annotate 消费
   // （chip + 发送拦截器序列化）。
   const reflow = createReflowStore()
-  registerSideChat(ctx, reflow)
-  registerAnnotations(ctx, reflow)
+  const annotations = createAnnotationStore()
+  registerSideChat(ctx, reflow, annotations)
+  registerAnnotations(ctx, reflow, annotations)
 }

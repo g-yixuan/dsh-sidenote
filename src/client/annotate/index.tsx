@@ -14,10 +14,11 @@
  */
 import { createRoot } from 'react-dom/client'
 import type { Context } from '../host/contracts.ts'
-import { createAnnotationStore } from './model.ts'
+import type { AnnotationStore } from '../annotations/model.ts'
 import { createSelectionController } from './selection.ts'
 import { AnnotateOverlay } from './overlay.tsx'
-import { createAnnotationChip, createReflowChip } from './chip.tsx'
+import { createAnnotationChip } from '../annotations/chip.tsx'
+import { createReflowChip } from './chip.tsx'
 import { installSendInterceptor } from './send.ts'
 import { installBubbleSurgery } from './bubble.ts'
 import type { ReflowStore } from '../reflow.ts'
@@ -26,10 +27,9 @@ import { currentSessionIdOf } from '../host/currentSession.ts'
 
 export { currentSessionIdOf }
 
-export function registerAnnotations(ctx: Context, reflow: ReflowStore): void {
+export function registerAnnotations(ctx: Context, reflow: ReflowStore, store: AnnotationStore): void {
   ctx.effect(() => {
     try {
-      const store = createAnnotationStore()
       const controller = createSelectionController(() => currentSessionIdOf(ctx))
 
       // The overlay root: toolbar + badges + highlight + editor + sent viewer.

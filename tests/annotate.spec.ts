@@ -4,14 +4,13 @@
  * 全部为 node 环境的纯函数测试（无 jsdom 依赖）。
  */
 import { describe, expect, it } from 'vitest'
-import { createAnnotationStore } from '../src/client/annotate/model.ts'
-import type { AnnotationDraft } from '../src/client/annotate/model.ts'
+import { createAnnotationStore } from '../src/client/annotations/model.ts'
+import type { AnnotationDraft } from '../src/client/annotations/model.ts'
 import {
   PROTOCOL_HEADER_RE,
   buildProtocolBlock,
-  buildSideChatQuote,
   splitProtocolPrefix,
-} from '../src/client/annotate/format.ts'
+} from '../src/client/annotations/format.ts'
 import { ASSISTANT_KIND, isEligibleSelection } from '../src/client/annotate/selection.ts'
 import { BADGE_SPREAD_STEP, spreadBadgePoint } from '../src/client/annotate/anchor.ts'
 import { currentSessionIdOf } from '../src/client/annotate/index.tsx'
@@ -20,6 +19,46 @@ import type { Context } from '../src/client/host/contracts.ts'
 function draft(sessionId: string, text: string, note = ''): AnnotationDraft {
   return { sessionId, anchorKey: 'k1', text, anchorText: text, occurrence: 0, note }
 }
+
+function fakeStorage() {
+  const map = new Map<string, string>()
+  return {
+    get length() { return map.size },
+    key: (i: number) => [...map.keys()][i] ?? null,
+    getItem: (k: string) => map.get(k) ?? null,
+    setItem: (k: string, v: string) => { map.set(k, v) },
+    removeItem: (k: string) => { map.delete(k) },
+    map,
+  }
+}
+
+describe('source/target and storage failures', () => {
+  it('revives a quote into its original target while preserving a different source', () => {
+    const storage = fakeStorage()
+    const first = createAnnotationStore(() => 1, storage)
+    first.add({ ...draft('child', 'full quote', 'note'), sourceSessionId: 'parent', sourceSurface: 'main' })
+    const second = createAnnotationStore(() => 2, storage)
+    expect(second.list('parent')).toEqual([])
+    expect(second.listActive('child')).toMatchObject([{ sourceSessionId: 'parent', sourceSurface: 'main', note: 'note' }])
+    expect(second.add(draft('child', 'another')).number).toBe(2)
+  })
+
+  it('a corrupt session key does not discard a different healthy session', () => {
+    const storage = fakeStorage()
+    storage.setItem('dsh-sidenote:annotations:v1:broken', 'not json')
+    createAnnotationStore(() => 1, storage).add(draft('healthy', 'keep me'))
+    expect(createAnnotationStore(() => 2, storage).list('healthy')).toMatchObject([{ text: 'keep me' }])
+  })
+
+  it('keeps content in memory when writes fail and reports the persistence gap', () => {
+    const storage = fakeStorage()
+    storage.setItem = () => { throw new Error('quota') }
+    const store = createAnnotationStore(() => 1, storage)
+    const saved = store.add(draft('child', 'complete quote', 'complete note'))
+    expect(store.get(saved.id)).toMatchObject({ text: 'complete quote', note: 'complete note' })
+    expect(store.getStorageStatus()).toBe('memory')
+  })
+})
 
 describe('currentSessionIdOf（0.1.5 current / 0.1.7 DOM 双源）', () => {
   const ctxWithCurrent = (current: unknown): Context => ({
@@ -164,25 +203,28 @@ describe('protocol block v3（XML 形态）', () => {
     expect(PROTOCOL_HEADER_RE.test('随便一句 我批注了以下 2 处内容：')).toBe(false)
   })
 
-  it('builds the side-chat seed as quote + note line（轻量、非协议块）', () => {
-    expect(buildSideChatQuote('划选的\n文本')).toBe('> 划选的\n> 文本\n(no note)')
-    expect(buildSideChatQuote('划选的文本', '关注这里')).toBe('> 划选的文本\nNote: 关注这里')
-  })
+
 })
 
 describe('store 持久化（localStorage 注入替身）', () => {
-  function fakeStorage() {
-    const map = new Map<string, string>()
-    return {
-      get length() { return map.size },
-      key: (i: number) => [...map.keys()][i] ?? null,
-      getItem: (k: string) => map.get(k) ?? null,
-      setItem: (k: string, v: string) => { map.set(k, v) },
-      removeItem: (k: string) => { map.delete(k) },
-      map,
+  it('another session’s successful write does not hide an unsaved quote', () => {
+    const storage = fakeStorage()
+    const original = storage.setItem.bind(storage)
+    let rejectFirst = true
+    storage.setItem = (key, value) => {
+      if (key.endsWith(':s1') && rejectFirst) throw new Error('quota')
+      original(key, value)
     }
-  }
-
+    const store = createAnnotationStore(() => 1, storage)
+    const first = store.add(draft('s1', '未保存全文'))
+    store.add(draft('s2', '另一个会话可保存'))
+    expect(store.getStorageStatus()).toBe('memory')
+    expect(store.getStorageStatus('s1')).toBe('memory')
+    expect(store.getStorageStatus('s2')).toBe('persistent')
+    rejectFirst = false
+    store.setNote(first.id, '写入恢复')
+    expect(store.getStorageStatus()).toBe('persistent')
+  })
   it('mutation 后按会话落盘，清空后删键', () => {
     const storage = fakeStorage()
     const store = createAnnotationStore(() => 1, storage)

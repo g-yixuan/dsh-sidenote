@@ -23,7 +23,16 @@ export async function dismissOnboarding(page: Page): Promise<void> {
   for (let round = 0; round < 10; round++) {
     const buttons = page.getByRole('button', { name: names })
     if (await buttons.count() === 0) break
-    await buttons.last().click()
+    // A registered local provider can complete onboarding automatically while
+    // its disabled Continue is on screen. Wait for enabled OR genuinely gone.
+    await expect.poll(() => buttons.evaluateAll(elements => {
+      const last = elements.at(-1)
+      return last === undefined ? 'gone' : last instanceof HTMLButtonElement && !last.disabled ? 'ready' : 'loading'
+    }), { timeout: 15_000 }).not.toBe('loading')
+    if (await buttons.count() === 0) break
+    try { await buttons.last().click({ timeout: 2_000 }) } catch (error) {
+      if (await buttons.count() !== 0) throw error
+    }
   }
   await expect(page.locator('[class*="_mask_"]')).toHaveCount(0, { timeout: 15_000 })
 }
@@ -82,7 +91,7 @@ export async function openSideChat(page: Page): Promise<string> {
 }
 
 /** Only the isolated host's durable log is read, never the user's DSH_HOME. */
-export function userMessagesOf(sessionId: string): string[] {
+export function userMessageContentsOf(sessionId: string): Array<Array<{ type: string; text?: string }>> {
   const home = process.env.DSH_E2E_HOME
   if (!home) throw new Error('Missing isolated DSH_E2E_HOME')
   const projects = join(home, 'sessions')
@@ -98,8 +107,11 @@ export function userMessagesOf(sessionId: string): string[] {
     const file = files[0]!
     const bytes = readFileSync(join(dir, file))
     const events = decodeLog(bytes, file.endsWith('.zstd')).trim().split('\n').map(line => JSON.parse(line))
-    return events.filter(e => e.type === 'user/message' || e.type === 'user/steering').map(e =>
-      (e.data.content ?? []).filter((b: { type: string }) => b.type === 'text').map((b: { text: string }) => b.text).join('\n'))
+    return events.filter(e => e.type === 'user/message' || e.type === 'user/steering').map(e => e.data.content ?? [])
   }
   return []
+}
+
+export function userMessagesOf(sessionId: string): string[] {
+  return userMessageContentsOf(sessionId).map(content => content.filter(block => block.type === 'text').map(block => block.text ?? '').join('\n'))
 }

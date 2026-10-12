@@ -6,6 +6,8 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'r
 import { IconPaperclipOutline16, IconSendOutline16, IconStopFill16 } from '../host/icons.ts'
 import type { Context, SessionFace } from '../host/contracts.ts'
 import type { Composer } from './composer.ts'
+import type { AnnotationStore } from '../annotations/model.ts'
+import { AnnotationChip } from '../annotations/chip.tsx'
 import { ModelMenu } from './ModelMenu.tsx'
 import { PermissionChip } from './PermissionChip.tsx'
 import { arbitrateKeyOf, guardOf, resolveTriggerController, useSlashMenuState, SlashMenuView } from './composer/slash.tsx'
@@ -23,6 +25,7 @@ export function ComposerBar(props: {
   modelName: string | null
   childId: string | undefined
   onModelSwitched: (name: string) => void
+  annotations: AnnotationStore
 }) {
   useLocaleTick()
   const { session, composer, running, visible } = props
@@ -46,6 +49,7 @@ export function ComposerBar(props: {
 
   return (
     <div className={css.composer}>
+      {props.childId !== undefined && <AnnotationChip store={props.annotations} targetSessionId={props.childId} side />}
       {menuOpen && menuState !== null && triggerCtl !== null && (
         <SlashMenuView state={menuState} onPick={(source, index) => { triggerCtl.pick(source, index) }} />
       )}
@@ -151,7 +155,7 @@ export function ComposerBar(props: {
                 className={css.sendButton}
                 title={t('send')}
                 aria-label={t('send')}
-                disabled={composer.draft.trim() === ''}
+                disabled={!composer.canSubmit}
                 onClick={() => { composer.submit() }}
               >
                 <IconSendOutline16 size={14} />

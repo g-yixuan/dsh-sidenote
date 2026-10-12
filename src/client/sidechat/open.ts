@@ -70,7 +70,7 @@ export function readTab(ctx: Context, sessionId: string, tabId: string): Sidebar
   }
   const legacySnap = betterSidebarOf(ctx)?.getSnapshot()
   const tab = collectTabs(legacySnap?.state).find(candidate => candidate.id === tabId)
-  return tab ?? nativeTabShell(tabId, SIDE_TAB_TYPE)
+  return tab ?? nativeTabShell(tabId, SIDE_TAB_TYPE, sessionId)
 }
 
 /**

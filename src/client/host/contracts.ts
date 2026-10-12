@@ -222,7 +222,7 @@ export interface WorkspacesService {
 
 export interface SessionInput {
   setDraft(text: string): void
-  submit(mode?: string): void
+  submit(mode?: 'queue' | 'steer'): void
   notify(level: string, text: string): void
 }
 
@@ -408,6 +408,9 @@ export interface InputStateSnapshot {
   readonly draftRev?: number
   /** 待发图片附件 id 列（DraftAttachmentId——附件 rail 用）。 */
   readonly imageIds?: readonly string[]
+  /** Newer hosts renamed image-only drafts to general attachments. */
+  readonly attachmentIds?: readonly string[]
+  readonly occurrences?: readonly { occurrenceId: number; offset: number; length: number; source: string; ref: string }[]
   readonly queue?: readonly unknown[]
 }
 
@@ -529,6 +532,11 @@ export interface SessionInput {
   /** Spike-only mirror; see {@link ReferenceInsert}. Not called by annotate. */
   insertReference(ref: ReferenceInsert, span: TokenSpan): boolean
   /** 图片附件（WI-02 附件 rail；busy 相位机器拒收返 false）。 */
-  addImages(ids: readonly string[]): boolean
-  removeImage(id: string): void
+  addImages?(ids: readonly string[]): boolean
+  removeImage?(id: string): void
+  addAttachments?(ids: readonly string[]): boolean
+  removeAttachment?(id: string): boolean
+  /** Scoped insert-text implementation; verified against actual input shells. */
+  insertText?(text: string, span: TokenSpan, keepCompleting?: boolean): boolean
+  readonly notices?: ObservableSnapshot<{ level: 'info' | 'error'; text: string; seq: number } | null>
 }

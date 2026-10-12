@@ -13,7 +13,11 @@
  * resident shell —— 任何一步失败都降级，绝不崩面板。
  */
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
-import type { Context, ConversationService, SessionFace, SessionInput } from '../host/contracts.ts'
+import type { Context, SessionFace, SessionInput } from '../host/contracts.ts'
+import type { AnnotationStore } from '../annotations/model.ts'
+import { submitAnnotations } from '../annotations/send.ts'
+import { resolveInput, readInputDraft, inputAttachmentIds, removeInputAttachment } from '../host/input.ts'
+export { readInputDraft } from '../host/input.ts'
 import { appendDraftText } from './model.ts'
 import { attachFiles, resolveAttachmentApis } from './composer/attach.ts'
 
@@ -24,29 +28,7 @@ const NOOP_UNSUBSCRIBE = (): void => {}
  * （调用方走降级路径）。
  */
 export function resolveSessionInput(ctx: Context, childId: string): SessionInput | null {
-  try {
-    const actx = ctx.sessions.scope(childId)
-    if (actx === undefined) return null
-    const conversation = ctx.get('conversation') as ConversationService | undefined
-    if (conversation === undefined || conversation === null) return null
-    const input = conversation.input.for(actx)
-    if (input === null || input === undefined) return null
-    if (typeof input.setDraft !== 'function' || typeof input.submit !== 'function') return null
-    if (input.state === undefined || typeof input.state.getSnapshot !== 'function') return null
-    return input
-  } catch {
-    return null
-  }
-}
-
-/** 读草稿机的当前草稿（容错）。 */
-export function readInputDraft(input: SessionInput): string {
-  try {
-    const draft = input.state.getSnapshot().draft
-    return typeof draft === 'string' ? draft : ''
-  } catch {
-    return ''
-  }
+  return resolveInput(ctx, childId) ?? null
 }
 
 /** composer 对外脸：machine 标记实际落点（true = input 机器，false = 自绘降级）。 */
@@ -54,6 +36,7 @@ export interface Composer {
   readonly machine: boolean
   readonly draft: string
   readonly sendError: string | null
+  readonly canSubmit: boolean
   setDraft(text: string): void
   /** 拼接一段外部文本（桥接注入的引文草稿）。 */
   appendDraft(text: string): void
@@ -81,18 +64,17 @@ export interface Composer {
  * 降级路径：草稿住本地 state，发送直连 session.prompt([...], 'queue')，
  * 失败时回填草稿并报错。
  *
- * firstSendPrefix（Delivery_04 busy fork）：首条消息发送瞬间现取的前缀块
- * （主线进展快照）。拼进即消费（由调用方清标记）——机器路径的失败回填与
- * 降级路径的重试都保留已拼文本，天然不会二次拼接。
+ * firstSendPrefix：提交时获取主线进展快照；真实接受后才由 onAccepted 消费。
+ * 失败时剥离临时前缀，保留正文与待发注释。
  *
  * onSubmitText（Delivery_05 内容身份）：每次 submit 拿到干净 body（不含
  * 快照前缀），供面板捕获首条消息主题为 topic；是否首条的判定归调用方。
  */
-export function useComposer(ctx: Context, session: SessionFace | undefined, childId: string | undefined, options?: { firstSendPrefix?: () => string | null, onSubmitText?: (body: string) => void }): Composer {
-  // 每个 childId 解析一次：机器可用性在会话生命周期内不变。
+export function useComposer(ctx: Context, session: SessionFace | undefined, childId: string | undefined, options?: { annotations?: AnnotationStore; firstSendPrefix?: () => string | null; onSubmitText?: (body: string) => void; onAccepted?: () => void }): Composer {
+  // 同一 child 的 retained Session 就绪后必须重解析，避免把初次缺席缓存为永久降级。
   const input = useMemo(
     () => (childId === undefined ? null : resolveSessionInput(ctx, childId)),
-    [ctx, childId],
+    [ctx, childId, session],
   )
 
   const machineState = useSyncExternalStore(
@@ -105,16 +87,23 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
   const machineDraft = machineState?.draft ?? ''
   const [localDraft, setLocalDraft] = useState('')
   const [sendError, setSendError] = useState<string | null>(null)
+  useSyncExternalStore(
+    useCallback((notify: () => void) => options?.annotations?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [options?.annotations]),
+    () => options?.annotations?.getSnapshot() ?? 0,
+  )
 
   const draft = input === null ? localDraft : machineDraft
 
   // 附件 API（off-face 探测；一次解析，会话生命周期内不变）。
-  const apis = useMemo(() => resolveAttachmentApis(ctx), [ctx])
+  const apis = useMemo(() => resolveAttachmentApis(ctx, childId), [ctx, childId])
 
   const attachImages = useCallback(
     (files: readonly File[]): boolean => {
       if (input === null || apis === null) return false
-      return attachFiles(apis, input, files)
+      try { return attachFiles(apis, input, files) } catch (error) {
+        setSendError(error instanceof Error ? error.message : String(error))
+        return false
+      }
     },
     [input, apis],
   )
@@ -122,7 +111,7 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
   const removeImage = useCallback(
     (id: string): void => {
       if (input === null || apis === null) return
-      input.removeImage(id)
+      removeInputAttachment(input, id)
       apis.releaseDraftImage(id)
     },
     [input, apis],
@@ -146,20 +135,29 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
 
   const submit = useCallback((mode?: 'queue' | 'steer'): void => {
     const body = draft.trim()
-    if (body === '') return
-    // 内容身份钩子（Delivery_05）：拿到的是不含快照前缀的干净 body。
-    options?.onSubmitText?.(body)
-    // 首条消息前缀（busy fork 的进展快照）：发送瞬间现取现拼。
+    const store = options?.annotations
+    const active = childId === undefined ? [] : store?.listActive(childId) ?? []
+    if (childId !== undefined && store?.getSubmission(childId).pending === true) return
+    if (body === '' && active.length === 0 && (input === null || inputAttachmentIds(input).length === 0)) return
     const prefix = options?.firstSendPrefix?.() ?? null
     const text = prefix === null ? body : `${prefix}\n\n${body}`
     if (input !== null) {
-      // 机器路径：草稿清空、发送失败回填、通知条全由机器/sink 负责。
-      // mode 缺省交给机器按宿主设置裁决（busy-Enter 偏好在机器内）。
-      // 拼了前缀先落机器草稿再交机器——回填/重试语义与未拼一致。
-      if (prefix !== null) input.setDraft(text)
-      input.submit(mode)
+      if (store !== undefined && childId !== undefined && (active.length > 0 || prefix !== null)) {
+        const target = childId
+        store.setSubmission(target, { pending: true })
+        setSendError(null)
+        void submitAnnotations({ ctx, store, sessionId: target, input, annotations: active, leadingBlocks: prefix === null ? [] : [prefix], mode }).then(accepted => {
+          const status = store.getSubmission(target)
+          store.setSubmission(target, { ...status, pending: false })
+          if (accepted) { options?.onSubmitText?.(body); options?.onAccepted?.() }
+        })
+      } else {
+        try { input.submit(mode); options?.onSubmitText?.(body) }
+        catch (error) { setSendError(error instanceof Error ? error.message : String(error)) }
+      }
       return
     }
+    if (active.length > 0) { setSendError('宿主输入能力尚未就绪；正文和注释已保留'); return }
     if (session === undefined) return
     setLocalDraft('')
     setSendError(null)
@@ -169,25 +167,27 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
         // 仅在用户未另行输入时回填，不盖掉新草稿。
         setLocalDraft(d => (d === '' ? text : d))
         setSendError(result.error?.message ?? '发送失败')
-      }
+      } else { options?.onSubmitText?.(body); options?.onAccepted?.() }
     }).catch((error: unknown) => {
       setLocalDraft(d => (d === '' ? text : d))
       setSendError(error instanceof Error ? error.message : '发送失败')
     })
-  }, [draft, input, session, options])
+  }, [draft, input, session, options, childId, ctx])
 
   return {
     machine: input !== null,
     draft,
     sendError,
+    canSubmit: (draft.trim() !== '' || (childId !== undefined && (options?.annotations?.countActive(childId) ?? 0) > 0) || (input !== null && inputAttachmentIds(input).length > 0))
+      && (childId === undefined || options?.annotations?.getSubmission(childId).pending !== true),
     setDraft,
     appendDraft,
     submit,
     phase: machineState?.phase,
     draftRev: machineState?.draftRev,
-    imageIds: machineState?.imageIds ?? [],
+    imageIds: input === null ? [] : inputAttachmentIds(input),
     imagePreviews: (() => {
-      const ids = machineState?.imageIds ?? []
+      const ids = input === null ? [] : inputAttachmentIds(input)
       if (ids.length === 0 || apis === null) return []
       try {
         return apis.draftImages(ids).map(i => ({ id: i.id, url: i.previewUrl }))

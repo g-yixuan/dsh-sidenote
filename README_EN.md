@@ -43,9 +43,10 @@ For local development, mount with `dsh plugin --profile web add link:<repo path>
 ## Selection annotations — turn "this bit is off" into model context
 
 - Select text in an assistant reply → popover → note editor, with numbered badges anchored at the right gutter;
-- Annotations are controlled objects (preview, remove individually) with **zero draft pollution** — they serialize into a model-readable structured protocol block only at send time;
-- Click outside a new note editor or press Enter to save; Escape cancels. If handing a quote to the side chat fails, the note stays open with an error and can be retried with the confirm button;
-- Sent bubbles collapse into a "×N annotated" trace label; everything survives reloads.
+- Adding to the main conversation or a side chat saves the same controlled annotation object, with shared chip previews, individual removal and clear-all. Quotes and notes stay complete, with **zero draft pollution**; quote-only messages are supported;
+- Click outside a new note editor or press Enter to save; Escape cancels. Main-to-side waits for the chosen tab’s actual child session. Escape cancels that wait; a failed handoff keeps the note open for retry;
+- Submissions use the host’s native input, retaining `@` references, image attachments and queue/steer arbitration. Only a durable message or authoritative queue occurrence in the target session marks that batch as sent and produces the annotated trace label;
+- Saved annotations are isolated by target session. A storage warning explains memory-only operation when persistence is unavailable. Failures retain quotes and body; additions or edits during admission stay active for the next message.
 
 | Selection popover | Annotation editor |
 |---|---|

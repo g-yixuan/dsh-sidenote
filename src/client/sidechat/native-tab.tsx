@@ -29,6 +29,7 @@ import type {
   SidebarTab,
 } from '../host/contracts.ts'
 import type { ReflowStore } from '../reflow.ts'
+import type { AnnotationStore } from '../annotations/model.ts'
 import { SideChatPanel } from './SideChatPanel.tsx'
 import { SIDE_TAB_TYPE } from './model.ts'
 import { sideChatTitleOf } from './identity.ts'
@@ -57,6 +58,7 @@ export interface SideChatOpenParams {
   childId?: string
   /** 后悔药重开：内容身份随恢复走（Delivery_05）——否则重开即丢 topic。 */
   topic?: string
+  quoteRequestId?: string
 }
 
 export function parseOpenParams(params: unknown): SideChatOpenParams | undefined {
@@ -68,6 +70,7 @@ export function parseOpenParams(params: unknown): SideChatOpenParams | undefined
     ...(typeof p.pendingDraft === 'string' && p.pendingDraft !== '' ? { pendingDraft: p.pendingDraft } : {}),
     ...(typeof p.childId === 'string' && p.childId !== '' ? { childId: p.childId } : {}),
     ...(typeof p.topic === 'string' && p.topic !== '' ? { topic: p.topic } : {}),
+    ...(typeof p.quoteRequestId === 'string' ? { quoteRequestId: p.quoteRequestId } : {}),
   }
 }
 
@@ -108,6 +111,7 @@ interface NativeBodyInjected {
   readonly ctx: Context
   readonly sessionId: string
   readonly reflow: ReflowStore
+  readonly annotations: AnnotationStore
 }
 
 /** 面板体外壳：把 useTabInfo（可能对未提交 record throw）也包进错误边界。 */
@@ -121,7 +125,7 @@ function NativeSideChatBody(props: NativeBodyInjected & NativeTabFrameworkProps)
 
 /** 面板体：原生 tab → SideChatPanel 的 TabComponentProps 合成适配。 */
 function NativeSideChatBodyInner(props: NativeBodyInjected & NativeTabFrameworkProps): ReactNode {
-  const { ctx, sessionId, reflow, useTabInfo } = props
+  const { ctx, sessionId, reflow, annotations, useTabInfo } = props
   const info: NativeTabInfo = useTabInfo()
   const nativeTab = info.tab
 
@@ -170,7 +174,7 @@ function NativeSideChatBodyInner(props: NativeBodyInjected & NativeTabFrameworkP
 
   return (
     <div className={css.nativeHost} data-dsh-sidenote-native-host="">
-      <SideChatPanel ctx={ctx} store={undefined} scope={scope} tab={tab} visible={nativeTab.visible} reflow={reflow} />
+      <SideChatPanel ctx={ctx} store={undefined} scope={scope} tab={tab} visible={nativeTab.visible} reflow={reflow} annotations={annotations} quoteRequestId={parseOpenParams(nativeTab.navigation.params)?.quoteRequestId} />
     </div>
   )
 }
@@ -217,7 +221,7 @@ function useSessionCwd(ctx: Context, sessionId: string): string | undefined {
  * 探测与分腿在调用方（sidechat/index.tsx）；本函数只在 sidebarRightTabs
  * 存在时被调用。
  */
-export function registerNativeSideChatTab(ctx: Context, reflow: ReflowStore): void {
+export function registerNativeSideChatTab(ctx: Context, reflow: ReflowStore, annotations: AnnotationStore): void {
   ctx.inject(['sidebarRightTabs'], (injected) => {
     const tabs = injected.get('sidebarRightTabs') as unknown as NativeTabRegistry | undefined
     if (tabs === undefined) return
@@ -236,12 +240,12 @@ export function registerNativeSideChatTab(ctx: Context, reflow: ReflowStore): vo
     const disposeBody = ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
       name: 'sidebar.right.pane.tab',
       key: NATIVE_IMPL_ID,
-      inject: (sessionId: unknown) => ({ ctx, sessionId: sessionId as string, reflow }),
+      inject: (sessionId: unknown) => ({ ctx, sessionId: sessionId as string, reflow, annotations }),
     }, NativeSideChatBody))
     const disposeTitle = ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({
       name: 'sidebar.right.pane.tab.title',
       key: NATIVE_IMPL_ID,
-      inject: (sessionId: unknown) => ({ ctx, sessionId: sessionId as string, reflow }),
+      inject: (sessionId: unknown) => ({ ctx, sessionId: sessionId as string, reflow, annotations }),
     }, NativeSideChatTitle))
     return () => {
       disposeBody()

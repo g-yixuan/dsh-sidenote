@@ -58,13 +58,6 @@ export function buildProtocolBlock(items: readonly QuoteItem[]): string {
   ].join('\n')
 }
 
-/** 「在侧边聊天中提问」的种子引用（进侧边草稿，不是协议块——保持轻量）。 */
-export function buildSideChatQuote(text: string, note = ''): string {
-  const quote = text.split('\n').map(line => (line === '' ? '>' : `> ${line}`)).join('\n')
-  const noteLine = note.trim() === '' ? t('noNote') : t('noteLine', { note })
-  return `${quote}\n${noteLine}`
-}
-
 // ── 反解析（气泡手术用；纯函数可测） ─────────────────────────────────────────
 
 /** 协议头识别（zh/en 都认）：整行匹配。 */

@@ -8,7 +8,7 @@
  * Anchor loss is acceptable (页面级临时语义) — the badge simply skips a
  * render; nothing here may throw into the page.
  */
-import type { Annotation } from './model.ts'
+import type { Annotation } from '../annotations/model.ts'
 
 /** The badge anchor point: right edge of the selection rects, first-line height. */
 export interface BadgeAnchor {

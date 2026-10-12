@@ -177,11 +177,13 @@ say "挂载已注册（BS_VERSION=${BS_VERSION}）"
 # 不从本仓 devDependencies 或 CLI 版本推断运行组件版本。
 # Outside the repository package boundary: this loose module has no dsh.client.
 cp "$SCRIPT_DIR/../tests/e2e/runtime-inventory.mjs" "$SCRATCH/runtime-inventory.mjs"
+cp "$SCRIPT_DIR/../tests/e2e/controlled-model.mjs" "$SCRATCH/controlled-model.mjs"
 node - "$PROFILE_DIR/cordis.patch.yml" "$SCRATCH/runtime-inventory.mjs" "$SCRATCH/runtime-inventory.json" <<'JS'
 const fs = require('node:fs')
 const [file, fixture, output] = process.argv.slice(2)
 const old = fs.readFileSync(file, 'utf8')
 fs.writeFileSync(file, (old.trim() === '[]' ? '' : old) + '\n- insert:\n  - id: sidenote-e2e-inventory\n    name: ' + JSON.stringify(fixture) + '\n    config:\n      output: ' + JSON.stringify(output) + '\n')
+fs.appendFileSync(file, '- insert:\n  - id: sidenote-e2e-model\n    name: ' + JSON.stringify(require('node:path').join(require('node:path').dirname(fixture), 'controlled-model.mjs')) + '\n')
 JS
 mkdir -p "$ROOT/test-results"
 node - "$SCRATCH/host-inventory.json" "${DSH_EXPECTED_VERSION:-}" "$DSH_VERSION" "$BS_VERSION" "$ROOT/package.json" "$ROOT/lib/client.js" <<'JS'
@@ -237,7 +239,7 @@ else
   SPEC_FILTER="mount.e2e.ts"
 fi
 DSH_E2E_URL="$URL" DSH_E2E_WORKSPACE="$WORKSPACE_DIR" DSH_E2E_SEED_SESSION="$SEED_SESSION_ID" DSH_E2E_HOME="$DSH_HOME" \
-  pnpm exec playwright test "$SPEC_FILTER" annotations.e2e.ts core.e2e.ts ${GREP_FILTER:+--grep "$GREP_FILTER"}
+  pnpm exec playwright test "$SPEC_FILTER" annotations.e2e.ts core.e2e.ts running.e2e.ts ${GREP_FILTER:+--grep "$GREP_FILTER"}
 
 node - "$SCRATCH/host-inventory.json" "$SCRATCH/runtime-inventory.json" <<'JS'
 const fs = require('node:fs')

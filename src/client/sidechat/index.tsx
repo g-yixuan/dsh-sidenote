@@ -20,13 +20,14 @@ import type { Context } from '../host/contracts.ts'
 import { currentSessionIdOf } from '../host/currentSession.ts'
 import { sideChatBridge } from '../bridge.ts'
 import type { ReflowStore } from '../reflow.ts'
+import type { AnnotationStore } from '../annotations/model.ts'
 import { SideChatPanel } from './SideChatPanel.tsx'
 import { SIDE_TAB_TYPE, canForkFrom, collectSideTabs, mintSideTabId, sideTabTitle } from './model.ts'
 import { parseSideChatMeta } from './model.ts'
 import { recordClosedSideChat } from './recentClosed.ts'
 import { directNativeLeg, liveSideChatsOf, nativeSidebarHost } from './native.ts'
 import { registerNativeSideChatTab } from './native-tab.tsx'
-import { openOrFocusSideChat, sideChatTargetTitle } from './open.ts'
+import { captureSideChatTarget } from './target.ts'
 import { t } from '../locales.ts'
 import { registerHeaderEntry } from './header.tsx'
 import { registerSideCommand } from './slash.ts'
@@ -34,14 +35,14 @@ import { registerSideChatReferenceSource } from './referenceSource.ts'
 import { registerToastHost } from './toast.tsx'
 import { registerCompletionNotify } from './notify.ts'
 
-export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
+export function registerSideChat(ctx: Context, reflow: ReflowStore, annotations: AnnotationStore): void {
   // 反应式双腿注册（对抗性审查 M-1：不做 apply 期一次性判定——BS 可能晚于
   // 本插件就绪，一次性快照会让旧宿主静默缺席）：两条腿各自等自己的前提服务。
   // - sidebarRightTabs 到（宿主 ≥ 0.1.5）⇒ 直连注册（native-tab.tsx 内 ctx.inject）；
   // - betterSidebar 到且 < 0.19（宿主 ≤ 0.1.2）⇒ legacy 注册。
   // 互斥：BS ≥ 0.19 时本分支不注册（原生面必在，直连腿接管）；同 kind 双注册
   // 会被原生注册表判碰撞 throw，本结构天然不冲突。
-  registerNativeSideChatTab(ctx, reflow)
+  registerNativeSideChatTab(ctx, reflow, annotations)
   ctx.inject(['betterSidebar'], (injected) => {
     const bs = injected.get('betterSidebar') as Context['betterSidebar']
     if (bs === undefined) return
@@ -84,7 +85,7 @@ export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
             })
           }
         },
-        component: (props) => <SideChatPanel {...props} reflow={reflow} />,
+        component: (props) => <SideChatPanel {...props} reflow={reflow} annotations={annotations} />,
       }),
       'dsh-sidenote: side chat tab',
     )
@@ -93,10 +94,7 @@ export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
   // annotate 桥：「在侧边聊天中提问」= 新建或聚焦一个侧边聊天 Tab 并写入草稿。
   ctx.effect(() => {
     const impl = {
-      askInSideChat: (sessionId: string, draftText: string): boolean =>
-        openOrFocusSideChat(ctx, sessionId, draftText),
-      peekTargetTitle: (sessionId: string): string | undefined =>
-        sideChatTargetTitle(ctx, sessionId),
+      captureTarget: (sessionId: string) => captureSideChatTarget(ctx, sessionId),
     }
     sideChatBridge.current = impl
     return () => {

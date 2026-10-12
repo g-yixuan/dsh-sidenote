@@ -1,53 +1,13 @@
-/**
- * 发送拦截器 v2（Delivery_02 Workitem_01 的核心；v2 经 C2 对抗性审查重写）：
- * 注释/回流对象不进 composer 草稿；有 active 内容时，在「最终提交」瞬间
- * （主 composer 的 Enter / 发送按钮点击）把协议前缀拼到正文前，然后调
- * **宿主输入机原生 `input.submit('queue')`** 完成真实发送。
- *
- * 为什么不点 DOM 按钮（C2 P0 教训）：宿主运行中主按钮变身「停止」、
- * goal bar 的「清除目标」按钮排在 seat 末位——DOM 序识别必然误点。
- * 机器 submit 与宿主 Enter 同路（adjudication/sink/commitSend），
- * running 时自动入队，idle 时直发，对按钮布局零假设。
- *
- * 守卫（全部先检后吞，任一不满足即放行宿主原行为）：
- * - 斜杠命令草稿跳过（dsh-annotation issue#20）；
- * - Cmd/Ctrl+Enter（steer 手势）归还宿主；
- * - 机器相位非 plain（trigger 弹窗/命令菜单/提交事务中）不拦（C2 P1-1）；
- * - seat 内存在打开的 listbox/展开菜单时不拦。
- *
- * 确认与回滚（C2 P1-2）：以 input.state 订阅为唯一确认面——相位回到
- * plain 且草稿清空 = 发出（markSent 只翻当时拼进去的那批 id，C2 P1-3）；
- * 回到 plain 而草稿未清 = 发送失败（宿主 notice + 留稿）→ 仅在草稿仍以
- * 我们拼的前缀开头时剥离回滚（C2 P2-3）；相位未到终态前绝不回滚。
- *
- * 空草稿补位：宿主主按钮在 `draft.trim()==="" && attachments.length===0` 时
- * 被置为原生 `disabled`（dsh-client-ui-conversation 的 `empty`），而注释/回流
- * 按设计不进草稿 —— 于是此时**没有任何可达的发送手势**：浏览器不为 disabled
- * 的按钮派发 `click`（`mousedown` 同样不发），只有 `pointerdown` 仍会到达它
- * （Chromium / Firefox / WebKit 实测一致）。因此对「空草稿导致 disabled 的
- * 主按钮」补一条 pointerdown 拦截；enabled 时一切照旧走 click，两条路径以
- * `button.disabled` 互斥，不会双驱动。**该手势尾随的 click 必须一并吞掉**：
- * 提交瞬间草稿变空，宿主主按钮随即按 `primaryStops = running && empty` 变身
- * 「停止」，放行那一发 click 会立刻 `stop()` 掉刚发起的这一轮 —— 症状是
- * `assistant/attempt` 空流、缺 `turn/end`、界面上却没有任何错误提示。
+/** Main composer gestures forward controlled quotes through the native input.
+ * Admission is observed on the frozen target, rather than inferred from draft clearing.
  */
-import type { Context, ConversationService, SessionId, SessionInput } from '../host/contracts.ts'
+import type { Context, SessionId, SessionInput } from '../host/contracts.ts'
+import { resolveInput, inputAttachmentIds } from '../host/input.ts'
+export { resolveInput } from '../host/input.ts'
 import { currentSessionIdOf } from '../host/currentSession.ts'
-import { buildProtocolBlock } from './format.ts'
-import type { AnnotationStore } from './model.ts'
-import { buildReflowBlock, tryInjectReflows, type ReflowItem, type ReflowStore } from '../reflow.ts'
-
-/** Resolve the per-session input facade, degrading to undefined (never throws). */
-export function resolveInput(ctx: Context, sessionId: SessionId): SessionInput | undefined {
-  try {
-    const actx = ctx.sessions.scope(sessionId)
-    if (actx === undefined) return undefined
-    const conversation = ctx.get('conversation') as ConversationService | undefined
-    return conversation?.input.for(actx)
-  } catch {
-    return undefined
-  }
-}
+import { submitAnnotations } from '../annotations/send.ts'
+import type { AnnotationStore } from '../annotations/model.ts'
+import { buildReflowBlock, tryInjectReflows, type ReflowStore } from '../reflow.ts'
 
 /** 主 composer 的宿主容器（侧边面板 textarea 不在其中，天然不串）。 */
 function composerSeat(): HTMLElement | null {
@@ -66,7 +26,7 @@ function findSendButtonInCard(): HTMLButtonElement | null {
 
 export function installSendInterceptor(ctx: Context, store: AnnotationStore, reflow: ReflowStore): () => void {
   /** 重入/连按护栏：事务进行中吞掉命中识别面的 Enter/点击（不重复驱动）。 */
-  let committing = false
+  const committingSessions = new Set<string>()
 
   /**
    * 手势尾随 click 的一次性吞并。pointerdown 提交后，同一次点击的 click 仍会
@@ -89,77 +49,30 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
 
   const currentSessionId = (): string => currentSessionIdOf(ctx)
 
-  /**
-   * 异步提交（Workitem_06）：inject 尝试（有界等待，见 tryInjectReflows）
-   * 在拼稿前——成功项以 plugin-source 事件进父会话日志（不进消息前缀），
-   * 且立即从 reflow store 移除（chip 消失表达「已注入」）；失败/超时项
-   * 照常搭车（拼进前缀）。正文取提交瞬间的最新草稿（注入等待窗口内的
-   * 用户输入不丢）。
-   */
-  const commitAsync = async (sessionId: SessionId, input: SessionInput, draftAtHijack: string, reflows: ReturnType<typeof reflow.list>, active: ReturnType<typeof store.listActive>): Promise<void> => {
-    // 1. reflow 注入尝试（Workitem_06）
-    const { injectedIds } = await tryInjectReflows(sessionId, reflows)
-    for (const id of injectedIds) reflow.remove(id)
-    const hitchhikers = reflows.filter(item => !injectedIds.has(item.id))
-
-    // 2. 拼稿：回流上下文（背景） → 注释协议块（具体锚点） → 用户正文。
-    const parts: string[] = []
-    for (const item of hitchhikers) parts.push(buildReflowBlock(item))
-    if (active.length > 0) parts.push(buildProtocolBlock(active))
-    // 失败回滚的基准是「拼稿前的当前草稿」（M-1：inject 等待窗口内的输入
-    // 不回滚吃掉）；draftAtHijack 只服务 submit 同步抛错（窗口刚开，两者等价）。
-    const draftBeforeCompose = input.state.getSnapshot().draft
-    const body = draftBeforeCompose.trim()
-    const full = [...parts, ...(body === '' ? [] : [body])].join('\n\n')
-    const sentIds = active.map(a => a.id)
-
-    // B-1（第 3 轮审查）：拼稿为空（纯回流 + 全注入成功 + 空草稿）——宿主
-    // submit 对空草稿是 no-op，什么都不发还会让确认面把空草稿误判成功、
-    // 回滚分支随后吞掉用户输入。此时没有消息要发：注入已入 inbox、chip 已
-    // 消失，直接收尾（不开事务、不订阅确认面）。
-    if (full === '') {
-      committing = false
-      return
-    }
-
-    input.setDraft(full)
+  const commitAsync = async (sessionId: SessionId, input: SessionInput, reflows: ReturnType<typeof reflow.list>, active: ReturnType<typeof store.listActive>, mode?: 'queue' | 'steer'): Promise<void> => {
     try {
-      input.submit('queue')
-    } catch (error) {
-      // 提交抛错：精确剥离前缀回滚，内容保持 active。
-      console.warn('[dsh-sidenote] 提交失败，回滚草稿:', error)
-      const now = input.state.getSnapshot().draft
-      if (now.startsWith(full)) input.setDraft(draftAtHijack)
-      committing = false
-      return
-    }
-
-    // 确认面：订阅机器相位。回到 plain 后看草稿判定成败。
-    const off = input.state.subscribe(() => {
-      const state = input.state.getSnapshot()
-      if (state.phase !== 'plain') return
-      window.clearTimeout(watchdog)
-      off()
-      committing = false
-      if (state.draft.trim() === '') {
-        // 成功：只翻转当时拼进去的那批注释（窗口内新增的不动）。
-        store.markSent(sentIds)
-        reflow.clearSession(sessionId)
+      const { injectedIds } = await tryInjectReflows(sessionId, reflows)
+      for (const id of injectedIds) reflow.remove(id)
+      const hitchhikers = reflows.filter(item => !injectedIds.has(item.id))
+      if (hitchhikers.length === 0 && active.length === 0) {
+        if (input.state.getSnapshot().draft.trim() !== '' || inputAttachmentIds(input).length > 0) input.submit(mode)
         return
       }
-      // 失败（宿主 notice + 留稿）：草稿仍以我们拼的前缀开头才剥离——
-      // 回滚到拼稿前的当前草稿（M-1），不是劫持瞬间的旧值。
-      const stuck = state.draft
-      if (stuck.startsWith(full)) input.setDraft(draftBeforeCompose)
-    })
-    // 看门狗：相位永远不回 plain（宿主异常）→ 解锁护栏，不动草稿（保守）。
-    const watchdog = window.setTimeout(() => {
-      off()
-      committing = false
-    }, 15_000)
+      const accepted = await submitAnnotations({
+        ctx, store, sessionId, input, annotations: active,
+        leadingBlocks: hitchhikers.map(item => buildReflowBlock(item)), mode,
+      })
+      if (accepted) for (const item of hitchhikers) reflow.remove(item.id)
+    } catch (error) {
+      store.setSubmission(sessionId, { pending: false, error: error instanceof Error ? error.message : String(error) })
+    } finally {
+      committingSessions.delete(sessionId)
+      const state = store.getSubmission(sessionId)
+      store.setSubmission(sessionId, { ...state, pending: false })
+    }
   }
 
-  const hijack = (): boolean => {
+  const hijack = (mode?: 'queue' | 'steer'): boolean => {
     const sessionId = currentSessionId()
     if (sessionId === '') return false
     const active = store.listActive(sessionId)
@@ -179,11 +92,9 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     if (seat.querySelector('[aria-expanded="true"]') !== null) return false
 
     // 同步拦截成立，异步执行（inject 的有界等待不能在同步手势里）。
-    committing = true
-    commitAsync(sessionId, input, draft, reflows, active).catch((error: unknown) => {
-      console.warn('[dsh-sidenote] 提交编排失败:', error)
-      committing = false
-    })
+    committingSessions.add(sessionId)
+    store.setSubmission(sessionId, { pending: true })
+    void commitAsync(sessionId, input, reflows, active, mode)
     return true
   }
 
@@ -197,7 +108,8 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
       && (target.closest('[data-composer-input]') !== null || target instanceof HTMLTextAreaElement)
       && target.closest('[data-composer-seat]') !== null
     if (!inSeat) return
-    if (committing) {
+    if (event.isComposing || event.keyCode === 229) return
+    if (committingSessions.has(currentSessionId())) {
       if (event.key === 'Enter') {
         event.preventDefault()
         event.stopImmediatePropagation()
@@ -205,9 +117,7 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
       return
     }
     if (event.key !== 'Enter' || event.shiftKey) return
-    if (event.metaKey || event.ctrlKey) return // steer 手势归还宿主
-    if (event.isComposing || event.keyCode === 229) return
-    if (!hijack()) return
+    if (!hijack(event.metaKey || event.ctrlKey ? 'steer' : undefined)) return
     event.preventDefault()
     event.stopImmediatePropagation()
   }
@@ -217,24 +127,25 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     if (!(target instanceof Element)) return
     const seat = target.closest('[data-composer-seat]')
     if (seat === null) return
+    const button = target.closest('button')
     // 尾随 click：必须先于按钮识别吞掉（见 armSwallow），否则宿主按「停止」处理。
-    if (swallowNextClick) {
+    if (swallowNextClick && button === findSendButtonInCard()) {
       clearSwallow()
       event.preventDefault()
       event.stopImmediatePropagation()
       return
     }
-    const button = target.closest('button')
     if (button === null) return
-    if (committing) {
-      // 事务进行中：吞掉 seat 内一切按钮点击（防双驱动）。
+    if (button !== findSendButtonInCard()) return
+    // Preserve native Stop while admission is in flight, too.
+    if (ctx.sessions.binding(currentSessionId())?.session.getSnapshot().running === true) return
+    if (committingSessions.has(currentSessionId())) {
       event.preventDefault()
       event.stopImmediatePropagation()
       return
     }
     // 识别面收窄到卡片内末位按钮（goal bar 在 card 外、不构成误点）；
     // 运行态主按钮是「停止」——相位守卫已在 hijack 内（plain 才拦）。
-    if (button !== findSendButtonInCard()) return
     if (!hijack()) return
     event.preventDefault()
     event.stopImmediatePropagation()
@@ -254,7 +165,7 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     if (!(button instanceof HTMLButtonElement)) return
     if (!button.disabled) return
     if (button !== findSendButtonInCard()) return
-    if (committing) return
+    if (committingSessions.has(currentSessionId())) return
     // disabled 的成因必须是空草稿：离线/无模型等其它成因不属本拦截器授权范围。
     const sessionId = currentSessionId()
     if (sessionId === '') return

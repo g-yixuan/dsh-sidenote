@@ -11,7 +11,7 @@
  */
 import type { Context, SidebarTab } from '../host/contracts.ts'
 import type { ChatMessage } from '../chat/transcript.ts'
-import { splitProtocolPrefix } from '../annotate/format.ts'
+import { splitProtocolPrefix } from '../annotations/format.ts'
 import { t } from '../locales.ts'
 
 /** Tab 类型 id（better-sidebar 注册表键；带包前缀防冲突）。 */

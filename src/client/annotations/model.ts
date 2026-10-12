@@ -21,9 +21,12 @@ export interface Annotation {
   /** Per-session display number assigned at creation; never reused. */
   readonly number: number
   readonly sessionId: string
+  /** Source is independent of the send target. Missing fields revive legacy main quotes. */
+  readonly sourceSessionId?: string
+  readonly sourceSurface?: 'main' | 'side'
   /** `data-chat-anchor-key` of the owning message (re-anchor key). */
   readonly anchorKey: string | undefined
-  /** Truncated quote text (what the model and the chip see). */
+  /** Full human-selected quote; chip truncation is visual only. */
   readonly text: string
   /** Full selection text (re-anchor needle; untruncated). */
   readonly anchorText: string
@@ -37,6 +40,8 @@ export interface Annotation {
 
 export interface AnnotationDraft {
   readonly sessionId: string
+  readonly sourceSessionId?: string
+  readonly sourceSurface?: 'main' | 'side'
   readonly anchorKey: string | undefined
   readonly text: string
   readonly anchorText: string
@@ -47,6 +52,10 @@ export interface AnnotationDraft {
 export interface AnnotationStore {
   /** Monotonic version, referentially stable between mutations (uSES-ready). */
   getSnapshot(): number
+  /** Memory contents remain usable after storage access/quota failures. */
+  getStorageStatus(sessionId?: string): 'persistent' | 'memory'
+  getSubmission(sessionId: string): { readonly pending: boolean; readonly error?: string }
+  setSubmission(sessionId: string, state: { pending: boolean; error?: string }): void
   subscribe(fn: () => void): () => void
   /** Create an active annotation; returns it (id/number assigned). */
   add(draft: AnnotationDraft): Annotation
@@ -80,6 +89,8 @@ function reviveStored(value: unknown): Annotation | null {
     id: a.id,
     number: a.number,
     sessionId: a.sessionId,
+    sourceSessionId: typeof a.sourceSessionId === 'string' && a.sourceSessionId !== '' ? a.sourceSessionId : undefined,
+    sourceSurface: a.sourceSurface === 'main' || a.sourceSurface === 'side' ? a.sourceSurface : undefined,
     anchorKey: typeof a.anchorKey === 'string' && a.anchorKey !== '' ? a.anchorKey : undefined,
     text: a.text,
     anchorText: a.anchorText,
@@ -100,11 +111,17 @@ export function createAnnotationStore(
   /** Per-session next display number. */
   const counters = new Map<string, number>()
   const listeners = new Set<() => void>()
+  const submissions = new Map<string, { pending: boolean; error?: string }>()
+  const idleSubmission = { pending: false }
 
   // localStorage 默认取全局（浏览器环境）；显式传 null = 纯内存（测试）。
-  const store: typeof storage = storage === undefined
-    ? (typeof localStorage !== 'undefined' ? localStorage : null)
-    : storage
+  let store = storage ?? null
+  if (storage === undefined) {
+    try { store = globalThis.localStorage ?? null } catch { store = null }
+  }
+  let storageStatus: 'persistent' | 'memory' = store === null ? 'memory' : 'persistent'
+  const failedStorageSessions = new Set<string>()
+  let hydrationFailed = false
 
   // ── 启动水合：扫描前缀键，容错 revive；编号计数器取既有最大值 ──
   if (store != null) {
@@ -117,7 +134,11 @@ export function createAnnotationStore(
       for (const key of keys) {
         const raw = store.getItem(key)
         if (raw === null) continue
-        const parsed: unknown = JSON.parse(raw)
+        let parsed: unknown
+        try { parsed = JSON.parse(raw) } catch {
+          console.warn('[dsh-sidenote] 跳过损坏的注释记录:', key)
+          continue
+        }
         if (!Array.isArray(parsed)) continue
         for (const item of parsed) {
           const revived = reviveStored(item)
@@ -128,6 +149,8 @@ export function createAnnotationStore(
         }
       }
     } catch (error) {
+      hydrationFailed = true
+      storageStatus = 'memory'
       console.warn('[dsh-sidenote] 注释持久化读取失败（按空起步）:', error)
     }
   }
@@ -140,7 +163,11 @@ export function createAnnotationStore(
       const key = STORAGE_PREFIX + sessionId
       if (items.length === 0) store.removeItem(key)
       else store.setItem(key, JSON.stringify(items))
+      failedStorageSessions.delete(sessionId)
+      storageStatus = hydrationFailed || failedStorageSessions.size > 0 ? 'memory' : 'persistent'
     } catch (error) {
+      failedStorageSessions.add(sessionId)
+      storageStatus = 'memory'
       console.warn('[dsh-sidenote] 注释持久化写入失败:', error)
     }
   }
@@ -164,6 +191,10 @@ export function createAnnotationStore(
 
   return {
     getSnapshot: () => version,
+    getStorageStatus: sessionId => sessionId === undefined || hydrationFailed || store === null
+      ? storageStatus : failedStorageSessions.has(sessionId) ? 'memory' : 'persistent',
+    getSubmission: sessionId => submissions.get(sessionId) ?? idleSubmission,
+    setSubmission(sessionId, state) { submissions.set(sessionId, state); notify() },
     subscribe(fn: () => void): () => void {
       listeners.add(fn)
       return () => { listeners.delete(fn) }
@@ -175,6 +206,8 @@ export function createAnnotationStore(
         id: nextId,
         number,
         sessionId: draft.sessionId,
+        sourceSessionId: draft.sourceSessionId,
+        sourceSurface: draft.sourceSurface,
         anchorKey: draft.anchorKey,
         text: draft.text,
         anchorText: draft.anchorText,

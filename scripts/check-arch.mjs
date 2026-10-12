@@ -4,9 +4,7 @@
  * 软执行必然衰减——本脚本把两条最关键的架构纪律变成 CI 可执行检查。
  *
  * 规则 1（分层）：L0/L1 文件（纯逻辑/store）禁止 react 值导入（import type 放行）。
- * 规则 2（feature 边界）：sidechat/ 与 annotate/ 之间禁止直接互引（共享件应住根部
- *   或 reflow/ 等共享层）；现状唯一遗留例外在 TEMP_ALLOW 显式登记（收敛目标：
- *   format.ts 协议层随 WI-04 迁共享后删除该例外）。
+ * 规则 2（feature 边界）：sidechat/ 与 annotate/ 之间禁止直接互引（共享件应住 annotations/reflow 等共享层）。
  * 规则 3（行数信号）：超预算文件 CI 警告（非阻断——触发职责审查，判据见
  *   architecture.md 第八节「职责判据 + 行数信号」）。
  *
@@ -30,12 +28,6 @@ const L01_PATTERNS = [
   /\/host\/[^/]+\.ts$/, // contracts/probes/markdown 全部 react-free
 ]
 
-/** feature 互引的存量例外（收敛后删除；新增例外=评审驳回）。 */
-const TEMP_ALLOW = [
-  // sidechat → annotate/format.ts（wire 协议层住错地方，arch-audit §2.2；
-  // WI-04 reflow/ 升格时 format 迁共享层后删本行）
-  /sidechat\/.*'\.\.\/annotate\/format\.ts'/,
-]
 
 const BUDGETS = [
   { pattern: /\.tsx$/, max: 300, kind: '视图' },
@@ -86,9 +78,6 @@ for (const dir of [SRC, join(ROOT, 'tests')]) {
         const spec = m[1]
         const selfFeature = rel.includes('/sidechat/') ? 'sidechat' : 'annotate'
         if (spec.includes(`/${selfFeature}/`)) continue // 自引不算
-        if (TEMP_ALLOW.some(p => p.test(rel + `'${spec}'`.slice(0))) || TEMP_ALLOW.some(p => p.test(`${rel}:${spec}`))) continue
-        // 更稳的判定：例外正则匹配的是「文件路径+spec」组合
-        if (TEMP_ALLOW.some(p => p.test(rel)) && spec.includes('annotate/format.ts')) continue
         console.error(`[feature 互引] ${rel}: ${spec}（共享件应住根部/reflow 层）`)
         violations += 1
       }
