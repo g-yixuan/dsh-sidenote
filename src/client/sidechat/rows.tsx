@@ -264,7 +264,7 @@ const MessageRow = memo(function MessageRow({ message, question, fold, reflow, p
     }
     case 'assistant':
       return (
-        <div className={css.assistantRow}>
+        <div className={css.assistantRow} data-sidenote-message-key={message.key} data-sidenote-message-role="assistant">
           {message.text !== '' && message.streaming !== true && (
             <div className={css.rowActions}>
               <ReflowButton reflow={reflow} parentSessionId={parentSessionId} sideTitle={sideTitle} text={message.text} question={question} />
@@ -280,7 +280,7 @@ const MessageRow = memo(function MessageRow({ message, question, fold, reflow, p
               />
             )}
             {message.text !== ''
-              ? <MarkdownText {...markdownTextProps(message.text, message.streaming)} />
+              ? <div className={css.quoteBody} data-sidenote-quote-body data-sidenote-streaming={message.streaming === true ? 'true' : 'false'}><MarkdownText {...markdownTextProps(message.text, message.streaming)} /></div>
               : message.streaming === true && <div className={css.streamingHint}>{t('writing')}</div>}
             {message.interrupted === true && <div className={css.noticeRow}>{t('stopped')}</div>}
           </div>

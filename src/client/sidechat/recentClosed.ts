@@ -5,6 +5,8 @@
  * 容量：每个主会话最多记 5 条（新者在前）；会话本体仍 archived 在盘
  * （× 只关 Tab），重开 = 开 Tab + meta 预置 childId（面板绑定而非 fork）。
  */
+import type { SideChatMeta } from './model.ts'
+
 export interface ClosedSideEntry {
   readonly childId: string
   readonly parentSessionId: string
@@ -12,6 +14,9 @@ export interface ClosedSideEntry {
   /** 内容身份（Delivery_05）：首条消息摘要；老条目缺省，菜单回退 title。 */
   readonly topic?: string
   readonly closedAt: number
+  /** Native tab recovery identity; manual reopen continues to use childId. */
+  readonly tabId?: string
+  readonly savedMeta?: SideChatMeta & { number?: number }
 }
 
 const KEY_PREFIX = 'dsh-sidenote:closed-side:v1:'
@@ -57,4 +62,19 @@ export function dropClosedSideChat(parentSessionId: string, childId: string): vo
     if (list.length === 0) localStorage.removeItem(key)
     else localStorage.setItem(key, JSON.stringify(list))
   } catch { /* ignore */ }
+}
+
+/** A newly opened native occurrence may reuse a tab id. Keep manual history,
+ * but revoke that old occurrence's automatic restoration identity. */
+export function forgetClosedTabBinding(parentSessionId: string, tabId: string): void {
+  try {
+    const key = KEY_PREFIX + parentSessionId
+    const entries = readAll(key)
+    if (!entries.some(entry => entry.tabId === tabId)) return
+    localStorage.setItem(key, JSON.stringify(entries.map(entry => {
+      if (entry.tabId !== tabId) return entry
+      const { tabId: _oldTab, ...rest } = entry
+      return rest
+    })))
+  } catch { /* Manual reopen remains best-effort when storage is unavailable. */ }
 }

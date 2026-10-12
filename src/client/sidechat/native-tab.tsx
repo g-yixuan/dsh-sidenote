@@ -9,7 +9,7 @@
  *   等槽触发会永久静默不注册（better-sidebar native/index.ts 的真机教训）。
  * - 面板体挂 sidebar.right.pane.tab keyed 槽（key = 注册实现 id）；
  *   芯片活标题挂 sidebar.right.pane.tab.title 槽（编号读 metaStore）。
- * - meta 无原生面（原生布局 memory-only）：全部走自有 metaStore；
+ * - meta 无原生面：全部走自有 metaStore；
  *   openTab → 面板挂载的窗口期内，初始值（parentSessionId/pendingDraft/恢复
  *   用的 childId）经 openTab params 随宿主管道投递，面板挂载时落进 store。
  *
@@ -33,6 +33,9 @@ import type { AnnotationStore } from '../annotations/model.ts'
 import { SideChatPanel } from './SideChatPanel.tsx'
 import { SIDE_TAB_TYPE } from './model.ts'
 import { sideChatTitleOf } from './identity.ts'
+import { isRestoredNativeTab } from '../host/tabs.ts'
+import { parseSideChatMeta } from './model.ts'
+import { forgetClosedTabBinding, listClosedSideChats } from './recentClosed.ts'
 import {
   SIDENOTE_RUN_ID,
   dropSideChatMeta,
@@ -40,6 +43,7 @@ import {
   notifySideChatMetaListeners,
   readSideChatMeta,
   sideChatMetaStore,
+  takeRestoredSideChatMeta,
   writeSideChatMeta,
 } from './metaStore.ts'
 import { t } from '../locales.ts'
@@ -86,15 +90,31 @@ export function reconcileMeta(record: NativeTabRecord, sessionId: string): { cre
   const existing = readSideChatMeta(sessionId, record.id)
   if (existing !== undefined) return { created: false, meta: existing }
   const params = parseOpenParams(record.navigation.params)
+  // Revision 0 is the public TabDomain marker for a restored/seeded record;
+  // ordinary openTab navigations have a positive revision. A stale meta key
+  // alone cannot reopen a tab, nor can a newly minted tab reclaim an old child.
+  const candidate = takeRestoredSideChatMeta(sessionId, record.id)
+  const restoredRecord = isRestoredNativeTab(record)
+  const closed = restoredRecord
+    ? listClosedSideChats(sessionId).find(entry => entry.tabId === record.id && entry.parentSessionId === sessionId)
+    : undefined
+  if (!restoredRecord) forgetClosedTabBinding(sessionId, record.id)
+  const restored = restoredRecord ? candidate ?? (closed === undefined ? undefined : {
+    ...parseSideChatMeta(closed.savedMeta), childId: closed.childId, parentSessionId: sessionId,
+    ...(closed.topic !== undefined ? { topic: closed.topic } : {}),
+    number: closed.savedMeta?.number,
+    createdAt: closed.closedAt,
+  }) : undefined
   const meta = {
+    ...restored,
     tabId: record.id,
     sessionId,
     ...(params?.childId !== undefined ? { childId: params.childId } : {}),
     parentSessionId: params?.parentSessionId ?? sessionId,
     ...(params?.pendingDraft !== undefined ? { pendingDraft: params.pendingDraft } : {}),
     ...(params?.topic !== undefined ? { topic: params.topic } : {}),
-    number: nextSideChatNumber(sessionId),
-    createdAt: Date.now(),
+    number: restored?.number ?? nextSideChatNumber(sessionId),
+    createdAt: restored?.createdAt ?? Date.now(),
     runId: SIDENOTE_RUN_ID,
   }
   writeSideChatMeta(meta, { silent: true })

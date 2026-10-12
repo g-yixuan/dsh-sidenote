@@ -10,9 +10,11 @@ import {
   readSideChatMeta,
   sideChatMetasOf,
   writeSideChatMeta,
+  sweepOrphanedSideChatMeta,
 } from '../src/client/sidechat/metaStore.ts'
 import { parseOpenParams, reconcileMeta, titleOf } from '../src/client/sidechat/native-tab.tsx'
 import type { NativeTabRecord } from '../src/client/host/contracts.ts'
+import { recordClosedSideChat, listClosedSideChats } from '../src/client/sidechat/recentClosed.ts'
 
 function meta(partial: Partial<Parameters<typeof writeSideChatMeta>[0]> & { tabId: string, sessionId: string }) {
   return { number: 1, createdAt: 1, ...partial }
@@ -72,6 +74,44 @@ describe('parseOpenParams', () => {
 })
 
 describe('reconcileMeta', () => {
+  it('recovers a pagehide record even when the host already removed the old meta', () => {
+    recordClosedSideChat('closed-parent', { childId: 'closed-child', parentSessionId: 'closed-parent', tabId: 't', title: 'Side 3', closedAt: 1, savedMeta: { boundarySeq: 44, number: 3 } })
+    const record = tabRecord('t')
+    record.navigation.revision = 0
+    expect(reconcileMeta(record, 'closed-parent').meta).toMatchObject({ childId: 'closed-child', boundarySeq: 44, number: 3 })
+  })
+
+  it('new tab id reuse revokes automatic recovery while preserving manual reopen history', () => {
+    recordClosedSideChat('reused-parent', { childId: 'previous-child', parentSessionId: 'reused-parent', tabId: 't', title: 'Side', closedAt: 1 })
+    const record = tabRecord('t')
+    record.navigation.revision = 1
+    expect(reconcileMeta(record, 'reused-parent').meta.childId).toBeUndefined()
+    expect(listClosedSideChats('reused-parent')).toMatchObject([{ childId: 'previous-child' }])
+    dropSideChatMeta('reused-parent', 't')
+    record.navigation.revision = 0
+    expect(reconcileMeta(record, 'reused-parent').meta.childId).toBeUndefined()
+  })
+
+  it('a real restored tab can reclaim its old child without making stale keys live', () => {
+    writeSideChatMeta(meta({ sessionId: 'restored-parent', tabId: 't', childId: 'saved-child', boundarySeq: 44, number: 3, runId: 'old-page' }))
+    expect(sweepOrphanedSideChatMeta()).toBe(1)
+    expect(sideChatMetasOf('restored-parent')).toEqual([])
+    const record = tabRecord('t')
+    record.navigation.revision = 0
+    expect(reconcileMeta(record, 'restored-parent').meta).toMatchObject({ childId: 'saved-child', boundarySeq: 44, number: 3 })
+  })
+
+  it('an ordinary new navigation discards an orphan candidate even when its tab id is reused', () => {
+    writeSideChatMeta(meta({ sessionId: 'new-parent', tabId: 't', childId: 'old-child', runId: 'old-page' }))
+    sweepOrphanedSideChatMeta()
+    const record = tabRecord('t', { parentSessionId: 'new-parent' })
+    record.navigation.revision = 1
+    expect(reconcileMeta(record, 'new-parent').meta.childId).toBeUndefined()
+    dropSideChatMeta('new-parent', 't')
+    record.navigation.revision = 0
+    expect(reconcileMeta(record, 'new-parent').meta.childId).toBeUndefined()
+  })
+
   it('plants params into the store on first mount; second mount is a no-op', () => {
     const tab = tabRecord('t1', { parentSessionId: 'p1', childId: 'c1', pendingDraft: 'hello' })
     expect(reconcileMeta(tab, 'p1').created).toBe(true)

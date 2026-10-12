@@ -487,7 +487,7 @@ export interface NativeTabRecord {
   kind: string
   title: string
   visible: boolean
-  navigation: { address: string, params?: unknown }
+  navigation: { address: string, params?: unknown, revision?: number }
   /**
    * record 消失（tab 关闭）或插件卸载时 abort（权威：contract/slots.d.ts
    * SidebarRightTabInfo.tab.signal——必填；标可选会让关闭检测在形态漂移时

@@ -1,7 +1,7 @@
 /**
  * 侧聊 tab 的自有 meta store（Workitem_03；直连原生腿的 meta 数据源）。
  *
- * 原生右栏（DSH ≥ 0.1.5）不替插件持久化 tab meta（布局 memory-only），
+ * 原生右栏（DSH ≥ 0.1.5）不替插件持久化 tab meta（布局恢复因版本而异），
  * better-sidebar 转发层的 updateTab 在 native 下本就只到 seed.meta 为止——
  * 直连后 meta 全部自管：childId 绑定、parentSessionId、pendingDraft、
  * 实例编号都落这里。
@@ -11,10 +11,11 @@
  * 独立计数器铸造（每个会话右栏首个 tab 都叫 tab2），裸 tabId 做键会跨
  * 会话碰撞（对抗性审查 B1）。revive 容错、空删键、写失败吞错。
  *
- * 孤键清扫：原生布局 memory-only（页面刷新后 tab 消失、键残留），而
+ * 孤键清扫：不能用旧页面键判断 tab 仍存活，而
  * 「有记录 ⇒ tab 存活」是编排层的判定——残留记录会把入口折叠成聚焦一个
  * 不存在的 tab（死锁，对抗性审查 B2）。每条记录带本页面生命周期的
- * runId，插件 apply 时清扫 runId 不匹配的残留（sweepOrphanedSideChatMeta）。
+ * runId，插件 apply 时撤掉 runId 不匹配的活记录。仅真正挂载的 restored
+ * tab（navigation revision 0）可重新绑定恢复候选；普通新开不能认领它。
  * 已知限制：同一 origin 开两个窗口时，后启动窗口的清扫会清掉先开窗口的
  * 活记录（其面板 reconcile 幂等重建，childId 丢失退回首开 fork）——
  * 多窗口为边角场景，记录在案。
@@ -51,6 +52,16 @@ export interface SideChatMetaRecord {
 }
 
 const KEY_PREFIX = 'dsh-sidenote:side-meta:v1:'
+// Recovery candidates never count as live tabs. Only a mounted host record
+// with navigation revision 0 may reclaim one after layout restoration.
+const restorationCandidates = new Map<string, SideChatMetaRecord>()
+
+export function takeRestoredSideChatMeta(sessionId: string, tabId: string): SideChatMetaRecord | undefined {
+  const key = keyOf(sessionId, tabId)
+  const meta = restorationCandidates.get(key)
+  restorationCandidates.delete(key)
+  return meta
+}
 
 /**
  * 本页面生命周期 id。**挂在 window 上**（审查 m3）：模块级铸造会在插件
@@ -192,8 +203,8 @@ export function nextSideChatNumber(sessionId: string): number {
 
 /**
  * 孤键清扫：删掉 runId 与本页面生命周期不匹配的记录（上一页面周期的
- * 残留——原生布局刷新即空，这些键指向的 tab 已不存在）。插件 apply 时
- * 调用一次。返回清扫数。
+ * 残留）。插件 apply 时调用一次；撤掉活身份，等待实际恢复记录认领。
+ * 返回清扫数。
  */
 export function sweepOrphanedSideChatMeta(): number {
   const store = storage()
@@ -204,7 +215,10 @@ export function sweepOrphanedSideChatMeta(): number {
       const key = store.key(i)
       if (typeof key !== 'string' || !key.startsWith(KEY_PREFIX)) continue
       const record = revive(JSON.parse(store.getItem(key) ?? 'null'))
-      if (record === null || record.runId !== SIDENOTE_RUN_ID) staleKeys.push(key)
+      if (record === null || record.runId !== SIDENOTE_RUN_ID) {
+        if (record !== null) restorationCandidates.set(key, record)
+        staleKeys.push(key)
+      }
     }
     for (const key of staleKeys) store.removeItem(key)
     if (staleKeys.length > 0) notify()

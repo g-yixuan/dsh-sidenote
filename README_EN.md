@@ -47,6 +47,8 @@ For local development, mount with `dsh plugin --profile web add link:<repo path>
 - Click outside a new note editor or press Enter to save; Escape cancels. Main-to-side waits for the chosen tab’s actual child session. Escape cancels that wait; a failed handoff keeps the note open for retry;
 - Submissions use the host’s native input, retaining `@` references, image attachments and queue/steer arbitration. Only a durable message or authoritative queue occurrence in the target session marks that batch as sent and produces the annotated trace label;
 - Saved annotations are isolated by target session. A storage warning explains memory-only operation when persistence is unavailable. Failures retain quotes and body; additions or edits during admission stay active for the next message.
+- Side assistant bodies support local selections, paragraphs, lists and code. Their single action adds to that side chat, including selections in inherited history. Streaming replies, cross-message selections, reasoning and controls are excluded. Badges and highlights stay within the source transcript; folding the source keeps its quotes in the chip.
+- Saved annotations survive reload. When the host restores a native tab, it rebinds the original child. If the sidebar is not restored, use **Reopen** in `/side` to recover that child and its annotations. A new fork has its own independent annotation list.
 
 | Selection popover | Annotation editor |
 |---|---|

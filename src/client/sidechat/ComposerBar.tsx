@@ -48,7 +48,7 @@ export function ComposerBar(props: {
   }, [visible])
 
   return (
-    <div className={css.composer}>
+    <div className={css.composer} data-sidenote-composer>
       {props.childId !== undefined && <AnnotationChip store={props.annotations} targetSessionId={props.childId} side />}
       {menuOpen && menuState !== null && triggerCtl !== null && (
         <SlashMenuView state={menuState} onPick={(source, index) => { triggerCtl.pick(source, index) }} />

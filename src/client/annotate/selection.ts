@@ -7,14 +7,15 @@
  * - both selection endpoints must sit in the SAME `[data-chat-flow-kind=
  *   "assistant-step"]` message node (跨消息划选不弹);
  * - `[data-streaming]` messages (still streaming) are excluded;
- * - `[data-dsh-better-sidebar]` and our own `[data-dsh-sidenote]` DOM are
- *   excluded (与侧边栏 viewer 浮层互斥);
- * - the text must be non-blank; over-length selections are admitted with the
- *   quote truncated (见 format.ts), never rejected.
+ * - explicit side assistant bodies are admitted; other sidebar/plugin UI is
+ *   excluded; both endpoints belong to the same message and source view;
+ * - quote text is kept complete, while anchor offsets use one DOM projection.
  *
  * These are DSH-internal DOM attributes rather than a public contract — an
  * upstream redesign silently degrades the feature (no popup), never crashes.
  */
+
+import { quoteSourceOf, projectedRangeText, selectedQuoteText, sourceKey, type QuoteSource } from '../annotations/source.ts'
 
 /** One validated selection, ready for the toolbar. */
 export interface SelectionSnapshot {
@@ -31,6 +32,7 @@ export interface SelectionSnapshot {
   /** A live clone of the selection range (badge anchor until re-render). */
   readonly range: Range
   readonly sessionId: string
+  readonly source: QuoteSource
 }
 
 export interface SelectionState {
@@ -39,9 +41,6 @@ export interface SelectionState {
 
 /** The assistant message node kind (v1 实测纠正值 — 勿引旧值 `assistant`). */
 export const ASSISTANT_KIND = 'assistant-step'
-
-/** Selector roots our UI must never react to (sidebar viewer + our own root). */
-const EXCLUDED_ROOTS = '[data-dsh-better-sidebar], [data-dsh-sidenote]'
 
 /** Pure validation of one candidate selection (unit-tested without DOM). */
 export function isEligibleSelection(input: {
@@ -60,18 +59,6 @@ export function isEligibleSelection(input: {
     && input.hasSession
 }
 
-/** Resolve the assistant message element owning a DOM node (text nodes → parent). */
-function messageOf(node: Node): HTMLElement | null {
-  const element = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element | null)
-  if (element === null || typeof element.closest !== 'function') return null
-  return element.closest<HTMLElement>(`[data-chat-flow-kind="${ASSISTANT_KIND}"]`)
-}
-
-/** Whether the message is still streaming (unfinished). */
-function isStreaming(message: HTMLElement): boolean {
-  return message.hasAttribute('data-streaming') || message.querySelector('[data-streaming]') !== null
-}
-
 /**
  * The 0-based ordinal of the selection's text among its occurrences in the
  * anchor element — the disambiguator for repeated phrases (re-anchor key).
@@ -81,7 +68,7 @@ export function occurrenceOf(anchor: HTMLElement, range: Range, text: string): n
     const pre = document.createRange()
     pre.selectNodeContents(anchor)
     pre.setEnd(range.startContainer, range.startOffset)
-    const before = pre.toString()
+    const before = projectedRangeText(anchor, pre)
     let occurrence = 0
     let at = before.indexOf(text)
     while (at !== -1) {
@@ -98,32 +85,23 @@ export function occurrenceOf(anchor: HTMLElement, range: Range, text: string): n
 export function captureSelection(currentSessionId: string): SelectionSnapshot | null {
   const sel = window.getSelection()
   if (sel === null || sel.isCollapsed || sel.rangeCount === 0) return null
-  const anchorText = sel.toString()
   const range = sel.getRangeAt(0)
-  const startMessage = messageOf(range.startContainer)
-  const endMessage = messageOf(range.endContainer)
-  const message = startMessage
-  const anchor = message?.closest<HTMLElement>('[data-chat-anchor-key]') ?? null
-  const eligible = isEligibleSelection({
-    blank: anchorText.trim() === '',
-    sameMessage: message !== null && message === endMessage,
-    kind: message?.dataset.chatFlowKind ?? '',
-    streaming: message !== null && isStreaming(message),
-    excluded: anchor !== null
-      ? anchor.closest(EXCLUDED_ROOTS) !== null
-      : message?.closest(EXCLUDED_ROOTS) !== null,
-    hasSession: currentSessionId !== '',
-  })
-  if (!eligible || message === null) return null
+  const source = quoteSourceOf(range.startContainer, currentSessionId)
+  const end = quoteSourceOf(range.endContainer, currentSessionId)
+  if (source === null || end === null || source.body !== end.body || source.view !== end.view || source.streaming) return null
+  const anchorText = projectedRangeText(source.body, range)
+  if (anchorText.trim() === '') return null
+  const text = selectedQuoteText(range, sel.toString(), anchorText)
   const rect = range.getBoundingClientRect()
   return {
-    text: anchorText,
+    text,
     anchorText,
-    anchorKey: anchor?.dataset.chatAnchorKey,
-    occurrence: anchor === null ? 0 : occurrenceOf(anchor, range, anchorText),
+    anchorKey: sourceKey(source),
+    occurrence: occurrenceOf(source.body, range, anchorText),
     rect: { left: rect.left, top: rect.top, width: rect.width },
     range: range.cloneRange(),
-    sessionId: currentSessionId,
+    sessionId: source.sessionId,
+    source,
   }
 }
 
@@ -164,6 +142,8 @@ export function createSelectionController(getSessionId: () => string): Selection
         selection.anchorText !== next.anchorText
         || selection.anchorKey !== next.anchorKey
         || selection.sessionId !== next.sessionId
+        || selection.source.view !== next.source.view
+        || selection.source.surface !== next.source.surface
         || selection.rect.top !== next.rect.top
         || selection.rect.left !== next.rect.left
         || selection.rect.width !== next.rect.width

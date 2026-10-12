@@ -307,23 +307,26 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
       () => titleRef.current,
       () => statusRef.current,
     )
+    const remember = (): void => {
+      if (!directNativeLeg(ctx)) return
+      const m = parseSideChatMeta(metaRef.current)
+      if (m.childId === undefined || m.parentSessionId === undefined) return
+      recordClosedSideChat(m.parentSessionId, {
+        childId: m.childId, parentSessionId: m.parentSessionId, title: titleRef.current,
+        tabId: tab.id, savedMeta: { ...m, number: (metaRef.current as { number?: number } | null)?.number },
+        ...(m.topic !== undefined ? { topic: m.topic } : {}), closedAt: Date.now(),
+      })
+    }
+    // Browser refresh does not run React unmount; preserve the same child for
+    // the existing recent-side-chat menu instead of silently forking a new one.
+    window.addEventListener('pagehide', remember)
     return () => {
       dispose()
       // 后悔药数据源（native）：用户 × 关 native tab 不经 descriptor.onClose
       // （tab-adapter 卸载只 records.drop），以面板卸载补记；误记由挂载时的
       // drop 自愈。legacy 由 descriptor.onClose 负责，不双写。
-      if (directNativeLeg(ctx)) {
-        const m = parseSideChatMeta(metaRef.current)
-        if (m.childId !== undefined && m.parentSessionId !== undefined) {
-          recordClosedSideChat(m.parentSessionId, {
-            childId: m.childId,
-            parentSessionId: m.parentSessionId,
-            title: titleRef.current,
-            ...(m.topic !== undefined ? { topic: m.topic } : {}),
-            closedAt: Date.now(),
-          })
-        }
-      }
+      window.removeEventListener('pagehide', remember)
+      remember()
     }
   }, [scope.sessionId, tab.id, ctx])
 
@@ -450,7 +453,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
     : parentPending > 0 ? 'pending' : parentSnap?.running === true ? 'running' : 'idle'
 
   return (
-    <div ref={rootRef} className={css.root} data-sidenote-chat-session={childId}>
+    <div ref={rootRef} className={css.root} data-sidenote-chat-session={childId} data-sidenote-view-title={tab.title}>
       {parentState !== null && meta.parentSessionId !== undefined && (
         <button
           type="button"
@@ -462,7 +465,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
           {t(parentState === 'running' ? 'parentRunning' : parentState === 'pending' ? 'parentPending' : 'parentIdle')}
         </button>
       )}
-      <div ref={bodyRef} className={css.body} onScroll={onBodyScroll}>
+      <div ref={bodyRef} className={css.body} data-sidenote-transcript onScroll={onBodyScroll}>
         {messages.length === 0 && !running
           ? <EmptyState />
           : <MessageList messages={messages} fold={fold} boundarySeq={meta.boundarySeq} reflow={props.reflow} parentSessionId={meta.parentSessionId} sideTitle={tab.title} onPromote={promote} />}

@@ -143,6 +143,11 @@
   word-break: break-word;
 }
 
+/* Reserve room for the source badge inside a narrow side transcript. */
+.quoteBody {
+  padding-right: 18px;
+}
+
 .reasoning {
   margin-bottom: 6px;
   border-left: 3px solid var(--dsw-alias-border-l2);

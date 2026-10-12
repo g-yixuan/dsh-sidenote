@@ -9,6 +9,7 @@
  * render; nothing here may throw into the page.
  */
 import type { Annotation } from '../annotations/model.ts'
+import { quoteSourceOf, quoteTextNodes, projectedRangeText, sourceBodies, sourceKey, sourceClip } from '../annotations/source.ts'
 
 /** The badge anchor point: right edge of the selection rects, first-line height. */
 export interface BadgeAnchor {
@@ -18,27 +19,14 @@ export interface BadgeAnchor {
   readonly centerY: number
 }
 
-/** Find the message element for an anchor key (connected DOM only). */
-function findAnchorElement(anchorKey: string): HTMLElement | null {
-  try {
-    const el = document.querySelector<HTMLElement>(
-      `[data-chat-anchor-key="${CSS.escape(anchorKey)}"]`,
-    )
-    return el !== null && el.isConnected ? el : null
-  } catch {
-    return null
-  }
-}
-
 /**
  * Rebuild a range covering the `occurrence`-th appearance of `text` inside
- * `root`'s text nodes. Falls back to the LAST occurrence when the ordinal is
- * out of range（消息内容变短时，最后一次出现更可能是原选区）.
+ * `root`'s text nodes. An ordinal no longer present is hidden rather than moved to another phrase.
  */
 function rangeOfOccurrence(root: HTMLElement, text: string, occurrence: number): Range | null {
   if (text === '') return null
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-  const haystack = root.textContent ?? ''
+  const nodes = quoteTextNodes(root)
+  const haystack = nodes.map(node => node.data).join('')
   let start = -1
   let at = haystack.indexOf(text)
   let seen = 0
@@ -47,10 +35,6 @@ function rangeOfOccurrence(root: HTMLElement, text: string, occurrence: number):
     seen += 1
     at = haystack.indexOf(text, at + text.length)
   }
-  if (start === -1 && occurrence > 0) {
-    // Ordinal out of range — fall back to the last known occurrence.
-    start = haystack.lastIndexOf(text)
-  }
   if (start === -1) return null
   const end = start + text.length
   let offset = 0
@@ -58,7 +42,7 @@ function rangeOfOccurrence(root: HTMLElement, text: string, occurrence: number):
   let startOffset = 0
   let endNode: Text | null = null
   let endOffset = 0
-  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+  for (const node of nodes) {
     const length = (node.textContent ?? '').length
     const next = offset + length
     if (startNode === null && start < next) {
@@ -84,20 +68,36 @@ function rangeOfOccurrence(root: HTMLElement, text: string, occurrence: number):
  * are still connected, otherwise a re-anchored one (cached on success).
  * Returns null when the anchor is gone — callers skip rendering, never throw.
  */
-export function resolveRange(annotation: Annotation, cache: Map<number, Range>): Range | null {
+export interface CachedRange { range: Range; view: HTMLElement }
+
+export function resolveRange(annotation: Annotation, cache: Map<number, CachedRange>, currentSessionId = ''): Range | null {
   try {
+    const sessionId = annotation.sourceSessionId ?? annotation.sessionId
+    const surface = annotation.sourceSurface ?? 'main'
+    const valid = (range: Range, view: HTMLElement): boolean => {
+      if (!range.startContainer.isConnected || !range.endContainer.isConnected) return false
+      const source = quoteSourceOf(range.startContainer, currentSessionId)
+      const end = quoteSourceOf(range.endContainer, currentSessionId)
+      return source !== null && end?.body === source.body && source.view === view
+        && source.sessionId === sessionId && source.surface === surface
+        && sourceKey(source) === annotation.anchorKey && !source.streaming
+        && projectedRangeText(source.body, range) === annotation.anchorText
+    }
     const cached = cache.get(annotation.id)
-    if (cached !== undefined && cached.startContainer.isConnected) return cached
+    if (cached !== undefined && valid(cached.range, cached.view)) return cached.range
     cache.delete(annotation.id)
     if (annotation.anchorKey === undefined || annotation.anchorText === '') return null
-    const anchor = findAnchorElement(annotation.anchorKey)
-    if (anchor === null) return null
-    const range = rangeOfOccurrence(anchor, annotation.anchorText, annotation.occurrence)
-    if (range !== null) cache.set(annotation.id, range)
+    const bodies = sourceBodies(sessionId, surface, annotation.anchorKey, currentSessionId)
+      .filter(body => body.getClientRects().length > 0)
+    // Multiple visible copies without the original view are ambiguous.
+    if (bodies.length !== 1) return null
+    const body = bodies[0]!
+    const source = quoteSourceOf(body, currentSessionId)
+    if (source === null || source.streaming) return null
+    const range = rangeOfOccurrence(body, annotation.anchorText, annotation.occurrence)
+    if (range !== null) cache.set(annotation.id, { range, view: source.view })
     return range
-  } catch {
-    return null
-  }
+  } catch { return null }
 }
 
 /**
@@ -126,21 +126,16 @@ export function badgeAnchorOf(range: Range): BadgeAnchor | null {
  * （B3-P2③「分❶治」），右缘 gutter 永不遮挡正文，多角标自然纵向排开
  * （Google Docs 页边评论同款心智）。找不到宿主消息容器时回退旧策略。
  */
-export function gutterAnchorOf(range: Range): BadgeAnchor | null {
+export function gutterAnchorOf(range: Range, currentSessionId = ''): BadgeAnchor | null {
   const base = badgeAnchorOf(range)
   if (base === null) return null
   try {
-    const node = range.startContainer instanceof Element
-      ? range.startContainer
-      : range.startContainer.parentElement
-    const flowItem = node?.closest('[data-chat-anchor-key]')
-    if (!(flowItem instanceof HTMLElement)) return base
-    const rect = flowItem.getBoundingClientRect()
+    const source = quoteSourceOf(range.startContainer, currentSessionId)
+    if (source === null) return base
+    const rect = source.anchor.getBoundingClientRect()
+    const clip = sourceClip(source)
     if (!Number.isFinite(rect.right) || rect.right <= 0) return base
-    // 落在流项右缘之外 6px（列与侧栏/页边之间的间隙）——内缩会盖住行尾文字
-    //（M2 实测 P1：角标盖住「间」），外探则永不遮挡正文；钳制在视口内
-    //（窄窗口/全宽列时不被 BadgeLayer 的视口裁剪误杀）。
-    return { right: Math.min(rect.right + 6, window.innerWidth - 26), centerY: base.centerY }
+    return { right: Math.min(rect.right + 6, clip.right - 2), centerY: base.centerY }
   } catch {
     return base
   }
