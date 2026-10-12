@@ -47,6 +47,14 @@ export async function openSeedSession(page: Page): Promise<void> {
   const titled = page.getByRole('treeitem').filter({ hasText: 'Side chat plugin review' })
   await expect(titled.first()).toBeAttached({ timeout: 30_000 })
   const byId = page.locator(`[role="treeitem"][data-row-key="session:${seed}"]`)
+  // Native workspace lists show a limited recent subset. Previous real forks
+  // can push the seed behind Show more; expand instead of choosing a child
+  // with the same inherited title.
+  const overflow = page.locator('button[data-row-key^="overflow:"][aria-expanded="false"]')
+  if (await byId.count() === 0 && await overflow.count() > 0) {
+    await overflow.first().click()
+    await expect(byId).toBeAttached({ timeout: 30_000 })
+  }
   const rows = await byId.count() > 0 ? byId : titled
   // Legacy children are archived; an ambiguous legacy title must fail loudly.
   await expect(rows).toHaveCount(1)
