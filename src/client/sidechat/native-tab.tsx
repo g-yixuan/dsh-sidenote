@@ -34,7 +34,7 @@ import { SideChatPanel } from './SideChatPanel.tsx'
 import { SIDE_TAB_TYPE } from './model.ts'
 import { sideChatTitleOf } from './identity.ts'
 import { isRestoredNativeTab } from '../host/tabs.ts'
-import { parseSideChatMeta } from './model.ts'
+import { parseSideChatMeta, type SideChatMeta } from './model.ts'
 import { forgetClosedTabBinding, listClosedSideChats } from './recentClosed.ts'
 import {
   SIDENOTE_RUN_ID,
@@ -63,6 +63,7 @@ export interface SideChatOpenParams {
   /** 后悔药重开：内容身份随恢复走（Delivery_05）——否则重开即丢 topic。 */
   topic?: string
   quoteRequestId?: string
+  savedMeta?: SideChatMeta & { number?: number }
 }
 
 export function parseOpenParams(params: unknown): SideChatOpenParams | undefined {
@@ -75,6 +76,10 @@ export function parseOpenParams(params: unknown): SideChatOpenParams | undefined
     ...(typeof p.childId === 'string' && p.childId !== '' ? { childId: p.childId } : {}),
     ...(typeof p.topic === 'string' && p.topic !== '' ? { topic: p.topic } : {}),
     ...(typeof p.quoteRequestId === 'string' ? { quoteRequestId: p.quoteRequestId } : {}),
+    ...(typeof p.savedMeta === 'object' && p.savedMeta !== null ? { savedMeta: {
+      ...parseSideChatMeta(p.savedMeta),
+      ...(typeof (p.savedMeta as { number?: unknown }).number === 'number' ? { number: (p.savedMeta as { number: number }).number } : {}),
+    } } : {}),
   }
 }
 
@@ -107,13 +112,14 @@ export function reconcileMeta(record: NativeTabRecord, sessionId: string): { cre
   }) : undefined
   const meta = {
     ...restored,
+    ...params?.savedMeta,
     tabId: record.id,
     sessionId,
     ...(params?.childId !== undefined ? { childId: params.childId } : {}),
     parentSessionId: params?.parentSessionId ?? sessionId,
     ...(params?.pendingDraft !== undefined ? { pendingDraft: params.pendingDraft } : {}),
     ...(params?.topic !== undefined ? { topic: params.topic } : {}),
-    number: restored?.number ?? nextSideChatNumber(sessionId),
+    number: params?.savedMeta?.number ?? restored?.number ?? nextSideChatNumber(sessionId),
     createdAt: restored?.createdAt ?? Date.now(),
     runId: SIDENOTE_RUN_ID,
   }

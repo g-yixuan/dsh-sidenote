@@ -74,6 +74,12 @@ describe('parseOpenParams', () => {
 })
 
 describe('reconcileMeta', () => {
+  it('manual reopen preserves inheritance and busy-fork state while explicit child/parent win', () => {
+    const record = tabRecord('manual', { parentSessionId: 'right-parent', childId: 'right-child', savedMeta: { childId: 'stale-child', parentSessionId: 'stale-parent', boundarySeq: 44, forkedMidTurn: true, number: 3 } })
+    record.navigation.revision = 1
+    expect(reconcileMeta(record, 'right-parent').meta).toMatchObject({ childId: 'right-child', parentSessionId: 'right-parent', boundarySeq: 44, forkedMidTurn: true, number: 3 })
+  })
+
   it('recovers a pagehide record even when the host already removed the old meta', () => {
     recordClosedSideChat('closed-parent', { childId: 'closed-child', parentSessionId: 'closed-parent', tabId: 't', title: 'Side 3', closedAt: 1, savedMeta: { boundarySeq: 44, number: 3 } })
     const record = tabRecord('t')

@@ -23,6 +23,7 @@ import {
   collectTabs,
   parseSideChatMeta,
   sideTabTitle,
+  type SideChatMeta,
 } from './model.ts'
 import { readInputDraft, resolveSessionInput } from './composer.ts'
 import { currentSessionIdOf } from '../host/currentSession.ts'
@@ -273,7 +274,7 @@ export function sideChatTargetTitle(ctx: Context, sessionId: string): string | u
  * opts.topic（Delivery_05）：内容身份随恢复走——否则重开后 reconcile
  * 铸造的是无 topic 的新记录，身份丢一次关闭就回不来了。
  */
-export function reopenSideChat(ctx: Context, sessionId: string, childId: string, opts?: { title?: string, topic?: string }): boolean {
+export function reopenSideChat(ctx: Context, sessionId: string, childId: string, opts?: { title?: string, topic?: string, savedMeta?: SideChatMeta & { number?: number } }): boolean {
   if (directLeg(ctx)) {
     try {
       if (currentSessionIdOf(ctx) !== sessionId) return false
@@ -283,6 +284,7 @@ export function reopenSideChat(ctx: Context, sessionId: string, childId: string,
         params: {
           parentSessionId: sessionId,
           childId,
+          ...(opts?.savedMeta !== undefined ? { savedMeta: opts.savedMeta } : {}),
           ...(opts?.topic !== undefined ? { topic: opts.topic } : {}),
         },
       })
@@ -307,7 +309,7 @@ export function reopenSideChat(ctx: Context, sessionId: string, childId: string,
     // native（>= 0.19）：seed.meta 携带恢复信息（native 面采纳 seed.meta；
     // 面板挂载即走绑定恢复路径）。legacy 的 createTab 铸造忽略 seed.meta，
     // 落快照后补写。topic 在时标题直接以内容身份铸造，不走编号。
-    const meta = { childId, parentSessionId: sessionId, ...(opts?.topic !== undefined ? { topic: opts.topic } : {}) }
+    const meta = { ...opts?.savedMeta, childId, parentSessionId: sessionId, ...(opts?.topic !== undefined ? { topic: opts.topic } : {}) }
     const title = opts?.title ?? (opts?.topic !== undefined ? sideChatTitleOf({ number: 1, topic: opts.topic }) : undefined)
     bs.openTab({ type: SIDE_TAB_TYPE, ...(title !== undefined ? { title } : {}), meta }, { sessionId })
     const created = collectSideTabs(bs.getSnapshot().state).find(tab => !before.has(tab.id))

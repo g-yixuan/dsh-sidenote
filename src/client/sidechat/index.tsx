@@ -82,6 +82,7 @@ export function registerSideChat(ctx: Context, reflow: ReflowStore, annotations:
               title: closedTab.title,
               ...(meta.topic !== undefined ? { topic: meta.topic } : {}),
               closedAt: Date.now(),
+              savedMeta: meta,
             })
           }
         },

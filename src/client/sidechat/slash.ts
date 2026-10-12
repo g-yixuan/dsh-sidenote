@@ -135,7 +135,10 @@ function makeContribution(ctx: Context, name: string) {
           const childId = option.id.slice('reopen:'.length)
           // topic 随重开恢复（Delivery_05）：option 只带 id，回查登记处取条目。
           const entry = listClosedSideChats(session.sessionId).find(e => e.childId === childId)
-          const opts = entry?.topic !== undefined ? { topic: entry.topic } : undefined
+          const opts = entry === undefined ? undefined : {
+            ...(entry.topic !== undefined ? { topic: entry.topic } : {}),
+            ...(entry.savedMeta !== undefined ? { savedMeta: entry.savedMeta } : {}),
+          }
           if (reopenSideChat(ctx, session.sessionId, childId, opts)) {
             dropClosedSideChat(session.sessionId, childId)
           }
