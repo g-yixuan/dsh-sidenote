@@ -42,8 +42,12 @@ export async function openSeedSession(page: Page): Promise<void> {
   if (!seed) throw new Error('Missing DSH_E2E_SEED_SESSION')
   const open = page.getByRole('button', { name: /^(Open sidebar|打开侧栏)$/ }).first()
   if (await open.isVisible()) await open.click()
+  // Wait for the session list before deciding which row identity exists. A
+  // zero count on the first frame must not choose the legacy title fallback.
+  const titled = page.getByRole('treeitem').filter({ hasText: 'Side chat plugin review' })
+  await expect(titled.first()).toBeAttached({ timeout: 30_000 })
   const byId = page.locator(`[role="treeitem"][data-row-key="session:${seed}"]`)
-  const rows = await byId.count() > 0 ? byId : page.getByRole('treeitem').filter({ hasText: 'Side chat plugin review' })
+  const rows = await byId.count() > 0 ? byId : titled
   // Legacy children are archived; an ambiguous legacy title must fail loudly.
   await expect(rows).toHaveCount(1)
   await rows.getByText('Side chat plugin review', { exact: true }).click()
