@@ -37,7 +37,11 @@ async function restoreSameSide(page: Page, child: string) {
     const main = page.locator('[data-composer-seat] [data-composer-input], [data-composer-seat] textarea').first()
     await main.fill('/side')
     await page.getByRole('option', { name: /side/i }).first().click()
-    await page.getByText(/^Reopen "|^重开/).first().click()
+    // A restored tab can still be loading when the transcript is ready. The
+    // real menu then offers Focus instead of Reopen; both must reach this child.
+    const restore = page.getByText(/^(Reopen "|Focus "|重开|聚焦)/)
+    await expect(restore).toHaveCount(1)
+    await restore.click()
   }
   await expect(sideChatOf(page)).toHaveAttribute('data-sidenote-chat-session', child)
 }
