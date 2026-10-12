@@ -73,10 +73,9 @@ jobs:
             bs-version: 'none'
           - dsh-version: '0.1.7-rc.2'
             bs-version: 'none'
-          # Candidate only; the five existing required checks stay unchanged.
+          # Fully admitted exact release; preserve the five existing checks.
           - dsh-version: '0.2.0-rc.2'
             bs-version: 'none'
-            experimental: true
     continue-on-error: ${{ matrix.experimental || false }}
     env:
       DSH_TELEMETRY_DISABLED: '1'

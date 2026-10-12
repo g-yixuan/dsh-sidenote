@@ -76,7 +76,7 @@ For local development, mount with `dsh plugin --profile web add link:<repo path>
 
 ## Compatibility
 
-Exact combinations are listed in the [compatibility policy](docs/compatibility_EN.md): 0.1.7 is maintained, 0.1.5 has extended maintenance, three 0.1.1/0.1.2 legacy combinations are frozen with required validation, and 0.2.0-rc.2 remains experimental. Unlisted combinations are unverified; engine ranges do not imply that every version inside them is supported.
+Exact combinations are listed in the [compatibility policy](docs/compatibility_EN.md): 0.1.7 is maintained, 0.1.5 has extended maintenance, three 0.1.1/0.1.2 legacy combinations are frozen with required validation, and the exact 0.2.0-rc.2 release has been admitted to maintained support. Unlisted combinations are unverified; engine ranges do not imply that every version inside them is supported.
 
 The header's **Compatibility status** can inspect, recheck and export current integration state. Waiting services do not mean incompatibility. Restricted operations retain body, attachments and quotes. Unreadable host versions stay unknown; exports exclude user text, credentials and local paths.
 

@@ -11,9 +11,13 @@ This table describes validation and maintenance for the development branch. A me
 | DSH 0.1.1-rc.2 + BS 0.12.3 | Frozen legacy, lower-bound representative | Full fixed journeys and existing commitments |
 | DSH 0.1.1-rc.2 + BS 0.18.0 | Frozen legacy, separate combination | Full fixed journeys; removal requires a retirement PR |
 | DSH 0.1.2-rc.1 + BS 0.18.0 | Frozen legacy, API-generation representative | Full fixed journeys |
-| DSH 0.2.0-rc.2, no BS | Experimental candidate | Independent validation; no complete support commitment yet |
+| DSH 0.2.0-rc.2, no BS | Maintained; exact release admitted | Full fixed journeys and a required host check |
 
 BS means dsh-better-sidebar. Unlisted combinations are unverified. Independence from BS does not prove every native-host + BS 0.19+ coexistence combination. Alpha hosts have no release compatibility commitment.
+
+Admission record for development main, 2026-10-13: test package 0.4.6, build digest `9a111c6d36221c44cea7a5024aecdeccdb89856e37c848d93adb9613c9629047`, six combinations / 141 real E2E tests, 310 tests, and complete visible-browser workflows on 0.1.5/0.1.7/0.2 passed. [Validation CI](https://github.com/g-yixuan/dsh-sidenote/actions/runs/38281154300). Runtime cases use a controlled model; external model answers are outside this validation. The already published old 0.4.6 package does not contain these fixes.
+
+The added installation declaration admits only exact `0.2.0-rc.2`: `>=0.1.1-rc.1 <0.2.0 || =0.2.0-rc.2`; UI primitives adds the same exact release. Other 0.2 rc, stable and alpha releases still need admission.
 
 Frozen support retains its integration and declared workflows without backporting every new host feature. Data loss, delivery to the wrong session and installation regressions still need attention. The default window is two fully validated host lines plus one explicit extended environment; it never removes old checks automatically. Retirement requires a separate PR recording the last validated plugin/host versions, impact, alternatives and bilingual notice. Without reliable data, do not infer host-version shares from npm downloads or add telemetry.
 
@@ -35,6 +39,6 @@ Exports contain software versions, capabilities, reasons and integration paths o
 4. Separate install/host failures, plugin API/DOM changes and test locator errors. Preserve failures, make focused fixes and rerun maintained combinations without lowering assertions or skipping features.
 5. Complete relevant functionality, real runtime cases and visible-browser validation before promoting a candidate via PR. Update support claims, installation ranges, both guides and required checks together, checking the actual GitHub ruleset context names.
 
-The five required combinations remain. Weekly canary resolves latest once, then runs that exact version with the same journeys and inventory. Failures retain evidence and remain visible in their job; they never automatically expand support or change the user's environment. Use existing GitHub Actions status rather than a new notification bot.
+The five required combinations remain, with `plugin-mount (0.2.0-rc.2, none)` added as the sixth host check. Weekly canary resolves latest once, then runs that exact version with the same journeys and inventory. Failures retain evidence and remain visible in their job; they never automatically expand support or change the user's environment. Use existing GitHub Actions status rather than a new notification bot.
 
 Ctrl/Cmd+Enter Steer follows the host's step boundaries. A subsequent send wakes the queue preserved by Stop. Record message acceptance and successful model answers separately.
