@@ -13,4 +13,3 @@ export class AnnotationBoundary extends Component<{ children: ReactNode }, { fai
     return this.state.failed ? null : this.props.children
   }
 }
-
