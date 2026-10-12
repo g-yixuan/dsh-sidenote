@@ -23,6 +23,8 @@ import { installSendInterceptor } from './send.ts'
 import { installBubbleSurgery } from './bubble.ts'
 import type { ReflowStore } from '../reflow.ts'
 
+import { hostDiagnostics } from '../host/probes.ts'
+
 import { currentSessionIdOf } from '../host/currentSession.ts'
 
 export { currentSessionIdOf }
@@ -61,6 +63,7 @@ export function registerAnnotations(ctx: Context, reflow: ReflowStore, store: An
           order: 11,
           registrant: 'dsh-sidenote',
         }, createReflowChip(reflow))
+        hostDiagnostics(ctx).dockRegistered()
         return () => {
           offAnnotations()
           offReflow()

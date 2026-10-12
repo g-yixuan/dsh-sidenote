@@ -82,6 +82,7 @@ jobs:
       DSH_TELEMETRY_DISABLED: '1'
       BS_VERSION: ${{ matrix.bs-version }}
       DSH_EXPECTED_VERSION: ${{ matrix.dsh-version }}
+      DSH_E2E_CAPABILITY_FAULT: '1'
     steps:
       - uses: actions/checkout@v7
 
@@ -153,6 +154,7 @@ jobs:
         env:
           BS_VERSION: none
           DSH_EXPECTED_VERSION: ${{ steps.host.outputs.version }}
+          DSH_E2E_CAPABILITY_FAULT: '1'
         run: pnpm test:mount
       - name: Upload canary evidence
         if: always()

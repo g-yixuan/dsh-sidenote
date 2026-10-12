@@ -1,105 +1,124 @@
-/**
- * T2 off-face 探测清单（版本韧性架构，architecture.md 第四节）。
- *
- * 纪律：off-face 调用点保持就地 feature-check + 降级（姿势不变）；本清单是
- * 「全景一次」——插件激活时逐项探测并 warn-once，让「宿主升级后哪些降级了」
- * 在开发者工具里一眼可见，而不是等功能被用时才静默残疾。
- * 告警通道显式裁决：console-only（开发者日志），不做用户可见 UI。
- *
- * 新增 off-face 依赖时：调用点照写就地探测，同时把条目加进 PROBES。
- */
 import type { Context } from './contracts.ts'
-import { nativeSidebarHost } from '../sidechat/native.ts'
-import { remoteSessionFace } from '../sidechat/lifecycle.ts'
+import { currentSessionIdOf } from './currentSession.ts'
+import { probeInput, type CapabilityState, type InputReason } from './input.ts'
+import { chatSourceOf } from './chat.ts'
+import { composerSeat, MAIN_ASSISTANT, hasConversationMessages } from './dom.ts'
+import { betterSidebarOf, directNativeLeg, rootContext } from './sidebar.ts'
+import { remoteSessionFace } from './models.ts'
+import { hasConfirmedAcceptance } from './submission.ts'
 
-interface Probe {
-  /** 探测项名称（告警文案用）。 */
-  readonly name: string
-  /** 探测函数：true = 能力在；false/异常 = 缺失（将降级）。 */
-  readonly check: (ctx: Context) => boolean
-  /** 缺失时的降级说明（告警文案用）。 */
-  readonly fallback: string
+declare const __SIDENOTE_VERSION__: string
+export type DiagnosticReason = InputReason | 'waitView' | 'waitDock' | 'waitSide' | 'unknownAcceptance' | 'markersMissing'
+export interface Capability {
+  id: string
+  name: 'selection' | 'dock' | 'sideOpen' | 'sideQuote' | 'input' | 'sideInput' | 'acceptance' | 'sideAcceptance' | 'chat' | 'model'
+  state: CapabilityState
+  reason: DiagnosticReason
+  path: string
+}
+export interface HostReport {
+  versions: { sidenote: string; dsh: string; betterSidebar: string | null }
+  capabilities: readonly Capability[]
 }
 
-const PROBES: readonly Probe[] = [
-  {
-    name: 'Session.open()（非 staged 会话开窗）',
-    check: (ctx) => {
-      // open 在 concrete Session 实例上（不在 SessionFace 契约）——探测类原型不可行，
-      // 这里探测契约面的替代信号：sessions.binding 存在即可（open 调用点另有就地探测）。
-      return typeof ctx.sessions?.binding === 'function'
-    },
-    fallback: '侧边聊天消息流降级为只发不收',
-  },
-  {
-    name: 'conversation.input 输入机器',
-    check: (ctx) => {
-      const conv = (ctx as { get?: (k: string) => unknown }).get?.('conversation') as
-        | { input?: { for?: unknown } }
-        | undefined
-      return typeof conv?.input?.for === 'function'
-    },
-    fallback: '侧边 composer 降级为本地草稿 + session.prompt',
-  },
-  {
-    name: 'commandUi（斜杠命令注册）',
-    check: (ctx) => {
-      const ui = (ctx as { get?: (k: string) => unknown }).get?.('commandUi') as
-        | { register?: unknown }
-        | undefined
-      return typeof ui?.register === 'function'
-    },
-    fallback: '/side 与「/侧边」命令不可用（菜单/顶栏入口仍在）',
-  },
-  {
-    name: 'ctx.modules.import（动态组件复用）',
-    check: (ctx) => {
-      const modules = (ctx as { modules?: { import?: unknown } }).modules
-      return typeof modules?.import === 'function'
-    },
-    fallback: 'ProducedFiles 等动态复用件降级为自绘',
-  },
-  {
-    name: 'sidebarRight.focus（native tab 程序化聚焦）',
-    check: (ctx) => {
-      // 仅 better-sidebar >= 0.19（native 右栏）需要的面；老宿主的
-      // activateTab 本就可用，缺失不算降级。
-      if (!nativeSidebarHost(ctx)) return true
-      const face = (ctx as { get?: (k: string) => unknown }).get?.('sidebarRight') as
-        | { focus?: unknown }
-        | undefined
-      return typeof face?.focus === 'function'
-    },
-    fallback: '聚焦既有侧边聊天 tab 不可用（activateTab 在 native 面是空操作）',
-  },
-  {
-    name: '会话模型面（remote.session / connection.api.sessions 双版本链）',
-    check: (ctx) => {
-      // 新面（0.1.5 的 remote.session）与旧面（<= 0.1.2 的 connection.api）
-      // 任一在列即能力在——双版本链的探测与调用点同序（lifecycle.ts）。
-      if (remoteSessionFace(ctx) !== undefined) return true
-      const legacy = (ctx as { connection?: { api?: { sessions?: { models?: unknown } } } })
-        .connection?.api?.sessions?.models
-      return typeof legacy === 'function'
-    },
-    fallback: 'fork 模型同步、模型标签与模型切换不可用（子会话用宿主默认模型）',
-  },
-]
+export interface HostDiagnostics {
+  getSnapshot(): HostReport
+  subscribe(fn: () => void): () => void
+  recheck(): void
+  dockRegistered(): void
+}
 
-/** 激活时跑一遍探测清单；缺失项逐项 warn-once。返回缺失项数（测试可断言）。 */
-export function probeHost(ctx: Context): number {
-  let missing = 0
-  for (const probe of PROBES) {
-    let ok = false
-    try {
-      ok = probe.check(ctx)
-    } catch {
-      ok = false
+const stores = new WeakMap<Context, HostDiagnostics>()
+
+/** A report contains software facts only: no session IDs, prompts, URLs or paths. */
+export function hostDiagnostics(ctx: Context): HostDiagnostics {
+  const owner = rootContext(ctx)
+  const existing = stores.get(ctx) ?? stores.get(owner)
+  if (existing !== undefined) return existing
+  const listeners = new Set<() => void>()
+  let dockRegistered = false
+  let report: HostReport = { versions: { sidenote: typeof __SIDENOTE_VERSION__ === 'string' ? __SIDENOTE_VERSION__ : 'unknown', dsh: 'unknown', betterSidebar: null }, capabilities: [] }
+  const recheck = (): void => {
+    const capabilities: Capability[] = []
+    const add = (name: Capability['name'], state: CapabilityState, reason: DiagnosticReason, path: string, id: string = name): void => {
+      const entry = { id, name, state, reason, path }
+      const at = capabilities.findIndex(capability => capability.id === id)
+      if (at === -1) capabilities.push(entry)
+      else capabilities[at] = entry
     }
-    if (!ok) {
-      missing += 1
-      console.warn(`[dsh-sidenote] 宿主能力缺失：${probe.name} → ${probe.fallback}`)
+    try {
+      const id = currentSessionIdOf(ctx)
+      const binding = id === '' ? undefined : ctx.sessions.binding(id)
+      const chat = chatSourceOf(ctx, binding)
+      const legacy = chat?.getLegacy()
+      const hasSource = typeof document !== 'undefined' && document.querySelector(MAIN_ASSISTANT) !== null
+      const hasAssistant = legacy?.nodes.some(node => (node as { kind?: string }).kind === 'assistant') === true
+      add('selection', hasSource ? 'available' : hasAssistant && hasConversationMessages() ? 'unknown' : 'unready', hasSource ? 'ready' : hasAssistant ? 'markersMissing' : 'waitView', 'main assistant DOM')
+      const dockReady = dockRegistered && composerSeat() !== null
+      add('dock', dockReady ? 'available' : 'unready', dockReady ? 'ready' : dockRegistered ? 'waitView' : 'waitDock', 'conversation.input.dock')
+      const input = probeInput(ctx, id)
+      add('input', input.state, input.reason, input.path)
+      add('chat', legacy === undefined || legacy === null ? 'unready' : 'available', legacy ? 'ready' : 'waitSession', 'chatSourceOf')
+      add('acceptance', hasConfirmedAcceptance(binding) ? 'available' : 'unknown', hasConfirmedAcceptance(binding) ? 'ready' : 'unknownAcceptance', 'durable user/steering or native Queue/Inbox')
+      const bs = betterSidebarOf(ctx)
+      const native = directNativeLeg(ctx)
+      const sidebar = native ? ctx.get('sidebarRight') as { openTab?: unknown } | undefined : bs
+      const sideReady = typeof sidebar?.openTab === 'function'
+      add('sideOpen', sideReady ? 'available' : sidebar == null ? 'unready' : 'unavailable', sideReady ? 'ready' : sidebar == null ? 'waitService' : 'unsupported', native ? 'sidebarRight.openTab' : 'betterSidebar.openTab')
+      const sides = typeof document === 'undefined' ? [] : [...document.querySelectorAll<HTMLElement>('[data-sidenote-chat-session]')].filter(element => element.getClientRects().length > 0)
+      const sideQuoteReady = sides.some(side => side.querySelector('[data-sidenote-quote-body][data-sidenote-streaming="false"]'))
+      add('sideQuote', sideQuoteReady ? 'available' : 'unready', sideQuoteReady ? 'ready' : sides.length > 0 ? 'waitView' : 'waitSide', 'owned side assistant body')
+      for (const [index, side] of sides.entries()) {
+        const sideInput = probeInput(ctx, side.dataset.sidenoteChatSession ?? '')
+        add('sideInput', sideInput.state, sideInput.reason, sideInput.path, `side-input-${index + 1}`)
+        const sideBinding = ctx.sessions.binding(side.dataset.sidenoteChatSession ?? '')
+        add('sideAcceptance', hasConfirmedAcceptance(sideBinding) ? 'available' : 'unknown', hasConfirmedAcceptance(sideBinding) ? 'ready' : 'unknownAcceptance', 'durable user/steering or native Queue/Inbox', `side-acceptance-${index + 1}`)
+      }
+      const remote = remoteSessionFace(ctx)
+      const legacyModels = ctx.connection?.api?.sessions
+      const modelReady = (typeof remote?.selectModel === 'function' && typeof remote.modelCatalog === 'function')
+        || (typeof legacyModels?.models === 'function' && typeof legacyModels.selectModel === 'function')
+      const providedRemote = ctx.get('remote.session') ?? (ctx.get('remote') as { session?: unknown } | undefined)?.session
+      const modelProvided = providedRemote != null || typeof legacyModels?.models === 'function' || typeof legacyModels?.selectModel === 'function'
+      add('model', modelReady ? 'available' : modelProvided ? 'unavailable' : 'unready', modelReady ? 'ready' : modelProvided ? 'unsupported' : 'waitService', providedRemote ? 'remote.session' : 'connection.api.sessions')
+      const next = { versions: { ...report.versions, betterSidebar: typeof bs?.version === 'string' ? bs.version : null }, capabilities }
+      if (JSON.stringify(next) !== JSON.stringify(report)) { report = next; for (const fn of [...listeners]) fn() }
+    } catch {
+      add('chat', 'unknown', 'readFailed', 'host state read')
+      const next = { ...report, capabilities }
+      if (JSON.stringify(next) !== JSON.stringify(report)) { report = next; for (const fn of [...listeners]) fn() }
     }
   }
-  return missing
+  const store: HostDiagnostics = {
+    getSnapshot: () => report,
+    subscribe(fn) { listeners.add(fn); return () => { listeners.delete(fn) } },
+    recheck,
+    dockRegistered() { dockRegistered = true; recheck() },
+  }
+  stores.set(ctx, store)
+  recheck()
+  return store
+}
+
+/** Recheck at service readiness and view changes; absence at boot is waiting. */
+export function watchHostDiagnostics(ctx: Context): () => void {
+  const store = hostDiagnostics(ctx)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const schedule = (): void => { if (timer !== undefined) clearTimeout(timer); timer = setTimeout(store.recheck, 100) }
+  const offList = ctx.sessions.list.subscribe(schedule)
+  const observer = new MutationObserver(records => {
+    if (records.every(record => (record.target instanceof Element ? record.target : record.target.parentElement)?.closest('[data-sidenote-compatibility]'))) return
+    schedule()
+  })
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'aria-expanded', 'data-sidenote-chat-session', 'data-conversation-session', 'data-sidenote-streaming'] })
+  for (const service of ['conversation', 'uiConversation', 'sidebarRight', 'betterSidebar', 'remote']) {
+    ctx.inject([service], () => { schedule() })
+  }
+  return () => { observer.disconnect(); offList(); if (timer !== undefined) clearTimeout(timer) }
+}
+
+export function probeHost(ctx: Context): number {
+  const status = hostDiagnostics(ctx)
+  status.recheck()
+  return status.getSnapshot().capabilities.filter(item => item.state === 'unavailable').length
 }

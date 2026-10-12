@@ -22,6 +22,8 @@ import { fileURLToPath } from 'node:url'
 import type { UserConfig } from 'tsdown'
 import { transform } from 'lightningcss'
 
+const packageVersion = JSON.parse(await readFile(new URL('package.json', import.meta.url), 'utf8')).version as string
+
 /** Node builtins must never survive into the browser module-loader factory. */
 const NODE_BUILTINS = new Set([
   ...builtinModules,
@@ -80,6 +82,7 @@ function clientBundle(pluginId: string, entryFile: string): UserConfig {
     clean: false,
     external: [...CLIENT_EXTERNALS],
     define: {
+      __SIDENOTE_VERSION__: JSON.stringify(packageVersion),
       'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
       'import.meta.env.MODE': JSON.stringify(process.env.NODE_ENV ?? 'production'),
       'import.meta.env': JSON.stringify({ MODE: process.env.NODE_ENV ?? 'production' }),

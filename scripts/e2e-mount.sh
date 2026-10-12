@@ -173,6 +173,11 @@ node -e '
 ' "$PROFILE_DIR/package.json" "$BS_VERSION"
 say "挂载已注册（BS_VERSION=${BS_VERSION}）"
 
+if [ -n "${DSH_E2E_CAPABILITY_FAULT:-}" ]; then
+  cp -R "$ROOT/tests/fixtures/capability-fault" "$SCRATCH/capability-fault"
+  $DSH_CMD plugin --profile web add "file:$SCRATCH/capability-fault"
+fi
+
 # 只读 inventory fixture 从真实 host registry 的 bundle 路径读取版本。
 # 不从本仓 devDependencies 或 CLI 版本推断运行组件版本。
 # Outside the repository package boundary: this loose module has no dsh.client.
@@ -239,7 +244,7 @@ else
   SPEC_FILTER="mount.e2e.ts"
 fi
 DSH_E2E_URL="$URL" DSH_E2E_WORKSPACE="$WORKSPACE_DIR" DSH_E2E_SEED_SESSION="$SEED_SESSION_ID" DSH_E2E_HOME="$DSH_HOME" \
-  pnpm exec playwright test "$SPEC_FILTER" annotations.e2e.ts core.e2e.ts running.e2e.ts side-selection.e2e.ts ${GREP_FILTER:+--grep "$GREP_FILTER"}
+  pnpm exec playwright test "$SPEC_FILTER" annotations.e2e.ts core.e2e.ts running.e2e.ts side-selection.e2e.ts diagnostics.e2e.ts ${GREP_FILTER:+--grep "$GREP_FILTER"}
 
 node - "$SCRATCH/host-inventory.json" "$SCRATCH/runtime-inventory.json" <<'JS'
 const fs = require('node:fs')

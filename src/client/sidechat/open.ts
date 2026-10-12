@@ -15,7 +15,7 @@
  * 草稿注入：目标 Tab 已 fork 且 input 机器可达 → 直接写机器草稿；
  * 否则写 meta.pendingDraft 移交面板（面板在 composer 就绪后应用并清除）。
  */
-import type { Context, SidebarRightService, SidebarTab } from '../host/contracts.ts'
+import type { Context, SidebarTab } from '../host/contracts.ts'
 import {
   SIDE_TAB_TYPE,
   appendDraftText,
@@ -32,15 +32,8 @@ import { readSideChatMeta, sideChatMetasOf, writeSideChatMeta } from './metaStor
 import { sideChatTitleOf } from './identity.ts'
 import { t } from '../locales.ts'
 
-/** 直连腿的原生右栏面（off-face 探测；无面 = 不在直连腿或面缺席降级）。 */
-export function sidebarRightOf(ctx: Context): SidebarRightService | undefined {
-  try {
-    const face = ctx.get('sidebarRight') as SidebarRightService | undefined
-    return typeof face?.openTab === 'function' ? face : undefined
-  } catch {
-    return undefined
-  }
-}
+import { sidebarRightOf } from '../host/sidebar.ts'
+export { sidebarRightOf } from '../host/sidebar.ts'
 
 /** 直连腿判定：directNativeLeg（BS ≥0.19 或 BS 缺席）+ 原生面已就位。 */
 function directLeg(ctx: Context): boolean {

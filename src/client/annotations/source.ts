@@ -7,6 +7,7 @@ export interface QuoteSource {
   sessionId: string
   surface: 'main' | 'side'
   streaming: boolean
+  key?: string
 }
 
 /** Explicit side bodies are the sole exception to the legacy sidebar exclusion. */
@@ -19,14 +20,14 @@ export function quoteSourceOf(node: Node, currentSessionId: string): QuoteSource
     const view = body.closest<HTMLElement>('[data-sidenote-chat-session]')
     const sessionId = view?.dataset.sidenoteChatSession
     if (!sessionId || anchor === null || view === null) return null
-    return { body, anchor, view, sessionId, surface: 'side', streaming: body.dataset.sidenoteStreaming === 'true' }
+    return { body, anchor, view, sessionId, surface: 'side', key: anchor.dataset.sidenoteMessageKey, streaming: body.dataset.sidenoteStreaming === 'true' }
   }
   if (element?.closest('[data-dsh-better-sidebar], [data-dsh-sidenote], [data-sidenote-chat-session]') !== null) return null
   return mainMessageOf(node, currentSessionId)
 }
 
 export function sourceKey(source: QuoteSource): string | undefined {
-  return source.surface === 'side' ? source.anchor.dataset.sidenoteMessageKey : source.anchor.dataset.chatAnchorKey
+  return source.key
 }
 
 export function sourceBodies(sessionId: string, surface: 'main' | 'side', anchorKey: string, currentSessionId: string): HTMLElement[] {

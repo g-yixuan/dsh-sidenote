@@ -1,17 +1,32 @@
 import type { Context, ConversationService, SessionInput } from './contracts.ts'
 
+export type CapabilityState = 'available' | 'unready' | 'unknown' | 'unavailable'
+export type InputReason = 'ready' | 'waitSession' | 'waitService' | 'waitInput' | 'unsupported' | 'readFailed'
+export interface InputProbe { state: CapabilityState; reason: InputReason; path: string; input?: SessionInput }
+
 /** One resolver for both composers; scope fixes the recipient before any async work. */
 export function resolveInput(ctx: Context, sessionId: string): SessionInput | undefined {
+  return probeInput(ctx, sessionId).input
+}
+
+/** Shape and real state read share the exact resolver used by both composers. */
+export function probeInput(ctx: Context, sessionId: string): InputProbe {
+  const path = 'sessions.scope → conversation.input.for'
   try {
+    if (sessionId === '') return { state: 'unready', reason: 'waitSession', path }
     const scope = ctx.sessions.scope(sessionId)
-    if (scope === undefined) return undefined
+    if (scope === undefined) return { state: 'unready', reason: 'waitSession', path }
     const service = ctx.get('conversation') as ConversationService | undefined
+    if (service == null) return { state: 'unready', reason: 'waitService', path }
+    if (typeof service.input?.for !== 'function') return { state: 'unavailable', reason: 'unsupported', path }
     const input = service?.input.for(scope)
+    if (input === undefined || input === null) return { state: 'unready', reason: 'waitInput', path }
     if (typeof input?.setDraft !== 'function' || typeof input.submit !== 'function'
-      || typeof input.state?.getSnapshot !== 'function' || typeof input.state.subscribe !== 'function') return undefined
-    return input
+      || typeof input.state?.getSnapshot !== 'function' || typeof input.state.subscribe !== 'function') return { state: 'unavailable', reason: 'unsupported', path }
+    if (typeof input.state.getSnapshot()?.draft !== 'string') return { state: 'unavailable', reason: 'unsupported', path }
+    return { state: 'available', reason: 'ready', path, input }
   } catch {
-    return undefined
+    return { state: 'unknown', reason: 'readFailed', path }
   }
 }
 

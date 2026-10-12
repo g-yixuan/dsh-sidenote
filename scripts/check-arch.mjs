@@ -83,6 +83,21 @@ for (const dir of [SRC, join(ROOT, 'tests')]) {
       }
     }
 
+    // 宿主边界：禁止反向依赖与主宿主选择器分散。
+    if (dir === SRC && /\.(ts|tsx)$/.test(file)) {
+      if (rel.startsWith('src/client/host/') && /from\s+['"]\.\.\/(?:annotate|sidechat)\//.test(src)) {
+        console.error(`[host 反向依赖] ${rel}: 宿主层不能依赖 feature 层`)
+        violations += 1
+      }
+      // Existing user-bubble protocol surgery remains one documented seam.
+      const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+      const hostDom = /['"][^'"\n]*\[data-(?:chat-flow-kind|chat-anchor-key|composer-(?:seat|card|input)|conversation-session)/
+      if (!rel.startsWith('src/client/host/') && rel !== 'src/client/annotate/bubble.ts' && hostDom.test(code)) {
+        console.error(`[宿主 DOM 分散] ${rel}: 主消息/composer 选择器应集中在 host/`)
+        violations += 1
+      }
+    }
+
     // 规则 3：行数信号（警告非阻断）。
     if (dir === SRC || rel.includes('e2e')) {
       const lines = src.split('\n').length

@@ -22,6 +22,8 @@ Each CI combination saves `test-results/host-inventory.json`, screenshots, and f
 
 0.2.0-rc.2 is an experimental combination and does not change the five existing required checks or the public support range. The weekly canary resolves latest once, runs the same core journey on that exact version, and saves evidence; failures remain visible in its job. Update the support table and required checks through a PR only after full candidate feature and relevant live-run validation.
 
+See the [compatibility policy](compatibility_EN.md) for runtime diagnosis, the bounded support window and admission. Frozen support keeps its data/delivery commitments; retirement needs a separate PR, never automatic removal by age or an unknown usage share.
+
 ## Issues and proposals
 
 Check for duplicates, sufficient reproduction, project relevance, and supported host versions. When information is missing, explain what is needed and suggest actionable reproduction steps.

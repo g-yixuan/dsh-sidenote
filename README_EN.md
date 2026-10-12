@@ -76,14 +76,11 @@ For local development, mount with `dsh plugin --profile web add link:<repo path>
 
 ## Compatibility
 
-| DSH | dsh-better-sidebar | Behavior |
-|---|---|---|
-| ≥ 0.1.5-rc.1 | not required | **direct on the DSH native right sidebar** |
-| ≤ 0.1.2-rc.x | ≤ 0.18.x (required) | legacy layout hosting |
+Exact combinations are listed in the [compatibility policy](docs/compatibility_EN.md): 0.1.7 is maintained, 0.1.5 has extended maintenance, three 0.1.1/0.1.2 legacy combinations are frozen with required validation, and 0.2.0-rc.2 remains experimental. Unlisted combinations are unverified; engine ranges do not imply that every version inside them is supported.
 
-The plugin degrades by capability when a host face is absent (never crashes the page); it coexists with dsh-better-sidebar natively (independent registrations, no dependency).
+The header's **Compatibility status** can inspect, recheck and export current integration state. Waiting services do not mean incompatibility. Restricted operations retain body, attachments and quotes. Unreadable host versions stay unknown; exports exclude user text, credentials and local paths.
 
-**Single-instance semantics (direct leg)**: the host allows one tab of a page-kind per pane — one side chat per session at a time (opening again focuses the live tab; after closing, `/side` reopens the recent one). Multi-instance returns with the host's `multiple` capability (0.1.6).
+Native hosting needs no BS; legacy hosts need their listed BS combination. Native page kinds allow one tab per pane, with multiple panes through splitting. Normal entries focus an existing tab; after closing, `/side` reopens the original child. Other BS coexistence combinations and future `multiple` behavior require independent validation.
 
 ## Design notes
 

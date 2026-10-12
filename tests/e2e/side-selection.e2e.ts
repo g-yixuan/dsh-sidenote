@@ -147,6 +147,7 @@ test('streaming side replies and cross-message selections stay ineligible; a sto
 
 test('whole side assistant selection keeps paragraphs, lists and code, excluding copy controls', async ({ page }) => {
   await prepareSeedPage(page)
+  const parentBefore = userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)
   const child = await openSideChat(page)
   const side = sideChatOf(page)
   const body = side.locator('[data-sidenote-quote-body]').filter({ hasText: 'full history snapshot' }).first()
@@ -171,5 +172,5 @@ test('whole side assistant selection keeps paragraphs, lists and code, excluding
   expect(record.text).not.toMatch(/Copy|Wrap lines/)
   await side.getByRole('button', { name: /^(Send|发送)$/ }).click()
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes(record.text))).toHaveLength(1)
-  expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!).some(text => text.includes('<quote>' + record.text))).toBe(false)
+  expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)).toEqual(parentBefore)
 })

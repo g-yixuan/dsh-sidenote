@@ -17,6 +17,8 @@ import type { ReactNode } from 'react'
 import { IconCheckOutline16, IconTrashOutline16 } from '../host/icons.ts'
 import type { Context } from '../host/contracts.ts'
 import { currentSessionIdOf } from '../host/currentSession.ts'
+import { hostDiagnostics } from '../host/probes.ts'
+import { probeInput } from '../host/input.ts'
 import { sideChatBridge, type SideChatBridge } from '../bridge.ts'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
@@ -78,6 +80,8 @@ export function AnnotateOverlay(props: OverlayProps): ReactNode {
 
 function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNode {
   useLocaleTick()
+  const diagnostics = hostDiagnostics(ctx)
+  useSyncExternalStore(diagnostics.subscribe, diagnostics.getSnapshot)
   const selectionState = useSyncExternalStore(
     useCallback((cb: () => void) => controller.subscribe(cb), [controller]),
     () => controller.getSnapshot(),
@@ -217,6 +221,7 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
       {selection !== null && editor === null && sideDraft === null && viewer === null && (
         <SelectionToolbar
           snapshot={selection}
+          addAvailable={selection.source.surface === 'side' || (probeInput(ctx, selection.sessionId).state === 'available' && hostDiagnostics(ctx).getSnapshot().capabilities.some(capability => capability.id === 'dock' && capability.state === 'available'))}
           sideChatAvailable={selection.source.surface === 'main' && sideChatBridge.current !== null}
           onAdd={() => { addToConversation(selection) }}
           onAsk={() => { askInSideChat(selection) }}
@@ -474,6 +479,7 @@ function SelectionToolbar(props: {
   sideChatAvailable: boolean
   onAdd: () => void
   onAsk: () => void
+  addAvailable: boolean
 }): ReactNode {
   useLocaleTick()
   if (!props.snapshot.source.body.isConnected || props.snapshot.range.getClientRects().length === 0) return null
@@ -498,6 +504,8 @@ function SelectionToolbar(props: {
       <button
         type="button"
         className={css.toolbarButton}
+        disabled={!props.addAvailable}
+        title={!props.addAvailable ? t('quoteWorkflowWaiting') : undefined}
         onMouseDown={(event) => { event.preventDefault() }}
         onClick={(event) => {
           event.preventDefault()
@@ -521,6 +529,7 @@ function SelectionToolbar(props: {
           {t('askInSideChat')}
         </button>
       )}
+      {!props.addAvailable && <span className={css.toolbarButton} role="status">{t('quoteWorkflowWaiting')}</span>}
     </div>
   )
 }

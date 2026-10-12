@@ -4,6 +4,7 @@
  * 时，于对话区右下浮出一张一次性提示卡：关闭或 12s 后自动消失，
  * localStorage 记账，终身只此一次。
  */
+import { hasConversationMessages } from '../host/dom.ts'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { t } from '../locales.ts'
@@ -29,9 +30,7 @@ function markHintSeen(): void {
 }
 
 /** 消息流已在屏（任意会话流节点）。 */
-function hasMessages(): boolean {
-  return document.querySelector('[data-chat-flow-kind]') !== null
-}
+const hasMessages = hasConversationMessages
 
 export function FirstUseHint(): ReactNode {
   useLocaleTick()

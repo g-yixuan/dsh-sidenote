@@ -3,6 +3,12 @@ import { chatSourceOf, retainSession } from './chat.ts'
 
 interface Message { seq?: number; id?: string; messageId?: string; kind?: string; content?: unknown }
 interface Inbox { 'next-turn'?: readonly Message[]; 'next-step'?: readonly Message[] }
+const confirmedSessions = new WeakSet<object>()
+
+/** Only an actual observed admission confirms this session generation. */
+export function hasConfirmedAcceptance(binding: SessionBinding | undefined): boolean {
+  return binding !== undefined && confirmedSessions.has(binding.session)
+}
 
 function inboxFaceOf(binding: SessionBinding): ObservableSnapshot<Inbox | undefined> | undefined {
   const session = binding.session as typeof binding.session & {
@@ -69,7 +75,7 @@ export async function prepareSubmission(ctx: Context, sessionId: string, input: 
       if (settled) return
       settled = true
       dispose()
-      if (error === undefined) resolve()
+      if (error === undefined) { confirmedSessions.add(binding!.session); resolve() }
       else reject(error)
     }
     const matches = (message: Message): boolean => {

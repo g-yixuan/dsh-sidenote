@@ -9,7 +9,7 @@
  * 运行时经 directNativeLeg(ctx) 分腿，消费点全部判空。
  */
 import type { Context } from './host/contracts.ts'
-import { probeHost } from './host/probes.ts'
+import { registerCompatibilityStatus } from './diagnostics/index.tsx'
 import { attachLocale, type LocaleServiceLike } from './locales.ts'
 import { createReflowStore } from './reflow.ts'
 import { createAnnotationStore } from './annotations/model.ts'
@@ -30,8 +30,7 @@ export function apply(ctx: Context): void {
   }, 'dsh-sidenote: native bridge')
   // 跟随 DSH 通用设置里的语言（locale.preference，Host-backed，实时切换）。
   attachLocale(ctx.locale as LocaleServiceLike | undefined)
-  // T2 off-face 全景探测：宿主升级后哪些能力降级了，开发者工具里一眼可见。
-  probeHost(ctx)
+  registerCompatibilityStatus(ctx)
   // 撤掉旧页面 meta 的活身份，避免把孤键当仍存活的 tab。宿主真的恢复
   // tab 时，由其 navigation revision 与挂载记录认领原 child。
   sweepOrphanedSideChatMeta()

@@ -12,14 +12,16 @@
  * provide materialization 触发创建，「从未 staged 的会话 scope」可能没有
  * resident shell —— 任何一步失败都降级，绝不崩面板。
  */
-import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { Context, SessionFace, SessionInput } from '../host/contracts.ts'
 import type { AnnotationStore } from '../annotations/model.ts'
 import { submitAnnotations } from '../annotations/send.ts'
-import { resolveInput, readInputDraft, inputAttachmentIds, removeInputAttachment } from '../host/input.ts'
+import { resolveInput, probeInput, readInputDraft, inputAttachmentIds, removeInputAttachment } from '../host/input.ts'
 export { readInputDraft } from '../host/input.ts'
 import { appendDraftText } from './model.ts'
 import { attachFiles, resolveAttachmentApis } from './composer/attach.ts'
+import { hostDiagnostics } from '../host/probes.ts'
+import { t } from '../locales.ts'
 
 const NOOP_UNSUBSCRIBE = (): void => {}
 
@@ -71,10 +73,12 @@ export interface Composer {
  * 快照前缀），供面板捕获首条消息主题为 topic；是否首条的判定归调用方。
  */
 export function useComposer(ctx: Context, session: SessionFace | undefined, childId: string | undefined, options?: { annotations?: AnnotationStore; firstSendPrefix?: () => string | null; onSubmitText?: (body: string) => void; onAccepted?: () => void }): Composer {
+  const diagnostics = hostDiagnostics(ctx)
+  const hostState = useSyncExternalStore(diagnostics.subscribe, diagnostics.getSnapshot)
   // 同一 child 的 retained Session 就绪后必须重解析，避免把初次缺席缓存为永久降级。
   const input = useMemo(
     () => (childId === undefined ? null : resolveSessionInput(ctx, childId)),
-    [ctx, childId, session],
+    [ctx, childId, session, hostState],
   )
 
   const machineState = useSyncExternalStore(
@@ -85,14 +89,32 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
     () => (input === null ? null : input.state.getSnapshot()),
   )
   const machineDraft = machineState?.draft ?? ''
-  const [localDraft, setLocalDraft] = useState('')
+  const [fallbackDraft, setFallbackDraft] = useState<{ id?: string; text: string }>({ id: childId, text: '' })
+  const localDraft = fallbackDraft.id === childId ? fallbackDraft.text : ''
+  const setLocalDraft = (update: string | ((text: string) => string)): void => {
+    setFallbackDraft(current => ({ id: childId, text: typeof update === 'string' ? update : update(current.id === childId ? current.text : '') }))
+  }
   const [sendError, setSendError] = useState<string | null>(null)
+  const lastNativeDraft = useRef<{ id?: string; text: string; hasAttachments: boolean } | undefined>(undefined)
+  if (input !== null) lastNativeDraft.current = { id: childId, text: machineDraft, hasAttachments: inputAttachmentIds(input).length > 0 }
+  useEffect(() => {
+    if (input === null) {
+      const previous = lastNativeDraft.current
+      if (previous !== undefined && previous.id === childId && previous.text !== '' && localDraft === '') setLocalDraft(previous.text)
+      return
+    }
+    if (localDraft === '' || machineState?.phase !== 'plain') return
+    if (machineDraft === '') input.setDraft(localDraft)
+    else if (machineDraft !== localDraft) { setSendError(t('draftRecoveryConflict')); return }
+    setLocalDraft('')
+    setSendError(null)
+  }, [input, childId, localDraft, machineDraft, machineState?.phase])
   useSyncExternalStore(
     useCallback((notify: () => void) => options?.annotations?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [options?.annotations]),
     () => options?.annotations?.getSnapshot() ?? 0,
   )
 
-  const draft = input === null ? localDraft : machineDraft
+  const draft = input === null || localDraft !== '' ? localDraft : machineDraft
 
   // 附件 API（off-face 探测；一次解析，会话生命周期内不变）。
   const apis = useMemo(() => resolveAttachmentApis(ctx, childId), [ctx, childId])
@@ -119,21 +141,28 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
 
   const setDraft = useCallback(
     (text: string): void => {
-      if (input === null) setLocalDraft(text)
+      if (input === null || localDraft !== '') setLocalDraft(text)
       else input.setDraft(text)
     },
-    [input],
+    [input, localDraft, childId],
   )
 
   const appendDraft = useCallback(
     (text: string): void => {
-      if (input === null) setLocalDraft(d => appendDraftText(d, text))
+      if (input === null || localDraft !== '') setLocalDraft(d => appendDraftText(d, text))
       else input.setDraft(appendDraftText(readInputDraft(input), text))
     },
-    [input],
+    [input, localDraft, childId],
   )
 
   const submit = useCallback((mode?: 'queue' | 'steer'): void => {
+    if (input !== null && childId !== undefined) {
+      const current = probeInput(ctx, childId)
+      if (current.input === undefined) {
+        setSendError(t(current.state === 'unavailable' ? 'inputUnavailable' : 'inputWaiting'))
+        return
+      }
+    }
     const body = draft.trim()
     const store = options?.annotations
     const active = childId === undefined ? [] : store?.listActive(childId) ?? []
@@ -141,6 +170,7 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
     if (body === '' && active.length === 0 && (input === null || inputAttachmentIds(input).length === 0)) return
     const prefix = options?.firstSendPrefix?.() ?? null
     const text = prefix === null ? body : `${prefix}\n\n${body}`
+    if (input !== null && localDraft !== '') { setSendError(t('draftRecoveryConflict')); return }
     if (input !== null) {
       if (store !== undefined && childId !== undefined && (active.length > 0 || prefix !== null)) {
         const target = childId
@@ -157,29 +187,37 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
       }
       return
     }
-    if (active.length > 0) { setSendError('宿主输入能力尚未就绪；正文和注释已保留'); return }
+    const previous = lastNativeDraft.current
+    if (active.length > 0 || (previous !== undefined && previous.id === childId && previous.hasAttachments)) {
+      setSendError(t(childId !== undefined && probeInput(ctx, childId).state === 'unavailable' ? 'inputUnavailable' : 'inputWaiting'))
+      return
+    }
     if (session === undefined) return
     setLocalDraft('')
     setSendError(null)
+    const restoreLocalBody = (): void => {
+      setFallbackDraft(current => current.id === childId && current.text === '' ? { ...current, text: body } : current)
+    }
     session.prompt([{ type: 'text', text }], mode ?? 'queue').then((result) => {
       // RpcResult 直接 ok 联合（无 .result 包装，镜像已收窄——见 contracts.ts）。
       if (result.ok === false) {
         // 仅在用户未另行输入时回填，不盖掉新草稿。
-        setLocalDraft(d => (d === '' ? text : d))
+        restoreLocalBody()
         setSendError(result.error?.message ?? '发送失败')
       } else { options?.onSubmitText?.(body); options?.onAccepted?.() }
     }).catch((error: unknown) => {
-      setLocalDraft(d => (d === '' ? text : d))
+      restoreLocalBody()
       setSendError(error instanceof Error ? error.message : '发送失败')
     })
-  }, [draft, input, session, options, childId, ctx])
+  }, [draft, input, session, options, childId, ctx, localDraft])
 
   return {
     machine: input !== null,
     draft,
     sendError,
     canSubmit: (draft.trim() !== '' || (childId !== undefined && (options?.annotations?.countActive(childId) ?? 0) > 0) || (input !== null && inputAttachmentIds(input).length > 0))
-      && (childId === undefined || options?.annotations?.getSubmission(childId).pending !== true),
+      && (childId === undefined || options?.annotations?.getSubmission(childId).pending !== true)
+      && !(input !== null && localDraft !== ''),
     setDraft,
     appendDraft,
     submit,

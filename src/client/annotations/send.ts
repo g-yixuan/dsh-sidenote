@@ -40,7 +40,9 @@ export async function submitAnnotations(options: {
     rollbackInputPrefix(input, prefix)
     const text = error instanceof Error ? error.message : String(error)
     store.setSubmission(sessionId, { pending: false, error: text })
-    input.notify('error', text)
+    // The shared chip already exposes this failure; a cosmetic host notice
+    // must not reject the completion promise or lose the retained batch.
+    try { if (typeof input.notify === 'function') input.notify('error', text) } catch { /* Shared error remains visible. */ }
     return false
   } finally { receipt?.dispose() }
 }

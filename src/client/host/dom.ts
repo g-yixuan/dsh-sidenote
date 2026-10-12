@@ -13,9 +13,10 @@ export function mainMessageOf(node: Node, currentSessionId: string) {
   const conversation = body.closest<HTMLElement>('[data-conversation-session]')
   const sessionId = conversation?.dataset.conversationSession ?? currentSessionId
   if (sessionId === '') return null
+  const anchor = body.closest<HTMLElement>('[data-chat-anchor-key]') ?? body
   return {
     body, view: conversation ?? document.body,
-    anchor: body.closest<HTMLElement>('[data-chat-anchor-key]') ?? body,
+    anchor, key: anchor.dataset.chatAnchorKey,
     sessionId, surface: 'main' as const,
     streaming: body.hasAttribute('data-streaming') || body.querySelector('[data-streaming]') !== null,
   }
@@ -24,7 +25,7 @@ export function mainMessageOf(node: Node, currentSessionId: string) {
 export function mainAnchorBodies(sessionId: string, anchorKey: string, currentSessionId: string): HTMLElement[] {
   return [...document.querySelectorAll<HTMLElement>(MAIN_ASSISTANT)].filter(body => {
     const source = mainMessageOf(body, currentSessionId)
-    return source?.sessionId === sessionId && source.anchor.dataset.chatAnchorKey === anchorKey
+    return source?.sessionId === sessionId && source.key === anchorKey
       && body.closest('[data-dsh-better-sidebar], [data-sidenote-chat-session]') === null
   })
 }
@@ -51,4 +52,34 @@ export function mainComposerOf(node: Element): HTMLElement | null { return node.
 
 export function focusMainComposer(view: HTMLElement): void {
   view.querySelector<HTMLElement>('[data-composer-seat] [data-composer-input], [data-composer-seat] textarea')?.focus()
+}
+
+/** 主 composer 的宿主容器（侧边面板 textarea 不在其中，天然不串）。 */
+export function composerSeat(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('[data-composer-seat]')
+}
+
+/** 发送按钮 = [data-composer-card] 内 DOM 序最后一个 button（仅 click 路径用，
+ *  且只在非运行态作为识别面——运行态主按钮变身「停止」，整个 click 路径不拦）。 */
+export function findSendButtonInCard(): HTMLButtonElement | null {
+  const card = document.querySelector<HTMLElement>('[data-composer-card]')
+  if (card === null) return null
+  const buttons = card.querySelectorAll('button')
+  const last = buttons[buttons.length - 1]
+  return last instanceof HTMLButtonElement ? last : null
+}
+
+
+export function isMainComposerInput(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement
+    && (target.closest('[data-composer-input]') !== null || target instanceof HTMLTextAreaElement)
+    && mainComposerOf(target) !== null
+}
+
+export function composerHasMenu(seat: HTMLElement): boolean {
+  return seat.querySelector('[role="listbox"], [aria-expanded="true"]') !== null
+}
+
+export function hasConversationMessages(): boolean {
+  return document.querySelector('[data-chat-flow-kind]') !== null
 }

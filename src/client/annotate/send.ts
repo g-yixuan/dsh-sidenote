@@ -5,24 +5,12 @@ import type { Context, SessionId, SessionInput } from '../host/contracts.ts'
 import { resolveInput, inputAttachmentIds } from '../host/input.ts'
 export { resolveInput } from '../host/input.ts'
 import { currentSessionIdOf } from '../host/currentSession.ts'
+import { t } from '../locales.ts'
 import { submitAnnotations } from '../annotations/send.ts'
 import type { AnnotationStore } from '../annotations/model.ts'
 import { buildReflowBlock, tryInjectReflows, type ReflowStore } from '../reflow.ts'
 
-/** 主 composer 的宿主容器（侧边面板 textarea 不在其中，天然不串）。 */
-function composerSeat(): HTMLElement | null {
-  return document.querySelector<HTMLElement>('[data-composer-seat]')
-}
-
-/** 发送按钮 = [data-composer-card] 内 DOM 序最后一个 button（仅 click 路径用，
- *  且只在非运行态作为识别面——运行态主按钮变身「停止」，整个 click 路径不拦）。 */
-function findSendButtonInCard(): HTMLButtonElement | null {
-  const card = document.querySelector<HTMLElement>('[data-composer-card]')
-  if (card === null) return null
-  const buttons = card.querySelectorAll('button')
-  const last = buttons[buttons.length - 1]
-  return last instanceof HTMLButtonElement ? last : null
-}
+import { composerSeat, findSendButtonInCard, isMainComposerInput, mainComposerOf, composerHasMenu } from '../host/dom.ts'
 
 export function installSendInterceptor(ctx: Context, store: AnnotationStore, reflow: ReflowStore): () => void {
   /** 重入/连按护栏：事务进行中吞掉命中识别面的 Enter/点击（不重复驱动）。 */
@@ -79,7 +67,10 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     const reflows = reflow.list(sessionId)
     if (active.length === 0 && reflows.length === 0) return false
     const input = resolveInput(ctx, sessionId)
-    if (input === undefined) return false
+    if (input === undefined) {
+      store.setSubmission(sessionId, { pending: false, error: t('inputUnavailable') })
+      return true
+    }
     const snap = input.state.getSnapshot()
     const draft = snap.draft
     if (draft.trimStart().startsWith('/')) return false
@@ -88,8 +79,7 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     // 弹窗 DOM 守卫：@引用 listbox、「+」菜单展开等。
     const seat = composerSeat()
     if (seat === null) return false
-    if (seat.querySelector('[role="listbox"]') !== null) return false
-    if (seat.querySelector('[aria-expanded="true"]') !== null) return false
+    if (composerHasMenu(seat)) return false
 
     // 同步拦截成立，异步执行（inject 的有界等待不能在同步手势里）。
     committingSessions.add(sessionId)
@@ -104,10 +94,7 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     // 重写为 Lexical contenteditable（div[data-composer-input]，Enter 走
     // Lexical command 层）。识别面双兼容：新锚点 closest 优先，旧 textarea
     // 回退；锚点 closest 天然覆盖内层 chip span/文本节点。
-    const inSeat = target instanceof HTMLElement
-      && (target.closest('[data-composer-input]') !== null || target instanceof HTMLTextAreaElement)
-      && target.closest('[data-composer-seat]') !== null
-    if (!inSeat) return
+    if (!isMainComposerInput(target)) return
     if (event.isComposing || event.keyCode === 229) return
     if (committingSessions.has(currentSessionId())) {
       if (event.key === 'Enter') {
@@ -125,7 +112,7 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
   const onClick = (event: MouseEvent): void => {
     const target = event.target
     if (!(target instanceof Element)) return
-    const seat = target.closest('[data-composer-seat]')
+    const seat = mainComposerOf(target)
     if (seat === null) return
     const button = target.closest('button')
     // 尾随 click：必须先于按钮识别吞掉（见 armSwallow），否则宿主按「停止」处理。

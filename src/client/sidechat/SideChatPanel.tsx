@@ -12,6 +12,7 @@
  * 暂停订阅。非 staged 会话需 off-face open() 开窗（lifecycle.openSessionWindow），
  * 否则消息流永远为空（client-runtime 只为 staged 会话开窗的已知偏差）。
  */
+import { focusMainComposer } from '../host/dom.ts'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { Context, SessionFace, TabComponentProps } from '../host/contracts.ts'
 import { useComposer, type Composer } from './composer.ts'
@@ -284,9 +285,9 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   const titleRef = useRef(tab.title)
   titleRef.current = tab.title
   useEffect(() => {
-    // 后悔药自愈（native）：重挂载说明上次卸载是切会话/HMR 而非关闭，清掉误记。
+    // 恢复到同一子会话后，清掉刷新或原生卸载留下的恢复记录。
     const metaNow = parseSideChatMeta(metaRef.current)
-    if (directNativeLeg(ctx) && metaNow.childId !== undefined) {
+    if (metaNow.childId !== undefined) {
       dropClosedSideChat(scope.sessionId, metaNow.childId)
     }
     const dispose = registerLiveSideChat(
@@ -308,7 +309,6 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
       () => statusRef.current,
     )
     const remember = (): void => {
-      if (!directNativeLeg(ctx)) return
       const m = parseSideChatMeta(metaRef.current)
       if (m.childId === undefined || m.parentSessionId === undefined) return
       recordClosedSideChat(m.parentSessionId, {
@@ -317,8 +317,8 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
         ...(m.topic !== undefined ? { topic: m.topic } : {}), closedAt: Date.now(),
       })
     }
-    // Browser refresh does not run React unmount; preserve the same child for
-    // the existing recent-side-chat menu instead of silently forking a new one.
+    // Browser refresh may lose either host's layout and does not run React
+    // unmount. Preserve the child for the existing recent-side-chat menu.
     window.addEventListener('pagehide', remember)
     return () => {
       dispose()
@@ -326,7 +326,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
       // （tab-adapter 卸载只 records.drop），以面板卸载补记；误记由挂载时的
       // drop 自愈。legacy 由 descriptor.onClose 负责，不双写。
       window.removeEventListener('pagehide', remember)
-      remember()
+      if (directNativeLeg(ctx)) remember()
     }
   }, [scope.sessionId, tab.id, ctx])
 
@@ -358,8 +358,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
       const inSide = rootRef.current?.contains(document.activeElement) === true
       if (inSide) {
         // 回主：聚焦主 composer（0.1.1 textarea / 0.1.2 contenteditable 双兼容）。
-        const main = document.querySelector<HTMLElement>('[data-composer-seat] textarea, [data-composer-seat] [contenteditable]')
-        main?.focus()
+        focusMainComposer(document.body)
       } else {
         rootRef.current?.querySelector('textarea')?.focus()
       }
