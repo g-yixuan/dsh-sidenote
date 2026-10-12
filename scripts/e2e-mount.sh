@@ -32,19 +32,11 @@ command -v node >/dev/null 2>&1 || die "未找到 node"
 command -v pnpm >/dev/null 2>&1 || die "未找到 pnpm"
 
 # DSH_CMD 允许是带参数的命令串（矩阵档钉版：`npx -y --package
-# @deepseek-ai/dsh@0.1.2-rc.1 dsh`）。command -v 对多词串必然失败并触发
-# 下面的 npx 回退——回退会丢掉版本钉、静默改测 latest（dist-tag 漂移后
-# 矩阵档就测错宿主；今天 latest 恰为 0.1.2-rc.1 纯属巧合），所以只校验
-# 首个词可执行，参数原样透传给后续 `$DSH_CMD …` 调用。
+# @deepseek-ai/dsh@0.1.2-rc.1 dsh`）。command -v 对多词串会误判缺失；
+# 回退会丢掉版本钉、静默改测 latest，所以只校验
+# 首个词可执行，参数原样透传给后续 `$DSH_CMD …` 调用；缺失即失败。
 DSH_BIN="${DSH_CMD%% *}"
-if ! command -v "$DSH_BIN" >/dev/null 2>&1; then
-  if command -v npx >/dev/null 2>&1; then
-    say "PATH 上无 ${DSH_BIN}，回退 npx -y --package @deepseek-ai/dsh"
-    DSH_CMD="npx -y --package @deepseek-ai/dsh dsh"
-  else
-    die "未找到 $DSH_BIN 或 npx"
-  fi
-fi
+command -v "$DSH_BIN" >/dev/null 2>&1 || die "未找到 $DSH_BIN；不会回退到另一个宿主版本"
 
 if [ -z "$TARBALL" ]; then
   # 按 package.json 版本精确选 tarball——仓库根可能残留历史版本的
@@ -67,6 +59,18 @@ say "scratch home: ${DSH_HOME}"
 SERVER_PID=""
 cleanup() {
   local code=$?
+  if [ -f "$SCRATCH/host-inventory.json" ]; then
+    if ! node - "$SCRATCH/host-inventory.json" "$SCRATCH/runtime-inventory.json" <<'JS'
+const fs = require('node:fs')
+const [file, runtimeFile] = process.argv.slice(2)
+const inventory = JSON.parse(fs.readFileSync(file, 'utf8'))
+if (fs.existsSync(runtimeFile)) Object.assign(inventory, JSON.parse(fs.readFileSync(runtimeFile, 'utf8')))
+fs.writeFileSync(file, JSON.stringify(inventory, null, 2) + '\n')
+JS
+    then code=1; fi
+    mkdir -p "$ROOT/test-results"
+    cp "$SCRATCH/host-inventory.json" "$ROOT/test-results/host-inventory.json"
+  fi
   if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
     kill "$SERVER_PID" 2>/dev/null || true
     wait "$SERVER_PID" 2>/dev/null || true
@@ -106,6 +110,10 @@ EOF
 # 老宿主的运行依赖放到 profile 自己的解析路径：0.1.1 的 HMR 必须保留
 # registerConfig；0.1.5 的 sandbox-local 仅列在 CLI devDependencies 中。
 DSH_VERSION="$($DSH_CMD --version)"
+if [ -n "${DSH_EXPECTED_VERSION:-}" ] && [ "$DSH_VERSION" != "$DSH_EXPECTED_VERSION" ]; then
+  die "请求宿主 $DSH_EXPECTED_VERSION，实际 CLI $DSH_VERSION"
+fi
+say "实际 CLI：$DSH_VERSION"
 node - "$PROFILE_DIR/package.json" "$DSH_VERSION" <<'JS'
 const fs = require('node:fs')
 const file = process.argv[2]
@@ -165,6 +173,24 @@ node -e '
 ' "$PROFILE_DIR/package.json" "$BS_VERSION"
 say "挂载已注册（BS_VERSION=${BS_VERSION}）"
 
+# 只读 inventory fixture 从真实 host registry 的 bundle 路径读取版本。
+# 不从本仓 devDependencies 或 CLI 版本推断运行组件版本。
+# Outside the repository package boundary: this loose module has no dsh.client.
+cp "$SCRIPT_DIR/../tests/e2e/runtime-inventory.mjs" "$SCRATCH/runtime-inventory.mjs"
+node - "$PROFILE_DIR/cordis.patch.yml" "$SCRATCH/runtime-inventory.mjs" "$SCRATCH/runtime-inventory.json" <<'JS'
+const fs = require('node:fs')
+const [file, fixture, output] = process.argv.slice(2)
+const old = fs.readFileSync(file, 'utf8')
+fs.writeFileSync(file, (old.trim() === '[]' ? '' : old) + '\n- insert:\n  - id: sidenote-e2e-inventory\n    name: ' + JSON.stringify(fixture) + '\n    config:\n      output: ' + JSON.stringify(output) + '\n')
+JS
+mkdir -p "$ROOT/test-results"
+node - "$SCRATCH/host-inventory.json" "${DSH_EXPECTED_VERSION:-}" "$DSH_VERSION" "$BS_VERSION" "$ROOT/package.json" "$ROOT/lib/client.js" <<'JS'
+const fs = require('node:fs')
+const { createHash } = require('node:crypto')
+const [file, expected, actualHost, bs, manifest, client] = process.argv.slice(2)
+fs.writeFileSync(file, JSON.stringify({ requestedHost: expected || null, actualHost, requestedBetterSidebar: bs === 'none' ? null : bs, requestedPlugin: JSON.parse(fs.readFileSync(manifest, 'utf8')).version, expectedClientSha256: createHash('sha256').update(fs.readFileSync(client)).digest('hex') }, null, 2) + '\n')
+JS
+
 # 步骤 3：伪造含已完成 turn 的会话（fork 路径无需模型凭证）
 SEED_SESSION_ID="$(node "$SCRIPT_DIR/seed-session.mjs" "$DSH_HOME" "$WORKSPACE_DIR")"
 say "伪造会话: $SEED_SESSION_ID"
@@ -186,7 +212,7 @@ URL=""
 for _ in $(seq 1 120); do
   if ! kill -0 "$SERVER_PID" 2>/dev/null; then
     echo "=== dsh web 提前退出，日志尾部 ===" >&2
-    tail -30 "$WEB_LOG" >&2 || true
+    tail -30 "$WEB_LOG" | sed -E 's/(\?token=)[A-Za-z0-9_-]+/\1[redacted]/g' >&2 || true
     exit 1
   fi
   if URL="$(grep -oE 'dsh web: http://127\.0\.0\.1:[0-9]+[^ ]*' "$WEB_LOG" | head -1 | awk '{print $3}')" && [ -n "$URL" ]; then
@@ -194,8 +220,8 @@ for _ in $(seq 1 120); do
   fi
   sleep 1
 done
-[ -n "$URL" ] || { echo "=== 120s 内未等到 dsh web 就绪，日志尾部 ===" >&2; tail -40 "$WEB_LOG" >&2 || true; exit 1; }
-say "dsh web 就绪：${URL}（pid ${SERVER_PID}）"
+[ -n "$URL" ] || { echo "=== 120s 内未等到 dsh web 就绪，日志尾部 ===" >&2; tail -40 "$WEB_LOG" | sed -E 's/(\?token=)[A-Za-z0-9_-]+/\1[redacted]/g' >&2 || true; exit 1; }
+say "dsh web 就绪：${URL%%\?*}（pid ${SERVER_PID}）"
 
 # 工作区注册（workspace.create）不再在这里 curl：0.1.2 起宿主要求
 # ① 先用启动 token 换 cookie、② 点式端点改为斜杠 `/api/workspace/create`
@@ -210,7 +236,21 @@ if [ "$BS_VERSION" = "none" ]; then
 else
   SPEC_FILTER="mount.e2e.ts"
 fi
-DSH_E2E_URL="$URL" DSH_E2E_WORKSPACE="$WORKSPACE_DIR" DSH_E2E_SEED_SESSION="$SEED_SESSION_ID" \
-  pnpm exec playwright test "$SPEC_FILTER" annotations.e2e.ts ${GREP_FILTER:+--grep "$GREP_FILTER"}
+DSH_E2E_URL="$URL" DSH_E2E_WORKSPACE="$WORKSPACE_DIR" DSH_E2E_SEED_SESSION="$SEED_SESSION_ID" DSH_E2E_HOME="$DSH_HOME" \
+  pnpm exec playwright test "$SPEC_FILTER" annotations.e2e.ts core.e2e.ts ${GREP_FILTER:+--grep "$GREP_FILTER"}
 
-say "通过：dsh-sidenote 挂载到真实 DSH 后无头渲染未崩溃"
+node - "$SCRATCH/host-inventory.json" "$SCRATCH/runtime-inventory.json" <<'JS'
+const fs = require('node:fs')
+const [file, runtimeFile] = process.argv.slice(2)
+const inventory = JSON.parse(fs.readFileSync(file, 'utf8'))
+Object.assign(inventory, JSON.parse(fs.readFileSync(runtimeFile, 'utf8')))
+for (const id of ['dsh-sidenote', '@deepseek-ai/dsh-client-ui-conversation']) {
+  if (!inventory.runtimePackages[id]?.version) throw new Error('Active host version missing: ' + id)
+}
+if (inventory.runtimePackages['dsh-sidenote'].version !== inventory.requestedPlugin) throw new Error('Mounted plugin version mismatch')
+if (inventory.runtimePackages['dsh-sidenote'].clientSha256 !== inventory.expectedClientSha256) throw new Error('Mounted plugin is not the current build')
+if (inventory.requestedBetterSidebar !== null && inventory.runtimePackages['dsh-better-sidebar']?.version !== inventory.requestedBetterSidebar) throw new Error('Mounted better-sidebar version mismatch')
+fs.writeFileSync(file, JSON.stringify(inventory, null, 2) + '\n')
+JS
+
+say "通过：真实宿主 journey；版本记录在 test-results/host-inventory.json"

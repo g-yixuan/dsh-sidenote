@@ -1,47 +1,9 @@
 import { test, expect, type Page } from '@playwright/test'
-import { createHostApi, gotoPage, hostRpc } from './host'
+import { prepareSeedPage, registerSeedWorkspace } from './journey'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-/** 关掉 onboarding 遮挡（Continue / 稍后配置），轮询至多轮（遮罩会分层出现）。 */
-async function dismissOnboarding(page: Page): Promise<void> {
-  // 先等首个按钮出现（notice 异步渲染，不 poll 会在它到达前就退出）。
-  try {
-    await expect
-      .poll(() => page.getByRole('button', { name: /^(Continue|Configure later|继续|稍后配置|稍后再说)$/ }).count(), { timeout: 30_000 })
-      .toBeGreaterThan(0)
-  } catch {
-    return // 没有 onboarding——直接返回。
-  }
-  for (let round = 0; round < 10; round++) {
-    let dismissed = false
-    for (const name of ['Continue', 'Configure later', '继续', '稍后配置', '稍后再说']) {
-      const button = page.getByRole('button', { name, exact: true }).first()
-      if ((await button.count()) === 0) continue
-      try {
-        // force：遮罩与被遮按钮同源（onboarding 自己）时普通 click 的
-        // actionability 检查会卡死——force 直接派发。
-        await button.click({ timeout: 4_000, force: true })
-        dismissed = true
-        await page.waitForTimeout(1_000)
-      } catch { /* 被上层遮挡时下轮再试 */ }
-    }
-    if (!dismissed) break
-  }
-  // 遮罩兜底：等到没有任何 mask 拦在页面上（或超时继续——后续断言会暴露）。
-  await page.waitForFunction(
-    () => document.querySelector('[class*="_mask_"]') === null,
-    undefined,
-    { timeout: 15_000 },
-  ).catch(() => {})
-}
-
-test.beforeAll(async () => {
-  const workspace = process.env.DSH_E2E_WORKSPACE
-  if (!workspace) throw new Error('DSH_E2E_WORKSPACE is not set — run via scripts/e2e-mount.sh')
-  const api = await createHostApi()
-  await hostRpc(api, 'workspace.create', { path: workspace })
-})
+test.beforeAll(registerSeedWorkspace)
 
 const OVERLAY = '[data-dsh-sidenote]'
 const STORAGE_KEY = `dsh-sidenote:annotations:v1:${process.env.DSH_E2E_SEED_SESSION}`
@@ -82,24 +44,7 @@ async function addQuote(page: Page): Promise<void> {
 }
 
 test.describe('annotation editor lifecycle', () => {
-  test.beforeEach(async ({ page }) => {
-    await gotoPage(page)
-    await expect(page.locator('#root > *')).not.toHaveCount(0, { timeout: 30_000 })
-    await dismissOnboarding(page)
-    const open = page.getByRole('button', { name: /^(Open sidebar|打开侧栏)$/ }).first()
-    if (await open.isVisible()) await open.click()
-    // Native hosts can keep forked children in the list with the parent's title.
-    // Select the seeded identity so a preceding side-chat test cannot redirect us.
-    const seedRow = page.locator(`[role="treeitem"][data-row-key="session:${process.env.DSH_E2E_SEED_SESSION}"]`)
-    const row = await seedRow.count() > 0 ? seedRow : page.getByRole('treeitem').filter({ hasText: 'Side chat plugin review' }).first()
-    const title = (await row.count()) > 0 ? row.getByText('Side chat plugin review', { exact: true }).first() : page.getByText('Side chat plugin review').first()
-    await title.click()
-    const conversation = page.locator('[data-conversation-session]').first()
-    if (await conversation.count() > 0) {
-      await expect(conversation).toHaveAttribute('data-conversation-session', process.env.DSH_E2E_SEED_SESSION!)
-    }
-    await expect(page.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()).toBeAttached({ timeout: 30_000 })
-  })
+  test.beforeEach(async ({ page }) => { await prepareSeedPage(page) })
 
   test('side-chat note survives outside click; empty note saves and Escape discards', async ({ page }) => {
     const overlay = page.locator(OVERLAY)

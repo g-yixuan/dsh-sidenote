@@ -44,7 +44,7 @@ Interaction, session orchestration, and host compatibility changes need relevant
 
 ```bash
 pnpm exec playwright install chromium
-BS_VERSION=none DSH_CMD="npx -y --package @deepseek-ai/dsh@0.1.7-rc.2 dsh" pnpm test:mount
+BS_VERSION=none DSH_EXPECTED_VERSION=0.1.7-rc.2 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.1.7-rc.2 dsh" pnpm test:mount
 ```
 
 The script uses a temporary DSH_HOME. The [CI matrix](.github/workflows/ci.yml) defines tested combinations. CI covers legacy and direct hosts; locally, start with the combinations affected by your change.

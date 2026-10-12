@@ -44,6 +44,7 @@ jobs:
   # (Playwright Chromium) through the journey lanes. No API key needed — the
   # seeded session jsonl makes the fork path work keyless.
   plugin-mount:
+    name: plugin-mount (${{ matrix.dsh-version }}, ${{ matrix.bs-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # 矩阵钉版（版本韧性架构第四节；「peer 钉版」在 DSH 插件生态无 npm 落点，
@@ -72,10 +73,15 @@ jobs:
             bs-version: 'none'
           - dsh-version: '0.1.7-rc.2'
             bs-version: 'none'
+          # Candidate only; the five existing required checks stay unchanged.
+          - dsh-version: '0.2.0-rc.2'
+            bs-version: 'none'
+            experimental: true
     continue-on-error: ${{ matrix.experimental || false }}
     env:
       DSH_TELEMETRY_DISABLED: '1'
       BS_VERSION: ${{ matrix.bs-version }}
+      DSH_EXPECTED_VERSION: ${{ matrix.dsh-version }}
     steps:
       - uses: actions/checkout@v7
 
@@ -98,11 +104,11 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Mount + headless-render smoke
+      - name: Mount and run host journeys
         run: pnpm test:mount
 
-      - name: Upload Playwright report on failure
-        if: failure()
+      - name: Upload host inventory and journey evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-dsh-${{ matrix.dsh-version }}-bs-${{ matrix.bs-version }}
@@ -128,17 +134,32 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Report latest host versions
+      - name: Resolve latest once
+        id: host
         run: |
-          echo "dsh latest: $(npm view @deepseek-ai/dsh version)"
-          echo "better-sidebar latest: $(npm view dsh-better-sidebar version)"
-      - name: Install dsh CLI (latest)
-        run: npm install -g @deepseek-ai/dsh@latest
+          version=$(npm view @deepseek-ai/dsh dist-tags.latest)
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Canary host: $version"
+      - name: Install resolved dsh CLI
+        env:
+          DSH_CANDIDATE: ${{ steps.host.outputs.version }}
+        run: npm install -g "@deepseek-ai/dsh@$DSH_CANDIDATE"
       - name: Build and pack the npm tarball
         run: pnpm build && pnpm pack
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
-      - name: Canary mount smoke (latest hosts)
+      - name: Canary host journeys
         env:
           BS_VERSION: none
+          DSH_EXPECTED_VERSION: ${{ steps.host.outputs.version }}
         run: pnpm test:mount
+      - name: Upload canary evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-canary-evidence
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore

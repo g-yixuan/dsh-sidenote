@@ -23,7 +23,8 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { test, expect, type Page } from '@playwright/test'
-import { createHostApi, gotoPage, hostRpc } from './host'
+import { gotoPage } from './host'
+import { dismissOnboarding, openSeedSession, registerSeedWorkspace } from './journey'
 
 const PLUGIN_CONSOLE = /dsh-sidenote|Unhandled/
 
@@ -36,32 +37,6 @@ async function dumpStep(page: Page, name: string): Promise<void> {
     writeFileSync(`test-results/steps/${name}.yml`, snapshot)
   } catch (error) {
     console.warn(`[e2e] dumpStep ${name} failed:`, error)
-  }
-}
-
-/** Dismiss keyless-boot onboarding takeovers (Continue / Configure later). */
-async function dismissOnboarding(page: Page): Promise<void> {
-  try {
-    await expect
-      .poll(() => page.getByRole('button', { name: /^(Continue|Configure later|继续|稍后再说)$/ }).count(), { timeout: 30_000 })
-      .toBeGreaterThan(0)
-  } catch {
-    return
-  }
-  for (let round = 0; round < 8; round++) {
-    let dismissed = false
-    for (const name of ['Continue', 'Configure later', '继续', '稍后再说']) {
-      const button = page.getByRole('button', { name, exact: true }).first()
-      if ((await button.count()) === 0) continue
-      try {
-        await button.click({ timeout: 4_000 })
-        dismissed = true
-        await page.waitForTimeout(1_000)
-      } catch {
-        // masked by the takeover stacked above; next round retries
-      }
-    }
-    if (!dismissed) break
   }
 }
 
@@ -90,14 +65,7 @@ async function ensureSidebarExpanded(page: Page): Promise<void> {
 // 调用在 0.1.2 上 404/401，已从 e2e-mount.sh 移到这里统一处理。注册失败
 // 对整条 lane 是致命的（5/7 个测试依赖会话列表），直接在 beforeAll 抛错
 // 比 5 个 lane 各自 90s 超时好诊断。
-test.beforeAll(async () => {
-  const workspace = process.env.DSH_E2E_WORKSPACE
-  if (!workspace) {
-    throw new Error('DSH_E2E_WORKSPACE is not set — run via scripts/e2e-mount.sh')
-  }
-  const api = await createHostApi()
-  await hostRpc(api, 'workspace.create', { path: workspace })
-})
+test.beforeAll(registerSeedWorkspace)
 
 test.beforeEach(async ({ page }) => {
   // 0.1.2 宿主：goto 前先种鉴权 cookie（token 换取，进程内一次）；
@@ -306,21 +274,6 @@ async function scrollTextIntoView(page: Page, text: string): Promise<void> {
   await page.waitForTimeout(400)
 }
 
-async function openSeedSession(page: Page): Promise<void> {
-  const openSidebar = page.getByRole('button', { name: 'Open sidebar' }).first()
-  if ((await openSidebar.count()) > 0) {
-    await openSidebar.click()
-    await page.waitForTimeout(800)
-  }
-  let seedRow = page.getByText('Side chat plugin review').first()
-  if ((await seedRow.count()) === 0) {
-    seedRow = page.locator('[role="treeitem"]:not([aria-expanded])', { hasText: /workspace/ }).first()
-  }
-  await expect(seedRow, '伪造会话未出现在会话列表').toBeVisible({ timeout: 30_000 })
-  await seedRow.click()
-  // 等主聊天渲染出种子 assistant 消息（划选靶子）
-  await expect(page.getByText(/Forking into a side panel is the right call/).first()).toBeVisible({ timeout: 30_000 })
-}
 
 /** 在第一条 assistant 消息的「full history snapshot」上注入一个真实 DOM 选区。 */
 async function injectSelection(page: Page): Promise<void> {

@@ -16,6 +16,12 @@
 
 `main` 的规则通过 GitHub ruleset 执行：必须 PR、基础 CI 与固定宿主矩阵、review thread 解决、禁止强推和删除，维护者不设常规绕过。修改 CI 矩阵的 PR 必须同步调整 ruleset 的检查名称，避免留下失效门槛；配置入口为仓库 Settings → Rules → Rulesets。
 
+宿主验收复用同一套核心 journey：实际 fork 出子会话、继承历史与输入框可用、消息进入子会话持久日志且未进入父会话。tab 出现、fork 错误态或乐观清空草稿都不能单独算通过；无凭证验收只证明消息接受与交互，不能证明模型回答成功。
+
+每组 CI 保存 `test-results/host-inventory.json`、截图及失败日志。inventory 核对精确 CLI、实际激活的客户端 bundle 版本、宿主依赖版本与本次插件构建摘要；无法读取的组件记为未知，不用 CLI 或 devDependencies 补值。手工钉版验收时设置 `DSH_EXPECTED_VERSION`，脚本会拒绝实际版本不符或命令缺失，不自动换测 latest。
+
+0.2.0-rc.2 暂为独立实验组合，不改变现有五组必需检查或公开支持范围。周度 canary 只解析一次 latest，随后按该精确版本跑相同核心流程并保存证据；失败在对应 job 中可见。候选完整功能及相关真实运行验收完成后，再通过 PR 更新支持表和所需 required checks。
+
 ## Issue 与需求处理
 
 优先检查重复反馈、复现是否充分、是否属于本插件和支持的宿主范围。需要补充信息时说明具体缺少什么，提供可操作的复现建议。

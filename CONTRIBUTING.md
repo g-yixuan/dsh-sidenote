@@ -44,7 +44,7 @@ pnpm test
 
 ```bash
 pnpm exec playwright install chromium
-BS_VERSION=none DSH_CMD="npx -y --package @deepseek-ai/dsh@0.1.7-rc.2 dsh" pnpm test:mount
+BS_VERSION=none DSH_EXPECTED_VERSION=0.1.7-rc.2 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.1.7-rc.2 dsh" pnpm test:mount
 ```
 
 脚本使用临时 DSH_HOME；版本组合以 [CI 矩阵](.github/workflows/ci.yml) 为准。CI 会运行 legacy 和直连组合，贡献者本地可先验证受影响的组合。
