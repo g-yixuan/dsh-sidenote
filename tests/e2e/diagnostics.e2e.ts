@@ -3,12 +3,13 @@ import { readFileSync } from 'node:fs'
 import { prepareSeedPage, registerSeedWorkspace, openSideChat, sideChatOf, userMessagesOf } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
+const pluginVersion: string = JSON.parse(readFileSync('package.json', 'utf8')).version
 
 test('compatibility report is visible, observes real admission, and exports software facts only', async ({ page }) => {
   await prepareSeedPage(page)
   await page.getByRole('button', { name: /^(Compatibility status|兼容状态)/ }).click()
   const dialog = page.getByRole('dialog', { name: /^(Compatibility status|兼容状态)$/ })
-  await expect(dialog).toContainText('0.4.6')
+  await expect(dialog).toContainText(`sidenote ${pluginVersion}`)
   await expect(dialog.getByText(/^(Main input|主输入框)$/)).toBeVisible()
   await dialog.getByRole('button', { name: /^(Close compatibility status|关闭兼容状态)$/ }).click()
   const child = await openSideChat(page)
