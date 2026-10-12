@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { createHostApi, gotoPage, hostRpc } from './host'
+import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 
 /** 关掉 onboarding 遮挡（Continue / 稍后配置），轮询至多轮（遮罩会分层出现）。 */
 async function dismissOnboarding(page: Page): Promise<void> {
@@ -50,7 +52,7 @@ async function items(page: Page): Promise<Array<{ id: number; number: number; no
   return page.evaluate(key => JSON.parse(localStorage.getItem(key) ?? '[]'), STORAGE_KEY)
 }
 
-async function addQuote(page: Page): Promise<void> {
+async function selectQuote(page: Page): Promise<void> {
   const quote = page.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()
   await quote.scrollIntoViewIfNeeded()
   const selected = await quote.evaluate(el => {
@@ -71,6 +73,10 @@ async function addQuote(page: Page): Promise<void> {
     return false
   })
   expect(selected).toBe(true)
+}
+
+async function addQuote(page: Page): Promise<void> {
+  await selectQuote(page)
   await page.locator(OVERLAY).getByText(/^(Add to conversation|添加到对话)$/).click()
   await expect(page.locator(`${OVERLAY} input`)).toBeVisible()
 }
@@ -82,8 +88,40 @@ test.describe('annotation editor lifecycle', () => {
     await dismissOnboarding(page)
     const open = page.getByRole('button', { name: /^(Open sidebar|打开侧栏)$/ }).first()
     if (await open.isVisible()) await open.click()
-    await page.getByText('Side chat plugin review').first().click()
+    const row = page.getByRole('treeitem').filter({ hasText: 'Side chat plugin review' }).first()
+    const title = (await row.count()) > 0 ? row.getByText('Side chat plugin review', { exact: true }).first() : page.getByText('Side chat plugin review').first()
+    await title.click()
     await expect(page.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()).toBeAttached({ timeout: 30_000 })
+  })
+
+  test('side-chat note survives outside click; empty note saves and Escape discards', async ({ page }) => {
+    const overlay = page.locator(OVERLAY)
+    const ask = async () => {
+      await selectQuote(page)
+      await overlay.getByText(/^(Ask in side chat|在侧边聊天中提问)$/).click()
+      await expect(overlay.locator('input')).toBeVisible()
+    }
+    await ask()
+    await overlay.locator('input').fill('侧边外点保存的完整注解')
+    await composerOf(page).click()
+    await expect(overlay.locator('input')).toHaveCount(0)
+    const sideInput = page.getByPlaceholder(/^(Message…|输入消息)/).first()
+    await expect(sideInput).toHaveValue(/full history snapshot[\s\S]*侧边外点保存的完整注解/, { timeout: 30_000 })
+    expect(await items(page)).toEqual([])
+
+    await ask()
+    await composerOf(page).click()
+    await expect(sideInput).toHaveValue(/(?:\(no note\)|（无注解）)/)
+    const beforeCancel = await sideInput.inputValue()
+    expect(beforeCancel.match(/full history snapshot/g)).toHaveLength(2)
+    await ask()
+    await overlay.locator('input').fill('Escape 要放弃的注解')
+    await page.keyboard.press('Escape')
+    await expect(overlay.locator('input')).toHaveCount(0)
+    await expect(sideInput).toHaveValue(beforeCancel)
+    const evidence = process.env.DSH_E2E_EVIDENCE_DIR ?? 'test-results'
+    mkdirSync(evidence, { recursive: true })
+    await page.screenshot({ path: join(evidence, 'side-note-outside-saved.png') })
   })
 
   test('empty note survives composer click and reload', async ({ page }) => {

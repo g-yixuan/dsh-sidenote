@@ -44,6 +44,7 @@ For local development, mount with `dsh plugin --profile web add link:<repo path>
 
 - Select text in an assistant reply → popover → note editor, with numbered badges anchored at the right gutter;
 - Annotations are controlled objects (preview, remove individually) with **zero draft pollution** — they serialize into a model-readable structured protocol block only at send time;
+- Click outside a new note editor or press Enter to save; Escape cancels. If handing a quote to the side chat fails, the note stays open with an error and can be retried with the confirm button;
 - Sent bubbles collapse into a "×N annotated" trace label; everything survives reloads.
 
 | Selection popover | Annotation editor |

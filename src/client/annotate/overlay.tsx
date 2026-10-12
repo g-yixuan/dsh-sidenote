@@ -333,7 +333,7 @@ function popoverLeft(x: number, width: number): number {
 
 /** 「Ask in side chat」的注解编辑器（新建态同构：输入框 + ✓，允许空注解）。
  *  bridge 失败时不关编辑器、给出内联错误——用户写好的注解不丢。 */
-function SideChatNoteEditor(props: {
+export function SideChatNoteEditor(props: {
   x: number
   y: number
   targetTitle?: string
@@ -344,12 +344,30 @@ function SideChatNoteEditor(props: {
   const [note, setNote] = useState('')
   const [failed, setFailed] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const latest = useRef({ note, onSave: props.onSave, onCancel: props.onCancel })
+  latest.current = { note, onSave: props.onSave, onCancel: props.onCancel }
+  const saved = useRef(false)
+  const failedRef = useRef(false)
+  const save = (outside = false): void => {
+    if (saved.current || (outside && failedRef.current)) return
+    // Lock before the bridge runs: focusing its composer must not submit twice.
+    saved.current = true
+    try {
+      saved.current = latest.current.onSave(latest.current.note)
+    } catch {
+      saved.current = false
+    }
+    failedRef.current = !saved.current
+    setFailed(failedRef.current)
+  }
+  const saveRef = useRef(save)
+  saveRef.current = save
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.stopPropagation()
-        props.onCancel()
+        if (!saved.current) latest.current.onCancel()
       }
     }
     const onMouseDown = (event: MouseEvent): void => {
@@ -357,7 +375,7 @@ function SideChatNoteEditor(props: {
       if (root === null || !(event.target instanceof Node)) return
       if (root.contains(event.target)) return
       if (event.target instanceof Element && event.target.closest('[data-dsh-sidenote]') !== null) return
-      props.onCancel()
+      saveRef.current(true)
     }
     document.addEventListener('keydown', onKeyDown, true)
     document.addEventListener('mousedown', onMouseDown, true)
@@ -371,10 +389,6 @@ function SideChatNoteEditor(props: {
   const width = 320
   const left = popoverLeft(props.x, width)
   const top = Math.max(8, Math.min(window.innerHeight - 120, props.y - 20))
-  const save = (): void => {
-    // 失败保持打开并提示（草稿不丢）；成功由父组件关闭。
-    setFailed(!props.onSave(note))
-  }
 
   return (
     <div ref={rootRef} className={css.editorAsk} style={{ left, top, width }}>
@@ -388,7 +402,11 @@ function SideChatNoteEditor(props: {
           placeholder={t('sideNotePlaceholder')}
           aria-label={t('sideNoteAria')}
           autoFocus
-          onChange={(event) => { setNote(event.target.value); setFailed(false) }}
+          onChange={(event) => {
+            setNote(event.target.value)
+            failedRef.current = false
+            setFailed(false)
+          }}
           onKeyDown={(event) => {
             if (event.key !== 'Enter') return
             // IME 保护：组合中（候选窗未提交）的 Enter 属于输入法，不能算确认。
@@ -402,7 +420,7 @@ function SideChatNoteEditor(props: {
           className={css.confirmButton}
           title={t('confirmTitle')}
           aria-label={t('confirmAskAria')}
-          onClick={save}
+          onClick={() => { save() }}
         >
           <IconCheckOutline16 size={14} />
         </button>
