@@ -88,9 +88,16 @@ test.describe('annotation editor lifecycle', () => {
     await dismissOnboarding(page)
     const open = page.getByRole('button', { name: /^(Open sidebar|打开侧栏)$/ }).first()
     if (await open.isVisible()) await open.click()
-    const row = page.getByRole('treeitem').filter({ hasText: 'Side chat plugin review' }).first()
+    // Native hosts can keep forked children in the list with the parent's title.
+    // Select the seeded identity so a preceding side-chat test cannot redirect us.
+    const seedRow = page.locator(`[role="treeitem"][data-row-key="session:${process.env.DSH_E2E_SEED_SESSION}"]`)
+    const row = await seedRow.count() > 0 ? seedRow : page.getByRole('treeitem').filter({ hasText: 'Side chat plugin review' }).first()
     const title = (await row.count()) > 0 ? row.getByText('Side chat plugin review', { exact: true }).first() : page.getByText('Side chat plugin review').first()
     await title.click()
+    const conversation = page.locator('[data-conversation-session]').first()
+    if (await conversation.count() > 0) {
+      await expect(conversation).toHaveAttribute('data-conversation-session', process.env.DSH_E2E_SEED_SESSION!)
+    }
     await expect(page.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()).toBeAttached({ timeout: 30_000 })
   })
 
