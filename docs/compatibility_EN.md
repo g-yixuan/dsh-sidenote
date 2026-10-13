@@ -2,7 +2,7 @@
 
 [中文](compatibility.md) · English
 
-This table describes validation and maintenance for the development branch. A merge is not an npm release; also read the Release corresponding to an installed package. Engine ranges are installation boundaries, not proof that every rc or plugin combination has passed.
+This table lists validated combinations and maintenance promises for dsh-sidenote **0.5.0**. For other published versions, check the corresponding Release. Engine ranges are installation gates, not proof that every rc or plugin combination inside them was validated.
 
 | Exact combination | Category | Validation gate |
 |---|---|---|
@@ -15,7 +15,7 @@ This table describes validation and maintenance for the development branch. A me
 
 BS means dsh-better-sidebar. Unlisted combinations are unverified. Independence from BS does not prove every native-host + BS 0.19+ coexistence combination. Alpha hosts have no release compatibility commitment.
 
-Admission record for development main, 2026-10-13: test package 0.4.6, build digest `9a111c6d36221c44cea7a5024aecdeccdb89856e37c848d93adb9613c9629047`, six combinations / 141 real E2E tests, 310 tests, and complete visible-browser workflows on 0.1.5/0.1.7/0.2 passed. [Validation CI](https://github.com/g-yixuan/dsh-sidenote/actions/runs/38281154300). Runtime cases use a controlled model; external model answers are outside this validation. The already published old 0.4.6 package does not contain these fixes.
+0.5.0 includes unified main/side annotations, side-reply selection, content retention and recovery on failure, and opt-in compatibility diagnostics. The earlier [host admission CI](https://github.com/g-yixuan/dsh-sidenote/actions/runs/38281154300) and [final feature validation CI](https://github.com/g-yixuan/dsh-sidenote/actions/runs/38344084161) record actual runtime versions, build digests and evidence for each maintained combination; the latter passed six combinations / 153 real E2E tests and 313 unit tests. Runtime cases use a controlled model; external model answers are outside this validation. The old 0.4.6 release does not contain these changes.
 
 The added installation declaration admits only exact `0.2.0-rc.2`: `>=0.1.1-rc.1 <0.2.0 || =0.2.0-rc.2`; UI primitives adds the same exact release. Other 0.2 rc, stable and alpha releases still need admission.
 
