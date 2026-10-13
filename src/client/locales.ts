@@ -10,9 +10,12 @@ export const LOCALE_NS = 'dsh-sidenote'
 
 /** 英文词典（key 的权威清单）。 */
 export const en = {
-  diagTitle: 'Compatibility status',
-  diagRestrictedTitle: 'Compatibility: limited',
-  diagClose: 'Close compatibility status',
+  diagTitle: 'Compatibility diagnostics',
+  diagClose: 'Close compatibility diagnostics',
+  diagMode: 'dsh-sidenote diagnostic mode',
+  diagModeDescription: 'Enable while debugging or reporting a problem to inspect integration status.',
+  diagModeUnsaved: 'This choice only applies to the current page because it could not be saved locally.',
+  diagUnknownVersion: 'version unknown',
   diagDescription: 'Current integration status. This does not claim that a message was accepted or a model answered. Unreadable versions stay unknown.',
   diagNotDetected: 'not detected',
   diagPath: 'Integration details',
@@ -34,10 +37,10 @@ export const en = {
   diagSideQuote: 'Side reply selection', diagInput: 'Main input', diagSideInput: 'Side input',
   diagAcceptance: 'Message acceptance observation', diagChat: 'Conversation content', diagModel: 'Model controls',
   diagSideAcceptance: 'Side message acceptance',
-  inputUnavailable: 'The host input cannot currently send these references. Body, attachments and quotes have been retained.',
-  inputWaiting: 'The host input is not ready. Body, attachments and quotes have been retained.',
+  inputUnavailable: 'Cannot send right now. Body, attachments and quotes have been retained.',
+  inputWaiting: 'The input is not ready. Body, attachments and quotes have been retained. Please try again shortly.',
   draftRecoveryConflict: 'The host has another draft. Your local body is retained; review this session in the main view before retrying.',
-  quoteWorkflowWaiting: 'The annotation input is not ready; open Compatibility status to recheck.',
+  quoteWorkflowWaiting: 'Annotations are not ready yet. Please try again shortly.',
 
   menuTitle: 'Side chat',
   tabBaseTitle: 'Side',
@@ -225,9 +228,12 @@ export type CopyKey = keyof typeof en
 
 /** 中文词典（与 en 同 key）。 */
 export const zh: Record<CopyKey, string> = {
-  diagTitle: '兼容状态',
-  diagRestrictedTitle: '兼容状态：受限',
-  diagClose: '关闭兼容状态',
+  diagTitle: '兼容诊断',
+  diagClose: '关闭兼容诊断',
+  diagMode: 'dsh-sidenote 诊断模式',
+  diagModeDescription: '开发者调试或报告问题时开启，显示功能接入状态。',
+  diagModeUnsaved: '无法保存到本地，本次选择仅在当前页面生效。',
+  diagUnknownVersion: '版本未知',
   diagDescription: '显示当前接入状态，不代表消息已被接受或模型已回答。无法可靠读取的版本显示未知。',
   diagNotDetected: '未检测到',
   diagPath: '接入详情',
@@ -249,10 +255,10 @@ export const zh: Record<CopyKey, string> = {
   diagSideQuote: '侧回复划选', diagInput: '主输入框', diagSideInput: '侧输入框',
   diagAcceptance: '消息接受观察', diagChat: '会话内容读取', diagModel: '模型控件',
   diagSideAcceptance: '侧聊消息接受',
-  inputUnavailable: '宿主输入暂不能发送这些引用；正文、附件和注释已保留。',
-  inputWaiting: '宿主输入尚未就绪；正文、附件和注释已保留。',
+  inputUnavailable: '暂时无法发送，正文、附件和注释已保留。',
+  inputWaiting: '输入尚未就绪，正文、附件和注释已保留，请稍后重试。',
   draftRecoveryConflict: '宿主另有草稿，本地正文已保留；请在主视图核对该会话草稿后再试。',
-  quoteWorkflowWaiting: '注释输入尚未就绪，可打开“兼容状态”重新检查。',
+  quoteWorkflowWaiting: '注释功能暂未就绪，请稍后重试。',
 
   menuTitle: '侧边聊天',
   tabBaseTitle: '侧边',

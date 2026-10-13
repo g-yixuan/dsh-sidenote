@@ -85,7 +85,7 @@ it('rechecks the live input when a service changes before React observes its dia
   act(() => { host.querySelector('button')!.click() })
   expect(submit).not.toHaveBeenCalled()
   expect(host.querySelector('output')?.textContent).toBe(state.draft)
-  expect(host.querySelector('[role="alert"]')?.textContent).toMatch(/host input|宿主输入/)
+  expect(host.querySelector('[role="alert"]')?.textContent).toMatch(/Cannot send right now|暂时无法发送/)
   current = input
   act(() => { host.querySelector('button')!.click() })
   expect(submit).toHaveBeenCalledOnce()

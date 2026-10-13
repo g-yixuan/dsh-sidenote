@@ -1,9 +1,10 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import type { Context } from '../host/contracts.ts'
 import { hostDiagnostics, watchHostDiagnostics, type Capability, type DiagnosticReason } from '../host/probes.ts'
 import type { CapabilityState } from '../host/input.ts'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
+import { createDiagnosticMode, type DiagnosticMode } from './mode.ts'
 import css from './diagnostics.module.css'
 
 const names = {
@@ -22,12 +23,16 @@ function CompatibilityButton({ ctx }: { ctx: Context }) {
   const store = hostDiagnostics(ctx)
   const report = useSyncExternalStore(store.subscribe, store.getSnapshot)
   const [open, setOpen] = useState(false)
-  const restricted = report.capabilities.some(capability => capability.state === 'unavailable')
+  const trigger = useRef<HTMLButtonElement>(null)
+  const panel = useRef<HTMLElement>(null)
+  const panelId = useId()
+  const close = (): void => { setOpen(false); trigger.current?.focus() }
   useEffect(() => {
     if (!open) return
-    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.stopPropagation(); setOpen(false) } }
-    document.addEventListener('keydown', close, true)
-    return () => { document.removeEventListener('keydown', close, true) }
+    panel.current?.focus()
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.stopPropagation(); setOpen(false); trigger.current?.focus() } }
+    document.addEventListener('keydown', onKey, true)
+    return () => { document.removeEventListener('keydown', onKey, true) }
   }, [open])
   const exportReport = (): void => {
     const url = URL.createObjectURL(new Blob([JSON.stringify(store.getSnapshot(), null, 2) + '\n'], { type: 'application/json' }))
@@ -37,13 +42,13 @@ function CompatibilityButton({ ctx }: { ctx: Context }) {
   }
   return (
     <div data-sidenote-compatibility>
-      <button type="button" className={restricted ? `${css.trigger} ${css.restricted}` : css.trigger} onClick={() => { store.recheck(); setOpen(!open) }}>
-        {t(restricted ? 'diagRestrictedTitle' : 'diagTitle')}
+      <button ref={trigger} type="button" className={css.trigger} aria-expanded={open} aria-controls={open ? panelId : undefined} onClick={() => { store.recheck(); setOpen(!open) }}>
+        {t('diagTitle')}
       </button>
-      {open && <section className={css.panel} role="dialog" aria-label={t('diagTitle')}>
-        <div className={css.header}><strong>{t('diagTitle')}</strong><button type="button" onClick={() => { setOpen(false) }} aria-label={t('diagClose')}>×</button></div>
+      {open && <section ref={panel} id={panelId} tabIndex={-1} className={css.panel} role="dialog" aria-label={t('diagTitle')}>
+        <div className={css.header}><strong>{t('diagTitle')}</strong><button type="button" onClick={close} aria-label={t('diagClose')}>×</button></div>
         <p className={css.description}>{t('diagDescription')}</p>
-        <p className={css.versions}>sidenote {report.versions.sidenote} · DSH {report.versions.dsh === 'unknown' ? t('diagUnknown') : report.versions.dsh} · BS {report.versions.betterSidebar ?? t('diagNotDetected')}</p>
+        <p className={css.versions}>sidenote {report.versions.sidenote} · DSH {report.versions.dsh === 'unknown' ? t('diagUnknownVersion') : report.versions.dsh} · BS {report.versions.betterSidebar ?? t('diagNotDetected')}</p>
         <ul className={css.list}>{report.capabilities.map(capability => <li key={capability.id}>
           <div><span>{t(names[capability.name])}</span><strong data-state={capability.state}>{t(states[capability.state])}</strong></div>
           <p>{t(reasons[capability.reason])}</p>
@@ -55,9 +60,34 @@ function CompatibilityButton({ ctx }: { ctx: Context }) {
   )
 }
 
+function DiagnosticSettings({ mode }: { mode: DiagnosticMode }) {
+  useLocaleTick()
+  const { enabled, saved } = useSyncExternalStore(mode.subscribe, mode.getSnapshot)
+  const descriptionId = useId()
+  return <div className={css.setting}>
+    <div>
+      <span className={css.settingTitle}>{t('diagMode')}</span>
+      <p id={descriptionId} className={css.description}>{t('diagModeDescription')}</p>
+      {!saved && <p className={css.description} role="status">{t('diagModeUnsaved')}</p>}
+    </div>
+    <input type="checkbox" role="switch" aria-label={t('diagMode')} aria-describedby={descriptionId} checked={enabled} onChange={event => { mode.setEnabled(event.currentTarget.checked); event.currentTarget.focus() }} />
+  </div>
+}
+
+function DiagnosticEntry({ ctx, mode }: { ctx: Context; mode: DiagnosticMode }) {
+  const { enabled } = useSyncExternalStore(mode.subscribe, mode.getSnapshot)
+  return enabled ? <CompatibilityButton ctx={ctx} /> : null
+}
+
 export function registerCompatibilityStatus(ctx: Context): void {
+  const mode = createDiagnosticMode()
+  // Capability observation also drives input recovery and quote controls.
+  // Only diagnostic presentation is opt-in; keep business consumers alive.
   ctx.effect(() => watchHostDiagnostics(ctx), 'dsh-sidenote: host status')
+  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+    name: 'settings.general.item', id: 'dsh-sidenote-diagnostics-setting', order: 120, registrant: 'dsh-sidenote',
+  }, () => <DiagnosticSettings mode={mode} />))
   ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
     name: 'conversation.session.header.utilities', id: 'dsh-sidenote-compatibility', order: 11, registrant: 'dsh-sidenote',
-  }, () => <CompatibilityButton ctx={ctx} />))
+  }, () => <DiagnosticEntry ctx={ctx} mode={mode} />))
 }
