@@ -52,5 +52,10 @@ for filename, lang, heading, subtitle, labels in [
     ('hero.svg', 'zh-CN', ('思路可以分岔。', '主线始终向前。'), '划选注释、侧边追问，再把结论带回来。', ('主对话', '侧边追问', '结论回流')),
     ('hero-en.svg', 'en', ('Follow the tangent.', 'Keep the thread.'), 'Annotate. Explore on the side. Bring answers back.', ('Main thread', 'Side chat', 'Bring it back')),
 ]:
-    (ASSETS / filename).write_text(cover(lang, heading, subtitle, labels), encoding='utf-8')
+    svg = cover(lang, heading, subtitle, labels)
+    (ASSETS / filename).write_text(svg, encoding='utf-8')
+    # A text-first crop keeps the headline readable in narrow README layouts.
+    compact = svg.replace('width="1440" height="560"', 'width="840" height="560"', 1)
+    compact = compact.replace('viewBox="0 0 1440 560"', 'viewBox="0 0 840 560"', 1)
+    (ASSETS / filename.replace('.svg', '-compact.svg')).write_text(compact, encoding='utf-8')
     print(filename)

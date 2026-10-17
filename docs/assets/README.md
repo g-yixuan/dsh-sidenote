@@ -8,7 +8,7 @@ The screenshots and recording used by the README were captured on **2026-10-18**
 - `selection.jpg`: a selected passage and its note editor / 划选与注释编辑器。
 - `sidechat.jpg`: a completed side-chat response / 侧聊问答。
 - `demo.gif`, `demo.mp4`: the same continuous selection → annotation → side reply → reflow sequence / 同一段连续操作的 GIF 与 MP4。
-- `hero.svg`, `hero-en.svg`: original vector covers; regenerate with `python3 scripts/build-brand-assets.py` / 原创矢量封面，可用该命令重新生成。
+- `hero.svg`, `hero-en.svg` and their `-compact.svg` variants: original vector covers; regenerate with `python3 scripts/build-brand-assets.py` / 原创矢量封面，可用该命令重新生成。
 
 The host uses its **light theme** and a 16 px conversation font. Screenshots show the real interface; they are not UI mockups. The recording preserves browser frame timing. A browser translation extension's floating control was temporarily hidden during capture and restored afterwards. No DSH controls were altered.
 

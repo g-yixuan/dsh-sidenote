@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/assets/hero-en.svg" alt="dsh-sidenote: Follow the tangent. Keep the thread. Annotate, explore on the side, and bring answers back." width="100%">
+  <picture>
+    <source media="(max-width: 640px)" srcset="docs/assets/hero-en-compact.svg">
+    <img src="docs/assets/hero-en.svg" alt="dsh-sidenote: Follow the tangent. Keep the thread. Annotate, explore on the side, and bring answers back." width="100%">
+  </picture>
 </p>
 
 <p align="center">
@@ -24,6 +27,18 @@
 
 <p align="center"><sub>dsh-sidenote 0.6.0 · DSH 0.2.0-rc.2 · Native sidebar · Light theme</sub></p>
 
+## Install
+
+With DSH already installed, run:
+
+```bash
+dsh plugin --profile web add dsh-sidenote
+```
+
+Open DSH Web and click **Side** in the session header, or select a passage in a reply. You can also open a side chat with `/side` and switch focus between main and side inputs with `Alt+J`.
+
+Native sidebar hosts need no additional `dsh-better-sidebar` installation. For older hosts, use the exact combination in the [compatibility table](docs/compatibility_EN.md).
+
 ## One task. Room to explore.
 
 ### Follow a question on the side
@@ -42,25 +57,13 @@ For example, select “When no results are found, help the user adjust their sea
 
 Click **Send back to main session** below a side reply to bring back both **the question and its answer**. They appear above the main composer and travel with your next message. You can also send back the whole conversation or save a side chat as a regular session.
 
-## Install
-
-With DSH already installed, run:
-
-```bash
-dsh plugin --profile web add dsh-sidenote
-```
-
-Open DSH Web and click **Side** in the session header, or select a passage in a reply. You can also open a side chat with `/side` and switch focus between main and side inputs with `Alt+J`.
-
-Native sidebar hosts need no additional `dsh-better-sidebar` installation. For older hosts, use the exact combination in the [compatibility table](docs/compatibility_EN.md).
-
 ## See it in action
 
 **Select a passage → explore it with context → bring the answer back.**
 
 ![Light-theme recording: select a passage, add a question, send it to a side chat, and return the answer to the main conversation](docs/assets/demo.gif)
 
-[Watch the full-resolution MP4](https://github.com/g-yixuan/dsh-sidenote/raw/refs/heads/main/docs/assets/demo.mp4) · [View the still screenshot](docs/assets/workflow.jpg)
+[Watch the full-resolution MP4](docs/assets/demo.mp4) · [View the still screenshot](docs/assets/workflow.jpg)
 
 <sub>Newly recorded on dsh-sidenote 0.6.0 / DSH 0.2.0-rc.2. These Chinese-language screenshots and recording show real interface interactions in an isolated environment. Conversations and replies are synthetic examples supplied by a local demo model.</sub>
 

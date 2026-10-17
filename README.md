@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/assets/hero.svg" alt="dsh-sidenote：思路可以分岔，主线始终向前。划选注释、侧边追问，再把结论带回来。" width="100%">
+  <picture>
+    <source media="(max-width: 640px)" srcset="docs/assets/hero-compact.svg">
+    <img src="docs/assets/hero.svg" alt="dsh-sidenote：思路可以分岔，主线始终向前。划选注释、侧边追问，再把结论带回来。" width="100%">
+  </picture>
 </p>
 
 <p align="center">
@@ -24,6 +27,18 @@
 
 <p align="center"><sub>dsh-sidenote 0.6.0 · DSH 0.2.0-rc.2 · 原生侧栏 · 浅色主题</sub></p>
 
+## 安装
+
+在已安装 DSH 的环境中执行：
+
+```bash
+dsh plugin --profile web add dsh-sidenote
+```
+
+打开 DSH Web，点击会话顶栏的 **「侧边」**，或划选一段回复开始。也可输入 `/side` 打开侧聊，用 `Alt+J` 切换主、侧输入焦点。
+
+原生侧栏宿主无需额外安装 `dsh-better-sidebar`；旧宿主按[兼容表](docs/compatibility.md)安装对应组合。
+
 ## 一个任务，容得下更多思路
 
 ### 有疑问，在旁边聊透
@@ -42,25 +57,13 @@
 
 侧聊回答下点击「回流到主会话」，**问题与回答成对带回**，出现在主输入框上方，随下一条消息送入主线。也可以整段回流，或将值得保留的侧聊保存为正式会话。
 
-## 安装
-
-在已安装 DSH 的环境中执行：
-
-```bash
-dsh plugin --profile web add dsh-sidenote
-```
-
-打开 DSH Web，点击会话顶栏的 **「侧边」**，或划选一段回复开始。也可输入 `/side` 打开侧聊，用 `Alt+J` 切换主、侧输入焦点。
-
-原生侧栏宿主无需额外安装 `dsh-better-sidebar`；旧宿主按[兼容表](docs/compatibility.md)安装对应组合。
-
 ## 看看它如何工作
 
 **划选一句 → 带着上下文追问 → 把结论带回主线。**
 
 ![浅色主题操作录屏：划选原文、添加问题、发送到侧边聊天、回流结论](docs/assets/demo.gif)
 
-[观看清晰版 MP4](https://github.com/g-yixuan/dsh-sidenote/raw/refs/heads/main/docs/assets/demo.mp4) · [查看静态截图](docs/assets/workflow.jpg)
+[观看清晰版 MP4](docs/assets/demo.mp4) · [查看静态截图](docs/assets/workflow.jpg)
 
 <sub>以上素材重新录制于 dsh-sidenote 0.6.0 / DSH 0.2.0-rc.2。使用隔离环境中的示例对话与本地演示模型，展示真实界面操作；内容与回答为合成示例。</sub>
 
