@@ -1,110 +1,93 @@
 <p align="center">
-  <img src="docs/assets/banner.png" alt="dsh-sidenote —— 侧边开一岔对话，划选留一条注释，主线永不被打断" width="100%">
+  <picture>
+    <source media="(max-width: 640px)" srcset="docs/assets/hero-compact.svg">
+    <img src="docs/assets/hero.svg" alt="dsh-sidenote：思路可以分岔，主线始终向前。划选注释、侧边追问，再把结论带回来。" width="100%">
+  </picture>
 </p>
 
 <p align="center">
-  DSH（DeepSeek Harness）插件——支线问题不打断主线，结论一键回流。
+  为 <b>DeepSeek Harness</b> 加上侧边聊天与划选注释。<br>
+  读到一个疑问，就在旁边聊透；有了结论，再带回正在推进的任务。
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/dsh-sidenote"><img src="https://img.shields.io/npm/v/dsh-sidenote" alt="npm version"></a>
+  <a href="#安装">安装</a> ·
+  <a href="#看看它如何工作">功能演示</a> ·
+  <a href="docs/usage.md">使用指南</a> ·
+  <a href="README_EN.md">English</a>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/dsh-sidenote"><img src="https://img.shields.io/npm/v/dsh-sidenote?color=3B5BFD&amp;label=npm" alt="npm version"></a>
   <a href="https://github.com/g-yixuan/dsh-sidenote/actions/workflows/ci.yml"><img src="https://github.com/g-yixuan/dsh-sidenote/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/peer-none-informational" alt="no required peer dependencies">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-60708E" alt="MIT license"></a>
 </p>
 
-<p align="center">
-  <a href="README_EN.md">English</a> · <b>中文</b>
-</p>
+![新版浅色界面：左侧保留主对话，右侧深入讨论，结论回到主输入框](docs/assets/workflow.jpg)
 
-![演示：划选注释 → 侧边聊天 → 回流主线](docs/assets/demo.gif)
+<p align="center"><sub>dsh-sidenote 0.6.0 · DSH 0.2.0-rc.2 · 原生侧栏 · 浅色主题</sub></p>
 
 ## 安装
+
+在已安装 DSH 的环境中执行：
 
 ```bash
 dsh plugin --profile web add dsh-sidenote
 ```
 
-**一步直装，无前置依赖。** 装完顶栏点「侧边」，或直接划选任意回复文本。
+打开 DSH Web，点击会话顶栏的 **「侧边」**，或划选一段回复开始。也可输入 `/side` 打开侧聊，用 `Alt+J` 切换主、侧输入焦点。
 
-本地开发挂载：`dsh plugin --profile web add link:<本仓库路径>`（client 改动热重载，host 改动需重启 `dsh web`）。
+原生侧栏宿主无需额外安装 `dsh-better-sidebar`；旧宿主按[兼容表](docs/compatibility.md)安装对应组合。
 
-## 侧边聊天——支线问题不打断主线
+## 一个任务，容得下更多思路
 
-从当前主会话 **fork**（全量历史快照，不压缩）出独立侧边会话，在右侧栏多轮对话：
+### 有疑问，在旁边聊透
 
-- 顶栏「侧边」按钮 / 右侧栏 guide / 斜杠命令 `/side` 三个入口；
-- 与主对话**同一套渲染材质**：工具卡、思考预览、任务卡、模型/权限切换、`@` 引用、图片附件；
-- 审批/提问**在面板内直接答复**，不用跳回主视图；跑完有 toast 通知；
-- 继承历史默认折叠成指示卡；折叠态/滚动位置刷新不丢；`Alt+J` 主↔侧切焦点。
-- 侧聊默认不进入左侧会话列表或搜索结果，创建时也不会先出现再消失；保存为正式会话后才列出。DSH 0.1.7+ 可在 **设置 → 通用设置 → 在会话列表中显示侧边聊天** 中找回较早的侧聊；该选择仅保存在当前浏览器、当前 DSH 地址。旧版继续归档隐藏，通过 `/side` 重开最近关闭。
+评审方案时想追问一个细节，读代码时想弄清一种实现，都可以从当前对话开一个侧聊。**完整历史随 fork 保留**，不用再交代一遍背景。
 
-![侧边聊天面板：fork 历史 + 原生级工具卡 + 同能力 composer](docs/assets/04-side-chat-panel.png)
+侧聊有独立的多轮对话、工具卡、模型和权限切换，也支持图片、`@` 引用以及面板内审批。主线和支线各自推进。
 
-## 回流主线——侧边结论不烂在支线
+### 有想法，直接落在原文上
 
-- 侧边结论一键「回流到主会话」：**问答成对**（结论 + 它回答的问题）收为受控 chip 挂在主输入框上方，随下一条消息发给主线；`@` 也可直接引用侧边聊天；
-- 「保存为正式会话」转正进会话列表；`/side` 弹层重开最近关闭。
+划选主对话或侧聊中的一段回复，写下问题或修改意见。**原文和注释一起保留**，可累积多条，发送前预览、移除，正文草稿照常编辑。
 
-![回流 chip：侧边结论挂进主输入框](docs/assets/06-reflow-chip.png)
+读到「没有结果时，引导用户调整搜索词」，就选中这一句，追问「这里如何设计才不会让用户卡住？」。
 
-## 划选注释——把「这句有问题」变成模型的上下文
+### 有结论，带回正在做的事
 
-- 划选 assistant 回复 → 浮层 → 注解编辑器，右缘编号角标锚定原文；
-- 添加到主对话或侧边聊天都保存为同一类受控注释，使用同一套 chip 预览、逐条移除及批量清空；引用和注解全文保留，**草稿零污染**，可只发送引用；
-- 新建注解点击编辑器外部或按 Enter 保存，Esc 明确取消；主→侧先等待选定 Tab 的真实子会话，等待期间可按 Esc 取消，失败则保留注解并提示重试；
-- 通过宿主原生输入机发送，保留 `@` 引用、图片附件和队列/steer 仲裁；目标会话出现持久消息或真实队列记录后，这一批注释才标为已发送，气泡收成「批注 ×N」留痕；
-- 保存的注释按目标会话隔离；存储不可用时提示仅保存在内存。发送失败保留注释与正文，提交期间新增或修改的注释留给下一条消息。
-- 侧边 assistant 正文也支持局部划选、多段落、列表与代码引用，入口只向所在侧聊添加；继承历史同样归当前子会话。流式、跨消息、思考和控件不作为引用。角标与高亮跟随来源消息并裁剪到其可见区域；原文折叠时注释仍在 chip 中。
-- 已保存注释刷新后保留。宿主恢复原生 tab 时重新绑定原子会话；未恢复侧栏时，可用 `/side` 中的“重开”恢复原子会话及注释。新建 fork 使用自己的独立注释列表。
+侧聊回答下点击「回流到主会话」，**问题与回答成对带回**，出现在主输入框上方，随下一条消息送入主线。也可以整段回流，或将值得保留的侧聊保存为正式会话。
 
-| 划选浮层 | 注解编辑器 |
+## 看看它如何工作
+
+**划选一句 → 带着上下文追问 → 把结论带回主线。**
+
+![浅色主题操作录屏：划选原文、添加问题、发送到侧边聊天、回流结论](docs/assets/demo.gif)
+
+[观看清晰版 MP4](docs/assets/demo.mp4) · [查看静态截图](docs/assets/workflow.jpg)
+
+<sub>以上素材重新录制于 dsh-sidenote 0.6.0 / DSH 0.2.0-rc.2。使用隔离环境中的示例对话与本地演示模型，展示真实界面操作；内容与回答为合成示例。</sub>
+
+## 用起来顺手的细节
+
+| 你关心的事 | Sidenote 如何处理 |
 |---|---|
-| ![划选浮层](docs/assets/01-selection-popover.png) | ![注解编辑器](docs/assets/02-annotation-editor.png) |
+| 之前聊过的内容 | 侧聊继承完整历史，默认折叠，按需展开。 |
+| 一次有多处意见 | 多条注释可以一起发送，也能逐条预览和移除。 |
+| 发不出去怎么办 | 发送失败保留注释与正文，便于重试。 |
+| 刷新后继续 | 已保存的注释保留；侧栏未恢复时，可从 `/side` 重开原侧聊。 |
+| 不想让支线堆满列表 | 侧聊默认不进入会话列表和搜索，保存为正式会话后才列出。 |
+| 结论值得长期保留 | 保存为正式会话，后续继续讨论。 |
 
+具体操作、恢复行为和划选范围见[使用指南](docs/usage.md)。
 
-<details>
-<summary><b>更多截图</b></summary>
+## 兼容与帮助
 
-| 折叠态（继承卡 + 操作行） | 侧边斜杠菜单 |
-|---|---|
-| ![折叠态](docs/assets/04a-side-chat-collapsed.png) | ![斜杠菜单](docs/assets/04b-side-slash-menu.png) |
+已验证的原生侧栏组合为 **DSH 0.1.5-rc.2、0.1.7-rc.2、0.2.0-rc.2**；旧版的三组 BS 组合继续保留验收。支持范围以[兼容与维护政策](docs/compatibility.md)中的精确版本为准。
 
-| 角标 + 注释 chip | 发送后留痕 |
-|---|---|
-| ![角标与注释 chip](docs/assets/03-badge-and-chip.png) | ![发送后留痕](docs/assets/05-sent-trace.png) |
+遇到问题时，可在 **设置 → 通用设置 → dsh-sidenote 诊断模式** 开启诊断，查看并手动导出接入状态。[报告问题或提出建议](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose)。
 
-</details>
+## 一起完善 Sidenote
 
-## 兼容性
+欢迎补充使用反馈、复现问题、改进文档和提交代码，中文与 English 都可以。开发环境、命令和检查步骤见[贡献指南](CONTRIBUTING.md)。
 
-维护范围按精确组合列在[兼容与维护政策](docs/compatibility.md)：0.1.7 当前维护，0.1.5 延长维护，0.1.1/0.1.2 的三组旧路径冻结且保留必需验收，0.2.0-rc.2 已通过精确准入并纳入当前维护。未列组合不作已验证承诺；安装引擎范围不代表其中所有版本均兼容。
-
-诊断默认关闭。排障时在 **设置 → 通用设置 → dsh-sidenote 诊断模式** 手动开启，顶栏才会出现“兼容诊断”，可查看、重查或导出当前接入状态。选择仅保存在当前浏览器、当前 DSH 地址，刷新后保留；无法本地保存时只在当前页生效。关闭诊断不影响能力检测、输入恢复或失败时的内容保留，也不修改宿主的全局开发者开关。服务尚未就绪不等于不兼容；无法读取的宿主版本显示未知。报告手动下载，不包含用户正文、凭证或本机路径。
-
-原生右栏无需 BS；旧版依赖表中的 BS 组合。原生 page kind 每 pane 一个，分栏可容纳多个 pane；普通入口聚焦既有 tab，关闭后 `/side` 重开原 child。其他 BS 共存或未来 `multiple` 能力需单独验收。
-
-## 设计要点
-
-- **真 fork，不压缩**：侧边会话是真实 DSH 会话（全量历史快照），与主会话能力对等；不是「摘要 + 一次性问答」。
-- **列表卫生**：插件自管侧聊身份和列表可见性；新版保持侧聊可运行，旧版保留归档路径。关闭或刷新不会把已登记侧聊重新放回列表。
-- **可累积的标注工作流**：多次划选累积多条注释，编辑、删除、随消息一起发出——不是一次性单引文。
-
-## 开发
-
-| 命令 | 说明 |
-|---|---|
-| `pnpm typecheck` | tsc --noEmit |
-| `pnpm test` | vitest 单测（先运行 build） |
-| `pnpm build` | 类型声明 + tsdown（host ESM + client CJS bundle，纯度门） |
-| `pnpm test:mount` | 真实 `dsh web` + 种子会话 + Playwright 挂载与交互验收（`BS_VERSION`/`DSH_CMD` 切版本矩阵） |
-
-## 参与贡献
-
-欢迎报告问题、提出需求、协助复现、改进文档和提交代码。请从 [Issue 入口](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose) 或[贡献指南](CONTRIBUTING.md)开始；中文和 English 都可以。
-
-维护者见[仓库维护](docs/maintaining.md)和[发布指南](docs/releasing.md)。
-
-## License
-
-MIT
+[仓库维护](docs/maintaining.md) · [发布指南](docs/releasing.md) · [MIT License](LICENSE)

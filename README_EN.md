@@ -1,109 +1,93 @@
 <p align="center">
-  <img src="docs/assets/banner-en.png" alt="dsh-sidenote — side lanes for side questions, notes on any passage" width="100%">
+  <picture>
+    <source media="(max-width: 640px)" srcset="docs/assets/hero-en-compact.svg">
+    <img src="docs/assets/hero-en.svg" alt="dsh-sidenote: Follow the tangent. Keep the thread. Annotate, explore on the side, and bring answers back." width="100%">
+  </picture>
 </p>
 
 <p align="center">
-  A DSH (DeepSeek Harness) plugin — side questions never derail the main thread, and answers flow back home.
+  Side chats and selection annotations for <b>DeepSeek Harness</b>.<br>
+  Explore a question beside your conversation. Bring the answer back to the task at hand.
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/dsh-sidenote"><img src="https://img.shields.io/npm/v/dsh-sidenote" alt="npm version"></a>
+  <a href="#install">Install</a> ·
+  <a href="#see-it-in-action">Demo</a> ·
+  <a href="docs/usage_EN.md">User guide</a> ·
+  <a href="README.md">中文</a>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/dsh-sidenote"><img src="https://img.shields.io/npm/v/dsh-sidenote?color=3B5BFD&amp;label=npm" alt="npm version"></a>
   <a href="https://github.com/g-yixuan/dsh-sidenote/actions/workflows/ci.yml"><img src="https://github.com/g-yixuan/dsh-sidenote/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/peer-none-informational" alt="no required peer dependencies">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-60708E" alt="MIT license"></a>
 </p>
 
-<p align="center">
-  <b>English</b> · <a href="README.md">中文</a>
-</p>
+![Current light interface: main conversation on the left, focused exploration on the right, and a finding returned to the main composer](docs/assets/workflow.jpg)
 
-![Demo: annotate a selection → dig in the side chat → reflow the answer home](docs/assets/demo.gif)
+<p align="center"><sub>dsh-sidenote 0.6.0 · DSH 0.2.0-rc.2 · Native sidebar · Light theme</sub></p>
 
 ## Install
+
+With DSH already installed, run:
 
 ```bash
 dsh plugin --profile web add dsh-sidenote
 ```
 
-**One step, no prerequisites.** Then click "Side" in the session header, or just select any reply text.
+Open DSH Web and click **Side** in the session header, or select a passage in a reply. You can also open a side chat with `/side` and switch focus between main and side inputs with `Alt+J`.
 
-For local development, mount with `dsh plugin --profile web add link:<repo path>` (client changes hot-reload; host changes need a `dsh web` restart).
+Native sidebar hosts need no additional `dsh-better-sidebar` installation. For older hosts, use the exact combination in the [compatibility table](docs/compatibility_EN.md).
 
-## Side chat — side questions never derail the main thread
+## One task. Room to explore.
 
-**Fork** the current session (full history snapshot, no compression) into an independent side session living in the right-hand panel:
+### Follow a question on the side
 
-- Three entries — the header "Side" button, the right-sidebar guide, and the `/side` slash command;
-- **The same rendering material as the main chat**: tool cards, thinking previews, task cards, model/permission switching, `@` references, image attachments;
-- Answer approvals and questions **right inside the panel** — no jumping back to the main view; a toast lets you know when a reply lands;
-- Inherited history folds into a summary card; fold and scroll state survive reloads; `Alt+J` hops focus between main and side.
+Clarify a detail during a design review or explore an implementation while reading code. Open a side chat from the current conversation. **The fork preserves the full history**, so you can pick up without explaining the context again.
 
-![The side chat panel: forked history + native-grade tool cards + a full-capability composer](docs/assets/04-side-chat-panel.png)
+Side chats support multiple turns, tool cards, model and permission switching, images, `@` references, and approvals inside the panel. Main and side conversations can move forward independently.
 
-## Selection annotations — turn "this bit is off" into model context
+### Put your feedback on the passage
 
-- Select text in an assistant reply → popover → note editor, with numbered badges anchored at the right gutter;
-- Adding to the main conversation or a side chat saves the same controlled annotation object, with shared chip previews, individual removal and clear-all. Quotes and notes stay complete, with **zero draft pollution**; quote-only messages are supported;
-- Click outside a new note editor or press Enter to save; Escape cancels. Main-to-side waits for the chosen tab’s actual child session. Escape cancels that wait; a failed handoff keeps the note open for retry;
-- Submissions use the host’s native input, retaining `@` references, image attachments and queue/steer arbitration. Only a durable message or authoritative queue occurrence in the target session marks that batch as sent and produces the annotated trace label;
-- Saved annotations are isolated by target session. A storage warning explains memory-only operation when persistence is unavailable. Failures retain quotes and body; additions or edits during admission stay active for the next message.
-- Side assistant bodies support local selections, paragraphs, lists and code. Their single action adds to that side chat, including selections in inherited history. Streaming replies, cross-message selections, reasoning and controls are excluded. Badges and highlights stay within the source transcript; folding the source keeps its quotes in the chip.
-- Saved annotations survive reload. When the host restores a native tab, it rebinds the original child. If the sidebar is not restored, use **Reopen** in `/side` to recover that child and its annotations. A new fork has its own independent annotation list.
+Select part of a reply in the main conversation or a side chat, then add a question or comment. **The original passage and your note stay together.** Collect several notes, preview or remove them before sending, and keep writing in the composer.
 
-| Selection popover | Annotation editor |
+For example, select “When no results are found, help the user adjust their search” and ask how to keep that user from getting stuck.
+
+### Bring useful answers back
+
+Click **Send back to main session** below a side reply to bring back both **the question and its answer**. They appear above the main composer and travel with your next message. You can also send back the whole conversation or save a side chat as a regular session.
+
+## See it in action
+
+**Select a passage → explore it with context → bring the answer back.**
+
+![Light-theme recording: select a passage, add a question, send it to a side chat, and return the answer to the main conversation](docs/assets/demo.gif)
+
+[Watch the full-resolution MP4](docs/assets/demo.mp4) · [View the still screenshot](docs/assets/workflow.jpg)
+
+<sub>Newly recorded on dsh-sidenote 0.6.0 / DSH 0.2.0-rc.2. These Chinese-language screenshots and recording show real interface interactions in an isolated environment. Conversations and replies are synthetic examples supplied by a local demo model.</sub>
+
+## Details that keep work moving
+
+| What matters | How Sidenote handles it |
 |---|---|
-| ![Selection popover](docs/assets/01-selection-popover.png) | ![Annotation editor](docs/assets/02-annotation-editor.png) |
+| Earlier context | Side chats inherit the full history, collapsed until you need it. |
+| Several pieces of feedback | Send annotations together, or preview and remove them individually. |
+| A failed send | Annotations and draft text stay available for retry. |
+| Picking up after a reload | Saved annotations persist. If the sidebar is not restored, reopen the original side chat through `/side`. |
+| Keeping the session list focused | Side chats stay out of the list and search until saved as regular sessions. |
+| A conversation worth keeping | Save it as a regular session and continue later. |
 
-## Reflow — side-lane findings come home
+See the [user guide](docs/usage_EN.md) for controls, recovery behavior, and selection boundaries.
 
-- One click sends a side-chat conclusion back to the main session as a **Q&A pair** (the answer *and* the question it answers) — a controlled chip above the main composer that rides along with your next message; `@`-mentioning a side chat works too;
-- "Save as session" promotes a side chat into the session list; recently closed ones reopen from the `/side` popup.
-- Side chats stay out of the sidebar list and search results from creation, without briefly flashing into the list. Saved regular copies appear normally. On DSH 0.1.7+, use **Settings → General → Show side chats in the session list** to find older side chats; the choice is local to this browser and DSH address. Historical hosts retain archive-based hiding and `/side` recovery of recently closed chats.
+## Compatibility and help
 
-![Reflow chip: a side-chat finding parked above the main composer](docs/assets/06-reflow-chip.png)
+Verified native sidebar combinations use **DSH 0.1.5-rc.2, 0.1.7-rc.2, or 0.2.0-rc.2**. Three legacy BS combinations retain validation. The exact versions in the [compatibility and maintenance policy](docs/compatibility_EN.md) define the supported scope.
 
-<details>
-<summary><b>More screenshots</b></summary>
+For troubleshooting, enable **Settings → General → dsh-sidenote diagnostic mode** to inspect and manually export the integration status. [Report a problem or suggest an improvement](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose).
 
-| Collapsed state (inherited-history card + action row) | Side slash menu |
-|---|---|
-| ![Collapsed state](docs/assets/04a-side-chat-collapsed.png) | ![Slash menu](docs/assets/04b-side-slash-menu.png) |
+## Help shape Sidenote
 
-| Badge + annotation chip | Sent-message trace |
-|---|---|
-| ![Badge and chip](docs/assets/03-badge-and-chip.png) | ![Sent trace](docs/assets/05-sent-trace.png) |
+Feedback, reproductions, documentation, and code contributions are welcome in English or Chinese. See the [contributing guide](CONTRIBUTING_EN.md) for the development setup, commands, and required checks.
 
-</details>
-
-## Compatibility
-
-Exact combinations are listed in the [compatibility policy](docs/compatibility_EN.md): 0.1.7 is maintained, 0.1.5 has extended maintenance, three 0.1.1/0.1.2 legacy combinations are frozen with required validation, and the exact 0.2.0-rc.2 release has been admitted to maintained support. Unlisted combinations are unverified; engine ranges do not imply that every version inside them is supported.
-
-Diagnostics are off by default. To troubleshoot, enable **Settings → General → dsh-sidenote diagnostic mode**; the header then shows **Compatibility diagnostics** for inspection, rechecking and export. The choice is local to this browser and DSH address and survives refresh; if local saving is unavailable, it applies only to the current page. Disabling diagnostics preserves capability checks, input recovery and content retention on failure, and does not change the host's global developer setting. Waiting services do not mean incompatibility, and unreadable host versions stay unknown. Reports are downloaded manually and exclude user text, credentials and local paths.
-
-Native hosting needs no BS; legacy hosts need their listed BS combination. Native page kinds allow one tab per pane, with multiple panes through splitting. Normal entries focus an existing tab; after closing, `/side` reopens the original child. Other BS coexistence combinations and future `multiple` behavior require independent validation.
-
-## Design notes
-
-- **A real fork, not a summary**: the side session is a genuine DSH session (full history snapshot) with the same capabilities as the main one — not a one-shot Q&A.
-- **List hygiene**: the plugin owns side-chat identity and list visibility. Newer hosts keep hidden chats runnable; historical hosts retain archiving. Closing tabs or reloading does not put registered side chats back in the list.
-- **An accumulative annotation workflow**: select repeatedly, stack notes, edit, remove, send them together — not a one-off quote.
-
-## Development
-
-| Command | What it does |
-|---|---|
-| `pnpm typecheck` | tsc --noEmit |
-| `pnpm test` | vitest unit tests (run build first) |
-| `pnpm build` | type declarations + tsdown (host ESM + client CJS bundle, purity gates) |
-| `pnpm test:mount` | real `dsh web` + seeded session + Playwright mounting and interaction checks (`BS_VERSION`/`DSH_CMD` version matrix) |
-
-## Contributing
-
-Bug reports, feature ideas, reproductions, documentation, and code are welcome. Start with the [issue chooser](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose) or [contributing guide](CONTRIBUTING_EN.md). English and Chinese are both welcome.
-
-Maintainers: see [repository maintenance](docs/maintaining_EN.md) and the [release guide](docs/releasing_EN.md).
-
-## License
-
-MIT
+[Repository maintenance](docs/maintaining_EN.md) · [Release guide](docs/releasing_EN.md) · [MIT License](LICENSE)
