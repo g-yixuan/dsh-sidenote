@@ -57,5 +57,6 @@ for filename, lang, heading, subtitle, labels in [
     # A text-first crop keeps the headline readable in narrow README layouts.
     compact = svg.replace('width="1440" height="560"', 'width="840" height="560"', 1)
     compact = compact.replace('viewBox="0 0 1440 560"', 'viewBox="0 0 840 560"', 1)
+    compact = compact.replace('<rect width="1440" height="560"', '<rect width="840" height="560"', 1)
     (ASSETS / filename.replace('.svg', '-compact.svg')).write_text(compact, encoding='utf-8')
     print(filename)

@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="840" height="560" viewBox="0 0 840 560" role="img" aria-labelledby="title desc" xml:lang="en">
   <title id="title">dsh-sidenote — Follow the tangent. Keep the thread.</title>
   <desc id="desc">Annotate. Explore on the side. Bring answers back.. Main thread → Side chat → Bring it back.</desc>
-  <rect width="1440" height="560" rx="24" fill="#F8FAFF"/>
+  <rect width="840" height="560" rx="24" fill="#F8FAFF"/>
   <path d="M840 0h576a24 24 0 0 1 24 24v512a24 24 0 0 1-24 24H840Z" fill="#EAF0FF"/>
   <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', sans-serif">
     <g transform="translate(64 52)">
