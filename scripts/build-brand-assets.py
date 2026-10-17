@@ -1,58 +1,56 @@
 #!/usr/bin/env python3
-"""生成 README 品牌资产：wordmark（明/暗双版 SVG）+ banner（1440×360 PNG）。
+"""Build bilingual README covers with the Python standard library.
 
-wordmark = logo.svg 图标 + 排版字标（系统字体栈，SVG 内联无外部依赖）。
-banner = 品牌蓝渐变底 + logo + 字标 + 定位语（Playwright 渲染 HTML → 截图，
-保证字体渲染质量；输出到 docs/assets/banner.png）。
-
-用法：python3 scripts/build-brand-assets.py（需本机可跑 Playwright——开发依赖已有）。
+Run: python3 scripts/build-brand-assets.py
+Each SVG has its own background for legibility in both GitHub themes.
 """
+from html import escape
 from pathlib import Path
-import subprocess
 
-ROOT = Path(__file__).resolve().parent.parent
-ASSETS = ROOT / 'docs' / 'assets'
-LOGO = (ASSETS / 'logo.svg').read_text()
-
-# （wordmark SVG 双版方案已弃：GitHub 的 data-color-mode 不联动
-# prefers-color-scheme——用户钉暗色主题而系统是浅色时，深色文字黑上黑
-# 不可读。hero 改走自带品牌底色的 banner，主题无关。）
-
-# ── banner：1440×360 品牌横幅（中英双版；主题无关——自带品牌底色）──
-def banner_html(tagline: str) -> str:
-    return f"""<!doctype html>
-<html><body style="margin:0">
-<div style="width:1440px;height:360px;display:flex;align-items:center;justify-content:center;gap:40px;
-  background:linear-gradient(135deg,#3B5BFD 0%,#2743D8 60%,#1E36B8 100%);
-  font-family:-apple-system,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;position:relative;overflow:hidden">
-  <!-- 右侧淡淡的界面隐喻：主区块 + 侧栏 -->
-  <div style="position:absolute;right:-60px;top:40px;width:520px;height:280px;border:2px solid rgba(255,255,255,0.18);border-radius:16px;transform:rotate(-2deg)">
-    <div style="position:absolute;right:0;top:0;width:150px;height:280px;border-left:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);border-radius:0 14px 14px 0"></div>
-  </div>
-  <div style="width:128px;height:128px;flex:none">{LOGO}</div>
-  <div>
-    <div style="color:#fff;font-size:64px;font-weight:700;letter-spacing:-2px;line-height:1.05;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">dsh-sidenote</div>
-    <div style="color:rgba(255,255,255,0.85);font-size:26px;margin-top:14px;letter-spacing:0.2px">{tagline}</div>
-  </div>
-</div>
-</body></html>"""
+ASSETS = Path(__file__).resolve().parent.parent / 'docs' / 'assets'
 
 
-def banner(tagline: str, name: str) -> None:
-    script = ROOT / 'scripts' / '.tmp-banner.mjs'
-    script.write_text(f"""
-import {{ chromium }} from '@playwright/test'
-const browser = await chromium.launch()
-const page = await browser.newPage({{ viewport: {{ width: 1440, height: 360 }}, deviceScaleFactor: 2 }})
-await page.setContent({banner_html(tagline)!r})
-await page.screenshot({{ path: {str(ASSETS / name)!r} }})
-await browser.close()
-console.log('banner ok')
-""")
-    subprocess.run(['node', str(script)], check=True, cwd=ROOT)
-    script.unlink()
-    print(f'banner → {name}')
+def cover(lang, heading, subtitle, labels):
+    title = escape(' '.join(heading))
+    main, side, back = map(escape, labels)
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="560" viewBox="0 0 1440 560" role="img" aria-labelledby="title desc" xml:lang="{lang}">
+  <title id="title">dsh-sidenote — {title}</title>
+  <desc id="desc">{escape(subtitle)}. {main} → {side} → {back}.</desc>
+  <rect width="1440" height="560" rx="24" fill="#F8FAFF"/>
+  <path d="M840 0h576a24 24 0 0 1 24 24v512a24 24 0 0 1-24 24H840Z" fill="#EAF0FF"/>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', sans-serif">
+    <g transform="translate(64 52)">
+      <rect width="44" height="44" rx="12" fill="#3B5BFD"/>
+      <path d="M11 16h12m-12 7h8" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M29 12v21" stroke="white" stroke-opacity=".35" stroke-width="1.5"/>
+      <path d="M33 16h5v7h-3l-2 3Z" fill="white"/>
+      <text x="60" y="31" font-size="32" font-weight="650" letter-spacing="-1" fill="#152441">dsh-sidenote</text>
+    </g>
+    <text x="64" y="221" fill="#152441" font-size="64" font-weight="700" letter-spacing="-2">{escape(heading[0])}</text>
+    <text x="64" y="304" fill="#152441" font-size="64" font-weight="700" letter-spacing="-2">{escape(heading[1])}</text>
+    <text x="66" y="368" fill="#60708E" font-size="24">{escape(subtitle)}</text>
+    <text x="66" y="490" fill="#60708E" font-size="20">A companion for DeepSeek Harness</text>
+    <!-- A continuous main line with a side route that rejoins it. -->
+    <path d="M908 185H1366" fill="none" stroke="#152441" stroke-width="6" stroke-linecap="round"/>
+    <path d="M960 185C1012 185 988 366 1060 366H1160C1236 366 1228 185 1304 185" fill="none" stroke="#3B5BFD" stroke-width="6" stroke-linecap="round"/>
+    <path d="m1354 175 12 10-12 10" fill="none" stroke="#152441" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="960" cy="185" r="11" fill="#F8FAFF" stroke="#152441" stroke-width="5"/>
+    <circle cx="1304" cy="185" r="11" fill="#F8FAFF" stroke="#152441" stroke-width="5"/>
+    <rect x="924" y="111" width="134" height="42" rx="21" fill="#152441"/>
+    <text x="991" y="139" fill="white" font-size="18" font-weight="600" text-anchor="middle">{main}</text>
+    <rect x="1019" y="308" width="184" height="112" rx="18" fill="white" stroke="#C9D5FA" stroke-width="1.5"/>
+    <path d="M1043 335h24m-24 9h15" stroke="#3B5BFD" stroke-width="3" stroke-linecap="round"/>
+    <text x="1042" y="388" fill="#152441" font-size="23" font-weight="600">{side}</text>
+    <rect x="1211" y="227" width="172" height="43" rx="21.5" fill="#DDE6FF"/>
+    <text x="1297" y="255" fill="#304DCE" font-size="18" font-weight="600" text-anchor="middle">{back}</text>
+  </g>
+</svg>
+'''
 
 
-banner('侧边开一岔对话，划选留一条注释——主线永不被打断', 'banner.png')
-banner('Side lanes for side questions. Notes on any passage.', 'banner-en.png')
+for filename, lang, heading, subtitle, labels in [
+    ('hero.svg', 'zh-CN', ('思路可以分岔。', '主线始终向前。'), '划选注释、侧边追问，再把结论带回来。', ('主对话', '侧边追问', '结论回流')),
+    ('hero-en.svg', 'en', ('Follow the tangent.', 'Keep the thread.'), 'Annotate. Explore on the side. Bring answers back.', ('Main thread', 'Side chat', 'Bring it back')),
+]:
+    (ASSETS / filename).write_text(cover(lang, heading, subtitle, labels), encoding='utf-8')
+    print(filename)
