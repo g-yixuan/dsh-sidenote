@@ -22,7 +22,7 @@
 
 ![Current light interface: main conversation on the left, focused exploration on the right, and a finding returned to the main composer](docs/assets/workflow.jpg)
 
-<p align="center"><sub>dsh-sidenote 0.5.1 · DSH 0.2.0-rc.2 · Native sidebar · Light theme</sub></p>
+<p align="center"><sub>dsh-sidenote 0.6.0 · DSH 0.2.0-rc.2 · Native sidebar · Light theme</sub></p>
 
 ## One task. Room to explore.
 
@@ -62,7 +62,7 @@ Native sidebar hosts need no additional `dsh-better-sidebar` installation. For o
 
 [Watch the full-resolution MP4](https://github.com/g-yixuan/dsh-sidenote/raw/refs/heads/main/docs/assets/demo.mp4) · [View the still screenshot](docs/assets/workflow.jpg)
 
-<sub>Newly recorded on dsh-sidenote 0.5.1 / DSH 0.2.0-rc.2. These Chinese-language screenshots and recording show real interface interactions in an isolated environment. Conversations and replies are synthetic examples supplied by a local demo model.</sub>
+<sub>Newly recorded on dsh-sidenote 0.6.0 / DSH 0.2.0-rc.2. These Chinese-language screenshots and recording show real interface interactions in an isolated environment. Conversations and replies are synthetic examples supplied by a local demo model.</sub>
 
 ## Details that keep work moving
 
@@ -72,6 +72,7 @@ Native sidebar hosts need no additional `dsh-better-sidebar` installation. For o
 | Several pieces of feedback | Send annotations together, or preview and remove them individually. |
 | A failed send | Annotations and draft text stay available for retry. |
 | Picking up after a reload | Saved annotations persist. If the sidebar is not restored, reopen the original side chat through `/side`. |
+| Keeping the session list focused | Side chats stay out of the list and search until saved as regular sessions. |
 | A conversation worth keeping | Save it as a regular session and continue later. |
 
 See the [user guide](docs/usage_EN.md) for controls, recovery behavior, and selection boundaries.

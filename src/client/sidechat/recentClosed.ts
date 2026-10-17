@@ -54,6 +54,13 @@ export function listClosedSideChats(parentSessionId: string): readonly ClosedSid
   return readAll(KEY_PREFIX + parentSessionId)
 }
 
+/** Existing recovery records can seed the durable visibility index on upgrade. */
+export function allClosedSideChats(): readonly ClosedSideEntry[] {
+  try {
+    return Object.keys(localStorage).filter(key => key.startsWith(KEY_PREFIX)).flatMap(readAll)
+  } catch { return [] }
+}
+
 /** 重开消费：从列表移除（重开后若再关会重新入列）。 */
 export function dropClosedSideChat(parentSessionId: string, childId: string): void {
   try {

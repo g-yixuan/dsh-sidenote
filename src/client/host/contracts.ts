@@ -204,7 +204,7 @@ export interface SessionsService {
   retain?(id: SessionId, options: { source: string; signal?: AbortSignal }): SessionReference
   binding(id: SessionId): SessionBinding | undefined
   scope(id: SessionId): Context | undefined
-  open(id: SessionId): void
+  open?(id: SessionId): void
 }
 
 // ── workspaces (dsh-client-runtime) ─────────────────────────────────────────
@@ -387,6 +387,7 @@ export interface SlotRegisterOptions {
  * 显式 opt-in，arch-audit §4.1-4 修法）。
  */
 export type KnownSlotKey =
+  | 'sidebar.workspaces'
   | 'conversation.input.dock'
   | 'conversation.session.header.utilities'
   | 'settings.general.item'

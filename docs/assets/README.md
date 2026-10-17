@@ -1,8 +1,8 @@
 # README media / 首页素材
 
-The screenshots and recording used by the README were captured on **2026-10-18** with **dsh-sidenote 0.5.1** (source: `d26900c`) and **DSH 0.2.0-rc.2**, using the native right sidebar without better-sidebar. The host's active bundle inventory and the mounted plugin's build hash were checked before capture.
+The screenshots and recording used by the README were captured on **2026-10-18** with **dsh-sidenote 0.6.0** (source: `7ed85e4`) and **DSH 0.2.0-rc.2**, using the native right sidebar without better-sidebar. The host's active bundle inventory and the mounted plugin's build hash were checked before capture.
 
-首页截图与录屏于 **2026-10-18** 重新采集，使用 **dsh-sidenote 0.5.1**（源码 `d26900c`）与 **DSH 0.2.0-rc.2** 原生右侧栏，不安装 better-sidebar。采集前核对了宿主实际激活的组件版本与插件构建摘要。
+首页截图与录屏于 **2026-10-18** 重新采集，使用 **dsh-sidenote 0.6.0**（源码 `7ed85e4`）与 **DSH 0.2.0-rc.2** 原生右侧栏，不安装 better-sidebar。采集前核对了宿主实际激活的组件版本与插件构建摘要。
 
 - `workflow.jpg`: the main and side conversations with a returned answer / 主、侧对话与回流结论。
 - `selection.jpg`: a selected passage and its note editor / 划选与注释编辑器。

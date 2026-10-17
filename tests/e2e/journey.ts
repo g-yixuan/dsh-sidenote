@@ -44,7 +44,9 @@ export async function openSeedSession(page: Page): Promise<void> {
   if (await open.isVisible()) await open.click()
   // Wait for the session list before deciding which row identity exists. A
   // zero count on the first frame must not choose the legacy title fallback.
-  const titled = page.getByRole('treeitem').filter({ hasText: 'Side chat plugin review' })
+  // A saved regular copy has a numbered title; legacy fallback must target
+  // the exact seed title rather than also selecting those valid copies.
+  const titled = page.getByRole('treeitem').filter({ has: page.getByText('Side chat plugin review', { exact: true }) })
   await expect(titled.first()).toBeAttached({ timeout: 30_000 })
   const byId = page.locator(`[role="treeitem"][data-row-key="session:${seed}"]`)
   // Native workspace lists show a limited recent subset. Previous real forks

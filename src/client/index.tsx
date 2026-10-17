@@ -17,6 +17,7 @@ import { registerSideChat } from './sidechat/index.tsx'
 import { registerAnnotations } from './annotate/index.tsx'
 import { clearNativeRuntime, setRootContext } from './sidechat/native.ts'
 import { sweepOrphanedSideChatMeta } from './sidechat/metaStore.ts'
+import { registerSideSessionVisibility } from './sidechat/visibility.tsx'
 
 export const inject = ['sessions', 'workspaces', 'slots', 'connection', 'locale']
 
@@ -31,6 +32,7 @@ export function apply(ctx: Context): void {
   // 跟随 DSH 通用设置里的语言（locale.preference，Host-backed，实时切换）。
   attachLocale(ctx.locale as LocaleServiceLike | undefined)
   registerCompatibilityStatus(ctx)
+  registerSideSessionVisibility(ctx)
   // 撤掉旧页面 meta 的活身份，避免把孤键当仍存活的 tab。宿主真的恢复
   // tab 时，由其 navigation revision 与挂载记录认领原 child。
   sweepOrphanedSideChatMeta()

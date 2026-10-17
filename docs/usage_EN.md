@@ -14,6 +14,12 @@ Inherited history is collapsed by default. Click the inheritance card to expand 
 
 After closing a side chat, reopen the original child through the recently closed options in `/side`. Normal entries focus an existing tab. Native page kinds allow one tab per pane, with multiple panes through splitting. Other BS coexistence combinations and future `multiple` behavior require separate validation; see the [compatibility policy](compatibility_EN.md).
 
+### Session lists and recovery
+
+Side chats stay out of the sidebar list and search results from creation, without briefly flashing into the list. Closing tabs or reloading does not put registered side chats back in the list. Saving as a regular session creates a visible copy.
+
+On DSH 0.1.7+, hidden side chats remain runnable. To find older side chats, enable **Settings → General → Show side chats in the session list**; the choice is local to this browser and DSH address. Historical hosts retain archive-based hiding and `/side` recovery of recently closed chats. This setting does not recover deleted sessions or undo existing legacy archives; see the [compatibility policy](compatibility_EN.md).
+
 ## Select and annotate
 
 1. Select a passage in a completed assistant reply.

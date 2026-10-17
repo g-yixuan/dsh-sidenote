@@ -14,6 +14,9 @@ import { readSideChatMeta, writeSideChatMeta } from './metaStore.ts'
 import { sideChatTitleOf } from './identity.ts'
 import { contentTextOf } from '../chat/transcript.ts'
 import { SNAPSHOT_BLOCK_MARK } from './snapshot.ts'
+import { sessionVisibilityOf } from '../host/sessionVisibility.ts'
+import { openSession } from '../host/navigation.ts'
+export { openSession } from '../host/navigation.ts'
 
 import { readModelSelection, writeModelSelection } from '../host/models.ts'
 export { projectedModelSelection, remoteSessionFace, readModelSelection, writeModelSelection, readModelName, listModels, switchModel } from '../host/models.ts'
@@ -392,8 +395,8 @@ function advanceBoundaryPastTail(ctx: Context, parentSessionId: string, tabId: s
 }
 
 /**
- * 首开编排：fork（全量历史快照）→ 登记 meta（先行，绝不丢登记）→
- * 归档隐藏出会话列表（best-effort）→ 模型跟随主会话（best-effort）。
+ * 首开编排：暂缓新增列表行 → fork → 登记隐藏身份/meta →
+ * 旧宿主归档（best-effort）→ 模型跟随主会话（best-effort）。
  * fork 失败抛错（面板组件转错误态）；后两步失败只告警不阻断。
  *
  * 主线 turn 在飞（busy）时走 busy-fork（Delivery_04）：立即 fork + 遗传
@@ -415,19 +418,26 @@ export async function forkAndRegister(ctx: Context, parentSessionId: string, tab
 
   let forked: string
   let snapshotOnly = false
-  if (!busy) {
-    forked = await ctx.sessions.fork({ sessionId: parentSessionId })
-  } else {
-    try {
+  const visibility = sessionVisibilityOf(owner)
+  const finishVisibility = visibility.begin(owner.sessions.list.getSnapshot())
+  try {
+    if (!busy) {
       forked = await ctx.sessions.fork({ sessionId: parentSessionId })
-    } catch (error) {
-      if (!isForkUnavailable(error)) throw error
-      forked = await createSideSession(owner, parentSessionId)
-      snapshotOnly = true
+    } else {
+      try {
+        forked = await ctx.sessions.fork({ sessionId: parentSessionId })
+      } catch (error) {
+        if (!isForkUnavailable(error)) throw error
+        forked = await createSideSession(owner, parentSessionId)
+        snapshotOnly = true
+      }
+      // 监护必须在 meta 登记（触发面板开窗 → 子会话 boot）之前就位。
+      if (!snapshotOnly) armInheritedTurnPurge(ctx, forked, parentSessionId, tabId, leakedPromptPrefix, boundarySeq)
     }
-    // 监护必须在 meta 登记（触发面板开窗 → 子会话 boot）之前就位——
-    // 「open 前订阅」是把 cancel 窗口压到 LLM 首响应之前的关键。
-    if (!snapshotOnly) armInheritedTurnPurge(ctx, forked, parentSessionId, tabId, leakedPromptPrefix, boundarySeq)
+    // Register identity before releasing provisional new rows, including create fallback.
+    visibility.hide(forked)
+  } finally {
+    finishVisibility()
   }
   // meta 先行：fork resolve 后立即登记 childId（会话切换导致组件卸载时
   // updateTab 找不到 tab 也只是 no-op——否则 Tab 永远停在 forking 且下次
@@ -444,13 +454,13 @@ export async function forkAndRegister(ctx: Context, parentSessionId: string, tab
   // 归档隐藏出会话列表——但 0.1.7 起 ArchivedSessionGate 把「已归档」当作
   // 拒跑模型步的硬闸门（agent/pre-step reject → turn/end blocked，实测侧边
   // 消息 200 后 30ms 内被 block）。判据：workspace 面有 unarchiveSession
-  // （0.1.7 才新增）。有闸门的宿主上子会话保持可见，让位给可用性。
+  // （0.1.7 才新增）。有闸门的宿主由列表投影隐藏，不改变归档状态。
   if (typeof owner.workspaces.unarchiveSession !== 'function') {
-    // 归档失败残留可见（无 unarchive API），不阻断面板。
+    // 归档失败时仍有列表投影；投影缺席则保留可见，不阻断面板。
     try {
       await owner.workspaces.archiveSession(forked)
     } catch (error) {
-      console.warn('[dsh-sidenote] 归档侧边会话失败（会话列表可能短暂可见）:', error)
+      console.warn('[dsh-sidenote] 归档侧边会话失败:', error)
     }
   }
   // fork 继承 agent preset 但不继承模型选择——读主会话当前模型并同步到
@@ -535,6 +545,13 @@ export function closeSideTab(ctx: Context, tabId: string, sessionId: string): vo
     }
   }
   betterSidebarOf(ctx)?.closeTab(tabId, { sessionId })
+}
+
+/** A saved copy is a regular session; close the source tab before changing views. */
+export async function saveSideChatSession(ctx: Context, childId: string, tabId: string, parentSessionId: string): Promise<void> {
+  const promoted = await rootContext(ctx).sessions.fork({ sessionId: childId, increaseTitle: true })
+  closeSideTab(ctx, tabId, parentSessionId)
+  openSession(ctx, promoted)
 }
 
 /**

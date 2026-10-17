@@ -22,7 +22,7 @@
 
 ![新版浅色界面：左侧保留主对话，右侧深入讨论，结论回到主输入框](docs/assets/workflow.jpg)
 
-<p align="center"><sub>dsh-sidenote 0.5.1 · DSH 0.2.0-rc.2 · 原生侧栏 · 浅色主题</sub></p>
+<p align="center"><sub>dsh-sidenote 0.6.0 · DSH 0.2.0-rc.2 · 原生侧栏 · 浅色主题</sub></p>
 
 ## 一个任务，容得下更多思路
 
@@ -62,7 +62,7 @@ dsh plugin --profile web add dsh-sidenote
 
 [观看清晰版 MP4](https://github.com/g-yixuan/dsh-sidenote/raw/refs/heads/main/docs/assets/demo.mp4) · [查看静态截图](docs/assets/workflow.jpg)
 
-<sub>以上素材重新录制于 dsh-sidenote 0.5.1 / DSH 0.2.0-rc.2。使用隔离环境中的示例对话与本地演示模型，展示真实界面操作；内容与回答为合成示例。</sub>
+<sub>以上素材重新录制于 dsh-sidenote 0.6.0 / DSH 0.2.0-rc.2。使用隔离环境中的示例对话与本地演示模型，展示真实界面操作；内容与回答为合成示例。</sub>
 
 ## 用起来顺手的细节
 
@@ -72,6 +72,7 @@ dsh plugin --profile web add dsh-sidenote
 | 一次有多处意见 | 多条注释可以一起发送，也能逐条预览和移除。 |
 | 发不出去怎么办 | 发送失败保留注释与正文，便于重试。 |
 | 刷新后继续 | 已保存的注释保留；侧栏未恢复时，可从 `/side` 重开原侧聊。 |
+| 不想让支线堆满列表 | 侧聊默认不进入会话列表和搜索，保存为正式会话后才列出。 |
 | 结论值得长期保留 | 保存为正式会话，后续继续讨论。 |
 
 具体操作、恢复行为和划选范围见[使用指南](docs/usage.md)。
