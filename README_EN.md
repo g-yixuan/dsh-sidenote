@@ -58,6 +58,7 @@ For local development, mount with `dsh plugin --profile web add link:<repo path>
 
 - One click sends a side-chat conclusion back to the main session as a **Q&A pair** (the answer *and* the question it answers) — a controlled chip above the main composer that rides along with your next message; `@`-mentioning a side chat works too;
 - "Save as session" promotes a side chat into the session list; recently closed ones reopen from the `/side` popup.
+- Side chats stay out of the sidebar list and search results from creation, without briefly flashing into the list. Saved regular copies appear normally. On DSH 0.1.7+, use **Settings → General → Show side chats in the session list** to find older side chats; the choice is local to this browser and DSH address. Historical hosts retain archive-based hiding and `/side` recovery of recently closed chats.
 
 ![Reflow chip: a side-chat finding parked above the main composer](docs/assets/06-reflow-chip.png)
 
@@ -85,7 +86,7 @@ Native hosting needs no BS; legacy hosts need their listed BS combination. Nativ
 ## Design notes
 
 - **A real fork, not a summary**: the side session is a genuine DSH session (full history snapshot) with the same capabilities as the main one — not a one-shot Q&A.
-- **List hygiene**: side sessions are archived out of the session list; your list stays clean.
+- **List hygiene**: the plugin owns side-chat identity and list visibility. Newer hosts keep hidden chats runnable; historical hosts retain archiving. Closing tabs or reloading does not put registered side chats back in the list.
 - **An accumulative annotation workflow**: select repeatedly, stack notes, edit, remove, send them together — not a one-off quote.
 
 ## Development

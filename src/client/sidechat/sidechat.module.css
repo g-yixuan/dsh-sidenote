@@ -895,3 +895,7 @@
   gap: 2px;
   margin-right: auto;
 }
+.visibilitySetting { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 16px 0; border-bottom: 1px solid var(--dsw-alias-border-l1, #ddd); color: var(--dsw-alias-label-primary, #222); }
+.visibilitySetting strong { font-size: 14px; font-weight: 500; }
+.visibilitySetting p { margin: 4px 0 0; color: var(--dsw-alias-label-secondary, #666); font-size: 12px; }
+.visibilitySetting input { cursor: pointer; }

@@ -43,6 +43,9 @@ export const en = {
   quoteWorkflowWaiting: 'Annotations are not ready yet. Please try again shortly.',
 
   menuTitle: 'Side chat',
+  showSideSessions: 'Show side chats in the session list',
+  showSideSessionsDescription: 'Side chats stay hidden by default. Enable this to find older side chats.',
+  sideSessionsUnsaved: 'This choice only applies to the current page because it could not be saved locally.',
   tabBaseTitle: 'Side',
 
   // SideChatPanel
@@ -261,6 +264,9 @@ export const zh: Record<CopyKey, string> = {
   quoteWorkflowWaiting: '注释功能暂未就绪，请稍后重试。',
 
   menuTitle: '侧边聊天',
+  showSideSessions: '在会话列表中显示侧边聊天',
+  showSideSessionsDescription: '侧聊默认隐藏；开启后可找回较早的侧聊。',
+  sideSessionsUnsaved: '无法保存到本地，本次选择仅在当前页面生效。',
   tabBaseTitle: '侧边',
 
   codeCopy: '复制',

@@ -19,7 +19,7 @@ import { useComposer, type Composer } from './composer.ts'
 import { appendDraftText, clearPendingDraft, parseSideChatMeta, phaseOf } from './model.ts'
 import { transcriptOf } from '../chat/transcript.ts'
 import { EmptyState, MessageList, StateScreen } from './rows.tsx'
-import { armInheritedTurnPurge, chatSourceOf, closeSideTab, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, retainSession, setSideChatTopic, unarchiveSideSession, updateTabMeta } from './lifecycle.ts'
+import { armInheritedTurnPurge, chatSourceOf, ensurePanelOpen, forkAndRegister, openSession, openSessionWindow, readModelName, retainSession, saveSideChatSession, setSideChatTopic, unarchiveSideSession, updateTabMeta } from './lifecycle.ts'
 import { topicOf } from './identity.ts'
 import { buildMainlineSnapshot } from './snapshot.ts'
 import { directNativeLeg, registerLiveSideChat, notifyLiveSideChats } from './native.ts'
@@ -338,9 +338,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
     if (childId === undefined) return
     void (async () => {
       try {
-        const promoted = await ctx.sessions.fork({ sessionId: childId, increaseTitle: true })
-        ctx.sessions.open(promoted)
-        closeSideTab(ctx, tab.id, scope.sessionId)
+        await saveSideChatSession(ctx, childId, tab.id, scope.sessionId)
         showToast(t('promoteDone'))
       } catch (error) {
         console.warn('[dsh-sidenote] 保存为正式会话失败:', error)
@@ -458,7 +456,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
           type="button"
           className={css.parentStrip}
           title={t('parentStripTitle')}
-          onClick={() => { if (meta.parentSessionId !== undefined) ctx.sessions.open(meta.parentSessionId) }}
+          onClick={() => { if (meta.parentSessionId !== undefined) openSession(ctx, meta.parentSessionId) }}
         >
           <span className={parentState === 'running' ? css.dotRunning : parentState === 'pending' ? css.dotPending : css.dotIdle} />
           {t(parentState === 'running' ? 'parentRunning' : parentState === 'pending' ? 'parentPending' : 'parentIdle')}
@@ -493,7 +491,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
         <button
           type="button"
           className={css.pendingBar}
-          onClick={() => { ctx.sessions.open(childId) }}
+          onClick={() => { openSession(ctx, childId) }}
         >
           {t('pendingNotice')}
         </button>

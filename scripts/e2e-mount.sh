@@ -264,7 +264,7 @@ else
   SPEC_FILTER="mount.e2e.ts"
 fi
 DSH_E2E_URL="$URL" DSH_E2E_WORKSPACE="$WORKSPACE_DIR" DSH_E2E_SEED_SESSION="$SEED_SESSION_ID" DSH_E2E_HOME="$DSH_HOME" \
-  pnpm exec playwright test "$SPEC_FILTER" annotations.e2e.ts core.e2e.ts running.e2e.ts side-selection.e2e.ts diagnostics.e2e.ts ${GREP_FILTER:+--grep "$GREP_FILTER"}
+  pnpm exec playwright test "$SPEC_FILTER" annotations.e2e.ts core.e2e.ts running.e2e.ts side-selection.e2e.ts diagnostics.e2e.ts visibility.e2e.ts ${GREP_FILTER:+--grep "$GREP_FILTER"}
 
 assert_inventory
 
