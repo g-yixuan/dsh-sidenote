@@ -898,4 +898,18 @@
 .visibilitySetting { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 16px 0; border-bottom: 1px solid var(--dsw-alias-border-l1, #ddd); color: var(--dsw-alias-label-primary, #222); }
 .visibilitySetting strong { font-size: 14px; font-weight: 500; }
 .visibilitySetting p { margin: 4px 0 0; color: var(--dsw-alias-label-secondary, #666); font-size: 12px; }
-.visibilitySetting input { cursor: pointer; }
+.visibilitySetting input {
+  appearance: none;
+  flex-shrink: 0;
+  position: relative;
+  width: 36px;
+  height: 20px;
+  margin: 0;
+  border-radius: 10px;
+  background: var(--dsw-alias-label-tertiary, #aaa);
+  cursor: pointer;
+}
+.visibilitySetting input::before { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+.visibilitySetting input:checked { background: var(--dsw-alias-label-primary, #222); }
+.visibilitySetting input:checked::before { left: 19px; }
+.visibilitySetting input:focus-visible { outline: 2px solid var(--dsw-alias-label-primary, #222); outline-offset: 3px; }

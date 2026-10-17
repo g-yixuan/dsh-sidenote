@@ -12,12 +12,12 @@ function VisibilitySetting({ visibility }: { visibility: SessionVisibility }) {
   useLocaleTick()
   const { show, saved } = useSyncExternalStore(visibility.subscribe, visibility.getSnapshot)
   const description = useId()
-  return <label className={css.visibilitySetting}>
-    <span><strong>{t('showSideSessions')}</strong><p id={description}>{t('showSideSessionsDescription')}</p>
+  return <div className={css.visibilitySetting}>
+    <div><strong>{t('showSideSessions')}</strong><p id={description}>{t('showSideSessionsDescription')}</p>
       {!saved && <p role="status">{t('sideSessionsUnsaved')}</p>}
-    </span>
+    </div>
     <input type="checkbox" role="switch" aria-label={t('showSideSessions')} aria-describedby={description} checked={show} onChange={event => visibility.setShow(event.currentTarget.checked)} />
-  </label>
+  </div>
 }
 
 /** Run before orphan-meta cleanup so previous live/closed children can migrate. */
