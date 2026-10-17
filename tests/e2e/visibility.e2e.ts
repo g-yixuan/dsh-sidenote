@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
@@ -94,7 +94,8 @@ test('side session visibility: newer hosts can show hidden children through sett
   await page.getByRole('button', { name: /^(Settings|设置)$/ }).click()
   await page.getByRole('button', { name: /^(General(?: settings)?|通用设置|常规)$/i }).click()
   const toggle = page.getByRole('switch', { name: /^(Show side chats in the session list|在会话列表中显示侧边聊天)$/ })
-  const gated = ['0.1.7-rc.2', '0.2.0-rc.2'].includes(process.env.DSH_EXPECTED_VERSION ?? '')
+  const { actualHost } = JSON.parse(readFileSync('test-results/host-inventory.json', 'utf8')) as { actualHost: string }
+  const gated = !['0.1.1-rc.2', '0.1.2-rc.1', '0.1.5-rc.2'].includes(actualHost)
   await expect(toggle).toHaveCount(gated ? 1 : 0)
   if (!gated) return // Historical hosts retain their archive and /side recovery path.
   await expect(toggle).not.toBeChecked()
