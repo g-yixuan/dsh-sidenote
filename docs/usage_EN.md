@@ -8,6 +8,8 @@ A side chat forks the current main session with a full history snapshot, without
 
 Use the session header's **Side** button, the right-sidebar entry, or `/side` in the main composer. Side chats support tool cards, thinking previews, task cards, model and permission switching, `@` references, and image attachments. Answer approvals and questions directly in the panel; a notification announces completion.
 
+With an image-capable model, focus the side composer and press `⌘V` / `Ctrl+V` to paste clipboard images, or use the attachment button to select them. Images appear above the input and can be removed before sending. Send images on their own or together with text.
+
 Inherited history is collapsed by default. Click the inheritance card to expand it. Fold state and scroll position survive reloads; `Alt+J` switches focus between the main and side composers.
 
 ![An independent conversation in the native sidebar](assets/sidechat.jpg)

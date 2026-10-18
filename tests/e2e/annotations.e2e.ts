@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, userMessageContentsOf, openSideChat } from './journey'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 test.beforeAll(registerSeedWorkspace)
@@ -232,6 +232,43 @@ test.describe('annotation editor lifecycle', () => {
     await expect(side.getByText('Controlled E2E reply. This complete assistant response supports quote selection.', { exact: true }).last()).toBeVisible()
     expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)).toEqual(parentBefore)
   })
+})
+
+test('clipboard image paste previews, removes and sends only to the side chat', async ({ page, context }) => {
+  await prepareSeedPage(page)
+  const child = await openSideChat(page)
+  const side = sideChatOf(page)
+  await selectControlledModel(page)
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  const input = side.getByPlaceholder(/^(Message…|输入消息)/)
+  const body = 'clipboard image admission'
+  await input.focus()
+  await page.evaluate(text => navigator.clipboard.writeText(text), body)
+  await input.press('ControlOrMeta+V')
+  await expect(input).toHaveValue(body)
+  await page.evaluate(bytes => navigator.clipboard.write([new ClipboardItem({
+    'image/png': new Blob([new Uint8Array(bytes)], { type: 'image/png' }),
+  })]), [...readFileSync('tests/fixtures/quote-test.png')])
+  await input.press('ControlOrMeta+V')
+  await expect(side.locator('img[src^="blob:"]')).toHaveCount(1)
+  await expect(input).toHaveValue(body)
+  await expect(page.locator('[data-composer-seat] img[src^="blob:"]')).toHaveCount(0)
+  await page.screenshot({ path: 'test-results/sidechat-pasted-image.png' })
+  await side.getByRole('button', { name: /^(Remove|移除)$/ }).click()
+  await expect(side.locator('img[src^="blob:"]')).toHaveCount(0)
+  await input.press('ControlOrMeta+V')
+  await expect(side.locator('img[src^="blob:"]')).toHaveCount(1)
+  const parentBefore = userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)
+  const replies = side.getByText('Controlled E2E reply. This complete assistant response supports quote selection.', { exact: true })
+  const repliesBefore = await replies.count()
+  await side.getByRole('button', { name: /^(Send|发送)$/ }).click()
+  await expect.poll(() => userMessagesOf(child).filter(text => text.includes(body))).toHaveLength(1)
+  const content = userMessageContentsOf(child).find(blocks => blocks.some(block => block.text?.includes(body)))!
+  expect(content.filter(block => block.type === 'image')).toHaveLength(1)
+  await expect(input).toHaveValue('')
+  await expect(side.locator('img[src^="blob:"]')).toHaveCount(0)
+  await expect(replies).toHaveCount(repliesBefore + 1)
+  expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)).toEqual(parentBefore)
 })
 
 test('real malformed-image rejection keeps quote and clean body, then retries once', async ({ page }) => {

@@ -84,6 +84,11 @@ export function ComposerBar(props: {
               composer.draftRev ?? 0,
             )
           }}
+          onPaste={(event) => {
+            if (!composer.canAttach) return
+            const images = [...event.clipboardData.files].filter(file => file.type.startsWith('image/'))
+            if (images.length > 0 && composer.attachImages(images)) event.preventDefault()
+          }}
           onKeyDown={(event) => {
             // 菜单开着先仲裁（上下/Enter 选中/Esc 关闭归控制器）。
             if (menuOpen && triggerCtl !== null) {
