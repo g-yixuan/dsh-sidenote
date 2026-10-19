@@ -9,6 +9,8 @@ const entry = (page: Page) => page.getByRole('button', { name: /^(Compatibility 
 const modeSwitch = (page: Page) => page.getByRole('switch', { name: /^dsh-sidenote (diagnostic mode|诊断模式)$/ })
 
 async function openDiagnosticSettings(page: Page): Promise<void> {
+  const open = page.getByRole('button', { name: /^(Open sidebar|打开侧栏)$/ }).first()
+  if (await open.isVisible()) await open.click()
   await page.getByRole('button', { name: /^(Settings|设置)$/ }).click()
   await page.getByRole('button', { name: /^(General(?: settings)?|通用设置|常规)$/i }).click()
   await expect(modeSwitch(page)).toBeVisible()
