@@ -9,9 +9,10 @@
 import { t } from '../locales.ts'
 import { markdownChrome } from './markdown.ts'
 
-/** TerminalBlockLabels（0.1.1 与 0.1.2 同形状）。 */
+/** TerminalBlockLabels；新版宿主还要求每行命令的无障碍标签。 */
 export function terminalLabels() {
   return {
+    commandLine: (n: number) => t('termCommandLine', { n }),
     signal: (signal: string) => t('termSignal', { signal }),
     exitCode: (code: number) => t('termExitCode', { code }),
     running: t('running'),
