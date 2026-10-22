@@ -73,6 +73,19 @@ export async function prepareSeedPage(page: Page): Promise<void> {
   await openSeedSession(page)
 }
 
+/** New hosts put Settings inside the account menu; legacy hosts expose a button. */
+export async function openGeneralSettings(page: Page): Promise<void> {
+  const open = page.getByRole('button', { name: /^(Open sidebar|打开侧栏)$/ }).first()
+  if (await open.isVisible()) await open.click()
+  const settings = page.getByRole('button', { name: /^(Settings|设置)$/ })
+  if (await settings.count() > 0) await settings.click()
+  else {
+    await page.getByRole('button', { name: /^(Account menu|账号菜单)$/ }).click()
+    await page.getByRole('menuitem', { name: /^(Settings|设置)$/ }).click()
+  }
+  await page.getByRole('button', { name: /^(General(?: settings)?|通用设置|常规)$/i }).click()
+}
+
 export const sideChatOf = (page: Page) => page.locator('[data-sidenote-chat-session]:visible')
 
 function decodeLog(bytes: Buffer, compressed: boolean): string {

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf } from './journey'
+import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, openGeneralSettings } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
 
@@ -92,8 +92,7 @@ test('side session visibility: creation never flashes, hidden chats run, and a s
 test('side session visibility: newer hosts can show hidden children through settings and remember the choice', async ({ page }) => {
   await prepareSeedPage(page)
   const child = await openSideChat(page)
-  await page.getByRole('button', { name: /^(Settings|设置)$/ }).click()
-  await page.getByRole('button', { name: /^(General(?: settings)?|通用设置|常规)$/i }).click()
+  await openGeneralSettings(page)
   const toggle = page.getByRole('switch', { name: /^(Show side chats in the session list|在会话列表中显示侧边聊天)$/ })
   // The verified inventory lives in scratch until the mount runner's cleanup;
   // test-results receives its exported copy only after Playwright has exited.
@@ -109,8 +108,7 @@ test('side session visibility: newer hosts can show hidden children through sett
   await expect(row).toBeVisible()
   await page.reload()
   await expect(row).toBeVisible()
-  await page.getByRole('button', { name: /^(Settings|设置)$/ }).click()
-  await page.getByRole('button', { name: /^(General(?: settings)?|通用设置|常规)$/i }).click()
+  await openGeneralSettings(page)
   await expect(toggle).toBeChecked()
   await toggle.uncheck()
   await page.screenshot({ path: 'test-results/visibility-setting.png' })

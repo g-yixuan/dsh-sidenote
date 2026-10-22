@@ -82,7 +82,7 @@ dsh plugin --profile web add dsh-sidenote
 
 ## 兼容与帮助
 
-已验证的原生侧栏组合为 **DSH 0.1.5-rc.2、0.1.7-rc.2、0.2.0-rc.2**；旧版的三组 BS 组合继续保留验收。支持范围以[兼容与维护政策](docs/compatibility.md)中的精确版本为准。
+已验证的原生侧栏组合为 **DSH 0.1.5-rc.2、0.1.7-rc.2、0.2.0-rc.2、0.2.1-rc.2**；旧版的三组 BS 组合继续保留验收。支持范围以[兼容与维护政策](docs/compatibility.md)中的精确版本为准；已发布版本请查看对应 Release。
 
 遇到问题时，可在 **设置 → 通用设置 → dsh-sidenote 诊断模式** 开启诊断，查看并手动导出接入状态。[报告问题或提出建议](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose)。
 

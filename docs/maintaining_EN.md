@@ -7,7 +7,7 @@ These rules apply to maintainers with write, merge, or release access and the ag
 ## Development and merging
 
 - `main` is the single development branch. Features, fixes, documentation, CI, dependencies, and versions all use topic branches and PRs. Maintainers and agents follow the same rules.
-- Before merging, `ci` and all six pinned `plugin-mount` host checks must pass, review threads must be addressed, and the branch must be compatible with current `main`. The weekly `host-canary` tracks host drift separately and is not a required check on every PR.
+- Before merging, `ci` and all seven pinned `plugin-mount` host checks must pass, review threads must be addressed, and the branch must be compatible with current `main`. The weekly `host-canary` tracks host drift separately and is not a required check on every PR.
 - Do not push directly to, force-push, or delete `main`. Manual publishing cannot replace merge checks. Urgent fixes still use small PRs. Fix CI failures or publicly explain a targeted rule adjustment; do not routinely ignore failed checks.
 - Maintainers review the problem, scope, regression risks, and validation evidence. External PRs need maintainer review. While there is one maintainer, their own PRs may merge after self-review and all required checks; a mandatory second-person approval would block development.
 - GitHub currently requires zero independent approvals while still enforcing PRs, CI, and resolved review threads. Once there are at least two active, reliable maintainers, require one approval and have another maintainer review an author's own PR.
@@ -20,7 +20,7 @@ Host validation uses the same core journey across versions: a real child fork, u
 
 Each CI combination saves `test-results/host-inventory.json`, screenshots, and failure logs. The inventory checks the exact CLI, active client bundle versions, resolved host dependencies, and this plugin build's digest. Unreadable component versions remain unknown; the CLI and devDependencies are not substitutes. A stale installed build is rejected before browser journeys and checked again afterward. Set `DSH_EXPECTED_VERSION` for a manually pinned run: the script rejects a mismatch or missing command instead of falling back to latest.
 
-The exact 0.2.0-rc.2 release has completed admission and is the sixth required host check; all five existing checks remain. The weekly canary resolves latest once, runs the same core journey on that exact version, and saves evidence; failures remain visible in its job. Future candidates still require full functionality, relevant runtime and visible-browser validation before a PR updates support claims and required checks, including the actual ruleset.
+The exact 0.2.0-rc.2 and 0.2.1-rc.2 releases have completed admission and are the sixth and seventh required host checks; all five existing checks remain. The weekly canary resolves latest once, runs the same core journey on that exact version, and saves evidence; failures remain visible in its job. Future candidates still require full functionality, relevant runtime and visible-browser validation before a PR updates support claims and required checks, including the actual ruleset.
 
 See the [compatibility policy](compatibility_EN.md) for runtime diagnosis, the bounded support window and admission. Frozen support keeps its data/delivery commitments; retirement needs a separate PR, never automatic removal by age or an unknown usage share.
 
