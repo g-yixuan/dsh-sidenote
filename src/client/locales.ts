@@ -185,6 +185,7 @@ export const en = {
   reflowRemoveTitle: 'Remove reflow',
 
   // TerminalBlock labels（0.1.2 运行时不传 labels 会崩——W00 排障实证）
+  termCommandLine: 'Command line {n}',
   termSignal: 'Terminated ({signal})',
   termExitCode: 'Exit code {code}',
   termDone: 'done',
@@ -395,6 +396,7 @@ export const zh: Record<CopyKey, string> = {
   reflowBubbleLabel: '含侧边回流上下文',
   reflowRemoveTitle: '移除回流',
 
+  termCommandLine: '命令第 {n} 行',
   termSignal: '已终止（{signal}）',
   termExitCode: '退出码 {code}',
   termDone: '完成',

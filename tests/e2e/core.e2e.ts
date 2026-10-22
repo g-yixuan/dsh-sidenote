@@ -11,6 +11,13 @@ test('shared host journey: real fork, inherited history, accepted side message a
   expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!).some(text => text.includes('I forked the main session'))).toBe(true)
   const child = await openSideChat(page)
   const side = sideChatOf(page)
+  // Exercise the host TerminalBlock too: opening inherited history alone leaves
+  // tool cards collapsed and misses required-label changes in newer hosts.
+  await side.getByText('Bash · List workspace files', { exact: true })
+    .locator('xpath=ancestor-or-self::*[@data-disclosure-row][1]').click()
+  const terminal = side.locator('[data-terminal]')
+  await expect(terminal).toContainText('ls -1')
+  await expect(terminal).toContainText('package.json')
   const input = side.getByPlaceholder(/^(Message…|输入消息)/)
   const message = 'Shared host journey: send to this child only'
   await input.fill(message)
