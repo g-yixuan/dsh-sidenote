@@ -76,6 +76,8 @@ jobs:
           # Fully admitted exact release; preserve the five existing checks.
           - dsh-version: '0.2.0-rc.2'
             bs-version: 'none'
+          - dsh-version: '0.2.1-rc.2'
+            bs-version: 'none'
     continue-on-error: ${{ matrix.experimental || false }}
     env:
       DSH_TELEMETRY_DISABLED: '1'

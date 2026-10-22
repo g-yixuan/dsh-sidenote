@@ -2,7 +2,7 @@
 
 [中文](compatibility.md) · English
 
-This table lists validated combinations and maintenance promises for dsh-sidenote **0.5.0**. For other published versions, check the corresponding Release. Engine ranges are installation gates, not proof that every rc or plugin combination inside them was validated.
+This table lists validated combinations and maintenance promises for the current main branch. For published versions, check the corresponding Release; 0.6.2 and earlier do not declare support for DSH 0.2.1-rc.2. Engine ranges are installation gates, not proof that every rc or plugin combination inside them was validated.
 
 | Exact combination | Category | Validation gate |
 |---|---|---|
@@ -12,12 +12,15 @@ This table lists validated combinations and maintenance promises for dsh-sidenot
 | DSH 0.1.1-rc.2 + BS 0.18.0 | Frozen legacy, separate combination | Full fixed journeys; removal requires a retirement PR |
 | DSH 0.1.2-rc.1 + BS 0.18.0 | Frozen legacy, API-generation representative | Full fixed journeys |
 | DSH 0.2.0-rc.2, no BS | Maintained; exact release admitted | Full fixed journeys and a required host check |
+| DSH 0.2.1-rc.2, no BS | Maintained; exact release admitted | Full fixed journeys and a required host check |
 
 BS means dsh-better-sidebar. Unlisted combinations are unverified. Independence from BS does not prove every native-host + BS 0.19+ coexistence combination. Alpha hosts have no release compatibility commitment.
 
 0.5.0 includes unified main/side annotations, side-reply selection, content retention and recovery on failure, and opt-in compatibility diagnostics. The earlier [host admission CI](https://github.com/g-yixuan/dsh-sidenote/actions/runs/38281154300) and [final feature validation CI](https://github.com/g-yixuan/dsh-sidenote/actions/runs/38344084161) record actual runtime versions, build digests and evidence for each maintained combination; the latter passed six combinations / 153 real E2E tests and 313 unit tests. Runtime cases use a controlled model; external model answers are outside this validation. The old 0.4.6 release does not contain these changes.
 
-The added installation declaration admits only exact `0.2.0-rc.2`: `>=0.1.1-rc.1 <0.2.0 || =0.2.0-rc.2`; UI primitives adds the same exact release. Other 0.2 rc, stable and alpha releases still need admission.
+For the 0.2 series, installation admits only exact `0.2.0-rc.2` and `0.2.1-rc.2`: `>=0.1.1-rc.1 <0.2.0 || =0.2.0-rc.2 || =0.2.1-rc.2`; UI primitives admits the same two exact releases. DSH 0.2.1 gives `engines.dsh` precedence when checking plugin compatibility, so both DSH engine declarations and the UI primitives peer range stay aligned. Other 0.2 rc, stable and alpha releases still need admission.
+
+Admission for 0.2.1-rc.2 uses an isolated DSH_HOME, the official plugin installation channel and the current plugin build. Full journeys cover main/side annotations, real forks and durable delivery, images, failure recovery, Queue/Steer/Stop, busy forks, reflow and side-chat hiding. Runtime cases use a local controlled model; external model services and coexistence with BS on the new host are outside this validation.
 
 Frozen support retains its integration and declared workflows without backporting every new host feature. Data loss, delivery to the wrong session and installation regressions still need attention. The default window is two fully validated host lines plus one explicit extended environment; it never removes old checks automatically. Retirement requires a separate PR recording the last validated plugin/host versions, impact, alternatives and bilingual notice. Without reliable data, do not infer host-version shares from npm downloads or add telemetry.
 
@@ -27,7 +30,7 @@ The main message/composer DOM, session input, durable content, acceptance, model
 
 Side-chat hiding is owned entirely by the plugin. Before a creation request, the sidebar temporarily holds new rows until the returned child ID is durably registered; existing rows keep updating, and failures release the hold. Only the workspace list input is filtered; the global catalog, bindings and message delivery are preserved. DSH 0.1.7+ keeps side chats unarchived so its archive gate cannot block model execution. Historical hosts retain archiving. Saving creates a visible regular copy, closes the source tab before navigation, and adapts both `uiWorkspace.openSession` and historical `sessions.open`.
 
-The list seam lives in `host/sessionList.tsx`, detects the native workspace slot, preserves grouping, search, actions, locale and injection, and restores the original component on disposal. It uses mutable runtime slot entries rather than a promised session-hiding API. Unrecognized shapes retain the native list; side chats may remain visible without archiving them into a model-blocked state on newer hosts. The existing six-combination matrix continues to guard this seam; supported version declarations are unchanged.
+The list seam lives in `host/sessionList.tsx`, detects the native workspace slot, preserves grouping, search, actions, locale and injection, and restores the original component on disposal. It uses mutable runtime slot entries rather than a promised session-hiding API. Unrecognized shapes retain the native list; side chats may remain visible without archiving them into a model-blocked state on newer hosts. The seven fixed combinations continue to guard this seam.
 
 Content search retains the host's result limit; filtering hidden side chats does not fetch additional results beyond that page.
 
@@ -49,6 +52,6 @@ Reports are downloaded only when **Export report** is clicked and are never uplo
 4. Separate install/host failures, plugin API/DOM changes and test locator errors. Preserve failures, make focused fixes and rerun maintained combinations without lowering assertions or skipping features.
 5. Complete relevant functionality, real runtime cases and visible-browser validation before promoting a candidate via PR. Update support claims, installation ranges, both guides and required checks together, checking the actual GitHub ruleset context names.
 
-The five required combinations remain, with `plugin-mount (0.2.0-rc.2, none)` added as the sixth host check. Weekly canary resolves latest once, then runs that exact version with the same journeys and inventory. Failures retain evidence and remain visible in their job; they never automatically expand support or change the user's environment. Use existing GitHub Actions status rather than a new notification bot.
+The six required combinations remain, with `plugin-mount (0.2.1-rc.2, none)` added as the seventh host check. Weekly canary resolves latest once, then runs that exact version with the same journeys and inventory. Failures retain evidence and remain visible in their job; they never automatically expand support or change the user's environment. Use existing GitHub Actions status rather than a new notification bot.
 
 Ctrl/Cmd+Enter Steer follows the host's step boundaries. A subsequent send wakes the queue preserved by Stop. Record message acceptance and successful model answers separately.

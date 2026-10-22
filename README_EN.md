@@ -82,7 +82,7 @@ See the [user guide](docs/usage_EN.md) for controls, recovery behavior, and sele
 
 ## Compatibility and help
 
-Verified native sidebar combinations use **DSH 0.1.5-rc.2, 0.1.7-rc.2, or 0.2.0-rc.2**. Three legacy BS combinations retain validation. The exact versions in the [compatibility and maintenance policy](docs/compatibility_EN.md) define the supported scope.
+Verified native sidebar combinations use **DSH 0.1.5-rc.2, 0.1.7-rc.2, 0.2.0-rc.2, or 0.2.1-rc.2**. Three legacy BS combinations retain validation. The exact versions in the [compatibility and maintenance policy](docs/compatibility_EN.md) define the supported scope; check the corresponding Release for published versions.
 
 For troubleshooting, enable **Settings → General → dsh-sidenote diagnostic mode** to inspect and manually export the integration status. [Report a problem or suggest an improvement](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose).
 
