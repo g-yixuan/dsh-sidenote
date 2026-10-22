@@ -73,7 +73,7 @@ jobs:
             bs-version: 'none'
           - dsh-version: '0.1.7-rc.2'
             bs-version: 'none'
-          # Fully admitted exact release; preserve the five existing checks.
+          # Exact admitted releases; preserve all historical combinations.
           - dsh-version: '0.2.0-rc.2'
             bs-version: 'none'
           - dsh-version: '0.2.1-rc.2'
