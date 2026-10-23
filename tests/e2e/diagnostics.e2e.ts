@@ -117,12 +117,7 @@ if (process.env.DSH_E2E_CAPABILITY_FAULT) test('missing side input is visible, r
   const input = side.locator('[data-composer-input]')
   await input.fill('body retained across missing input')
   const body = side.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()
-  await body.scrollIntoViewIfNeeded()
-  await body.evaluate(el => {
-    const range = document.createRange(); range.selectNodeContents(el)
-    window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(range)
-    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
-  })
+  await dragText(page, body, 'full history snapshot')
   const overlay = page.locator('[data-dsh-sidenote]')
   await overlay.getByText(/^(Add to conversation|添加到对话)$/).click()
   await overlay.locator('input').fill('retained quote note'); await overlay.locator('input').press('Enter')
@@ -161,12 +156,7 @@ if (process.env.DSH_E2E_CAPABILITY_FAULT) test('missing main input cannot silent
   await prepareSeedPage(page)
   const parent = process.env.DSH_E2E_SEED_SESSION!
   const source = page.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()
-  await source.scrollIntoViewIfNeeded()
-  await source.evaluate(el => {
-    const range = document.createRange(); range.selectNodeContents(el)
-    window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(range)
-    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
-  })
+  await dragText(page, source, 'full history snapshot')
   const overlay = page.locator('[data-dsh-sidenote]')
   await overlay.getByText(/^(Add to conversation|添加到对话)$/).click()
   await overlay.locator('input').fill('main quote to retain'); await overlay.locator('input').press('Enter')
