@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
-import { prepareSeedPage, registerSeedWorkspace, openSideChat, sideChatOf, userMessagesOf, openGeneralSettings } from './journey'
+import { prepareSeedPage, registerSeedWorkspace, openSideChat, sideChatOf, userMessagesOf, openGeneralSettings, dragText } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
 const pluginVersion: string = JSON.parse(readFileSync('package.json', 'utf8')).version
@@ -90,14 +90,10 @@ test('compatibility report is visible, observes real admission, and exports soft
   await input.fill('diagnostics ordinary body')
   // Add through the real toolbar; only selected quote data enters the model.
   const body = sideChatOf(page).locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()
-  await body.scrollIntoViewIfNeeded()
-  await body.evaluate(el => {
-    const range = document.createRange(); range.selectNodeContents(el)
-    window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(range)
-    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
-  })
+  await dragText(page, body, 'full history snapshot')
   const overlay = page.locator('[data-dsh-sidenote]')
-  await overlay.getByText(/^(Add to conversation|添加到对话)$/).click()
+  await overlay.getByRole('button', { name: /^(Add to conversation|添加到对话)$/ }).click()
+  await expect(overlay.locator('input')).toBeVisible()
   await overlay.locator('input').press('Enter')
   await input.press('Enter')
   await expect.poll(() => userMessagesOf(child).some(text => text.includes('diagnostics ordinary body') && text.includes('<annotation'))).toBe(true)

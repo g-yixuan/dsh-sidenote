@@ -88,6 +88,28 @@ export async function openGeneralSettings(page: Page): Promise<void> {
 
 export const sideChatOf = (page: Page) => page.locator('[data-sidenote-chat-session]:visible')
 
+/** Exercise selection with real pointer events, including the host's scrolling. */
+export async function dragText(page: Page, body: Locator, text: string): Promise<void> {
+  await body.scrollIntoViewIfNeeded()
+  const points = await body.evaluate((el, needle) => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const at = (node.textContent ?? '').indexOf(needle)
+      if (at < 0) continue
+      const first = document.createRange(), last = document.createRange()
+      first.setStart(node, at); first.setEnd(node, at + 1)
+      last.setStart(node, at + needle.length - 1); last.setEnd(node, at + needle.length)
+      const a = first.getBoundingClientRect(), b = last.getBoundingClientRect()
+      return { x1: a.left + 0.1, y1: a.top + a.height / 2, x2: b.right - 0.1, y2: b.top + b.height / 2 }
+    }
+    return null
+  }, text)
+  expect(points).not.toBeNull()
+  await page.mouse.move(points!.x1, points!.y1); await page.mouse.down()
+  await page.mouse.move(points!.x2, points!.y2, { steps: 12 }); await page.mouse.up()
+  await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toContain(text)
+}
+
 export async function selectModel(page: Page, view: Locator, name: string): Promise<void> {
   const button = view.getByRole('button', { name: /^(Select model|选择模型)/ })
   if ((await button.getAttribute('aria-label'))?.includes(name)) return

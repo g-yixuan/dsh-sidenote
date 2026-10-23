@@ -1,8 +1,8 @@
 import type { Context, ConversationSnapshot, ObservableSnapshot, SessionBinding, SessionReference, UiConversationLike } from './contracts.ts'
 
 /** Native root status includes approvals and questions, independently of running. */
-export function sessionStatusSource(ctx: Context): ObservableSnapshot<ReadonlyMap<string, { pendingInteraction?: unknown }>> | undefined {
-  return (ctx.get('uiSession') as { sessionStatus?: ObservableSnapshot<ReadonlyMap<string, { pendingInteraction?: unknown }>> } | undefined)?.sessionStatus
+export function sessionStatusSource(ctx: Context): ObservableSnapshot<ReadonlyMap<string, { running?: boolean; pendingInteraction?: unknown }>> | undefined {
+  return (ctx.get('uiSession') as { sessionStatus?: ObservableSnapshot<ReadonlyMap<string, { running?: boolean; pendingInteraction?: unknown }>> } | undefined)?.sessionStatus
 }
 
 /** Durable conversation content; local submission echoes are never part of this face. */

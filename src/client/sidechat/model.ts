@@ -11,7 +11,7 @@
  */
 import type { Context, SidebarTab } from '../host/contracts.ts'
 import type { ChatMessage } from '../chat/transcript.ts'
-import { splitProtocolPrefix } from '../annotations/format.ts'
+import { splitProtocolPrefix, splitSnapshotPrefix } from '../annotations/format.ts'
 import { t } from '../locales.ts'
 
 /** Tab 类型 id（better-sidebar 注册表键；带包前缀防冲突）。 */
@@ -205,8 +205,9 @@ export function pairQuestions(messages: readonly ChatMessage[]): ReadonlyMap<str
   let pending: string | undefined
   for (const message of messages) {
     if (message.role === 'user') {
-      const proto = splitProtocolPrefix(message.text)
-      const visible = (proto === null ? message.text : message.text.slice(proto.length)).trim()
+      const body = splitSnapshotPrefix(message.text)?.rest ?? message.text
+      const proto = splitProtocolPrefix(body)
+      const visible = (proto === null ? body : body.slice(proto.length)).trim()
       pending = visible === '' ? undefined : visible
     } else if (message.role === 'assistant' && message.streaming !== true && pending !== undefined) {
       pairs.set(message.key, pending)

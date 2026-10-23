@@ -3,7 +3,7 @@ import type { Context } from '../host/contracts.ts'
 import { openSessionWindow, isPurgingInheritedTurn } from './lifecycle.ts'
 import { sideChatMetaStore, sideChatMetasAll } from './metaStore.ts'
 import { sideChatTitleOf } from './identity.ts'
-import { chatSourceOf } from '../host/chat.ts'
+import { chatSourceOf, sessionStatusSource } from '../host/chat.ts'
 import { subscribeLiveSideChats } from './native.ts'
 import { showToast } from './toast.tsx'
 import { t } from '../locales.ts'
@@ -40,9 +40,12 @@ export function registerCompletionNotify(ctx: Context): void {
           if (session === undefined) continue
           openSessionWindow(session)
           const chat = chatSourceOf(ctx, ctx.sessions.binding(childId))
-          const watcher: Watcher = { unsub: () => {}, wasRunning: session.getSnapshot().running === true, lastEndSeq: chat?.getLastTurnEnd?.()?.seq ?? -1 }
+          if (!chat?.getLastTurnEnd) continue
+          const status = sessionStatusSource(ctx)
+          const runningNow = (): boolean => status?.getSnapshot().get(childId)?.running ?? session.getSnapshot().running === true
+          const watcher: Watcher = { unsub: () => {}, wasRunning: runningNow(), lastEndSeq: chat.getLastTurnEnd()?.seq ?? -1 }
           const check = (): void => {
-            const running = session.getSnapshot().running === true
+            const running = runningNow()
             if (isPurgingInheritedTurn(childId)) { watcher.wasRunning = running; return }
             const end = chat?.getLastTurnEnd?.()
             if (end && end.seq > watcher.lastEndSeq) {
@@ -56,7 +59,8 @@ export function registerCompletionNotify(ctx: Context): void {
           }
           const offSession = session.subscribe(check)
           const offChat = chat?.subscribe(check)
-          watcher.unsub = () => { offSession(); offChat?.() }
+          const offStatus = status?.subscribe(check)
+          watcher.unsub = () => { offSession(); offChat?.(); offStatus?.() }
           watchers.set(childId, watcher)
         } catch {
           // 下轮重扫再试。

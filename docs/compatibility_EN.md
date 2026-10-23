@@ -38,7 +38,7 @@ Before raising the host requirement, identify retired hosts and their last compa
 
 Main and side share the host's Conversation, SessionProvider, composer, message flow, queue, commands, file references, attachments, model and reasoning controls, approvals and questions. The plugin adds forks, inherited-history folding, annotations, reflow, saving and recovery. Controlled annotation/reflow sends still use native arbitration and authoritative acceptance.
 
-Integration seams live in `src/client/host/`. Decorating flow and keyed message registry entries preserves the native renderer. History filtering, quote anchors, progress snapshots and workspace-list hiding rely on runtime slot seams covered by the fixed matrix, rather than a promised permanent hiding API. Unknown shapes retain the native interface without guessing message sources or recipients.
+Integration seams live in `src/client/host/`. Decorating the shared chat View and keyed message registry entries preserves the native renderer. History filtering, quote anchors, progress snapshots and workspace-list hiding rely on runtime slot seams covered by the fixed matrix, rather than a promised permanent hiding API. Unknown shapes retain the native interface without guessing message sources or recipients.
 
 Side chats stay hidden by default. Their browser/address-local identity outlives tabs and the five-entry recently closed menu; active native sessions are not archived. Saving produces a visible copy of completed history and is blocked while running, submitting or queued. “Show side chats in the session list” reveals registered children without restoring deleted sessions or unarchiving historical ones.
 

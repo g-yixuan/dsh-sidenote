@@ -79,12 +79,12 @@ test('busy: native queue is visible and saving cannot discard running or queued 
   await side.getByRole('button', { name: /^(Stop generating|停止生成)$/ }).click()
   await expect(save).toBeDisabled()
   await expect.poll(() => sessionEventsOf(child).at(-1)?.type).toBe('turn/end')
-  await expect(page.locator('[data-dsh-sidenote-toast]')).not.toContainText(/finished replying|回复完成/)
+  await expect(page.getByRole('alert').filter({ hasText: /finished replying|回复完成/ })).toHaveCount(0)
   expect(userMessagesOf(child).some(text => text.includes('visible queued message'))).toBe(false)
   await input.fill('resume queued work'); await input.press('Enter')
   await expect.poll(() => userMessagesOf(child).some(text => text.includes('visible queued message'))).toBe(true)
   await expect(save).toBeEnabled()
-  await expect(page.locator('[data-dsh-sidenote-toast]')).toContainText(/finished replying|回复完成/)
+  await expect(page.getByRole('alert').filter({ hasText: /finished replying|回复完成/ })).toBeVisible()
 })
 
 test('commands: native slash completion and file references work inside the child', async ({ page }) => {

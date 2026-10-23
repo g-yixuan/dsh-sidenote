@@ -394,7 +394,7 @@ export type KnownSlotKey =
   | 'sidebar.right.pane.tab'
   | 'sidebar.right.pane.tab.title'
   | 'sidenote.conversation'
-  | 'conversation.chat.flow'
+  | 'conversation.view'
   | 'conversation.chat.node'
   | 'conversation.chat.turnTail'
 

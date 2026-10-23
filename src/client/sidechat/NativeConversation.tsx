@@ -1,4 +1,4 @@
-import { createContext, createElement, useContext, useEffect, useMemo, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
+import { createContext, createElement, useCallback, useContext, useMemo, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
 import type { Context, SessionReference } from '../host/contracts.ts'
 import { transcriptOf, type ChatMessage } from '../chat/transcript.ts'
 import { createFoldStore } from '../chat/viewState.ts'
@@ -76,52 +76,60 @@ function ReplyAction({ side, messages, seq }: { side: SideConversation; messages
 
 interface Entry { kind: 'node' | 'group'; key: string }
 interface NodeSnapshot { anchorSeq: number }
-interface FlowProps {
-  entries: readonly Entry[]
+interface GroupedView { entries: readonly Entry[]; groupSource(key: string): { getSnapshot(): { members: readonly Entry[] } | undefined } }
+interface ViewSnapshot { views: { grouped(name: string): GroupedView | undefined } }
+interface ViewProps {
   useChat<T>(select: (state: { nodes: { get(key: string): NodeSnapshot | undefined } }) => T): T
-  useConversation<T>(select: (state: { views: { grouped(name: string): { groupSource(key: string): { getSnapshot(): { members: readonly Entry[] } | undefined } } | undefined } }) => T): T
+  useConversation<T>(select: (state: ViewSnapshot) => T): T
 }
-function HistoryFlow({ Original, props, side }: { Original: ComponentType<FlowProps>; props: FlowProps; side: SideConversation }) {
+function HistoryView({ Original, props, side }: { Original: ComponentType<ViewProps>; props: ViewProps; side: SideConversation }) {
   const fold = useMemo(() => createFoldStore(`dsh-sidenote:fold:v1:${side.sessionId}`), [side.sessionId])
   useSyncExternalStore(fold.subscribe, fold.getSnapshot)
   const nodes = props.useChat(state => state.nodes)
-  const groups = props.useConversation(state => state.views.grouped('chat'))
+  const snapshot = props.useConversation(state => state)
+  const groups = snapshot.views.grouped('chat')
+  const entries = groups?.entries ?? []
   const isInherited = (entry: Entry): boolean => {
-    const members = entry.kind === 'node' ? [entry] : groups?.groupSource(entry.key).getSnapshot()?.members ?? []
-    return members.length > 0 && members.every(member => {
-      const node = nodes.get(member.key)
+    if (entry.kind === 'node') {
+      const node = nodes.get(entry.key)
       return node !== undefined && node.anchorSeq <= (side.boundarySeq ?? -1)
-    })
+    }
+    const members = groups?.groupSource(entry.key).getSnapshot()?.members ?? []
+    return members.length > 0 && members.every(isInherited)
   }
-  const inherited = props.entries.filter(isInherited)
+  const inherited = entries.filter(isInherited)
   const expanded = fold.isOpen('inherited')
+  const visible = expanded ? entries : entries.filter(entry => !isInherited(entry))
+  const projected = { ...snapshot, views: { ...snapshot.views, grouped: (name: string) => name === 'chat' && groups ? { ...groups, entries: visible } : snapshot.views.grouped(name) } }
+  const useProjected = useCallback(<T,>(selector: (state: ViewSnapshot) => T): T => selector(projected), [projected])
   return <>
     {inherited.length > 0 && <button type="button" className={css.historyToggle} aria-expanded={expanded} onClick={() => { fold.toggle('inherited') }}>{t('inheritedLabel', { n: inherited.length })}</button>}
-    {createElement(Original, { ...props, entries: expanded ? props.entries : props.entries.filter(entry => !isInherited(entry)) })}
+    {createElement(Original, { ...props, useConversation: useProjected })}
   </>
 }
 
-/** Keep the shipped renderer, store, hooks and grouping; filter only inherited entries in our occurrence. */
-function registerHistoryFlow(ctx: Context): void {
-  type FlowEntry = { component: ComponentType<FlowProps> }
-  const slots = ctx.slots as Context['slots'] & { entries(name: string): readonly FlowEntry[]; subscribe(name: string, notify: () => void): () => void }
-  ctx.slots.inject('conversation.chat.flow', () => {
-    const patched = new Map<FlowEntry, { original: ComponentType<FlowProps>; wrapped: ComponentType<FlowProps> }>()
+/** Both admitted hosts publish the native chat View; only 0.2.1 adds a Flow slot. */
+function registerInheritedHistory(ctx: Context): void {
+  type ViewEntry = { component: ComponentType<ViewProps>; options: { id?: string; priority?: number } }
+  const slots = ctx.slots as Context['slots'] & { entries(name: string): readonly ViewEntry[]; subscribe(name: string, notify: () => void): () => void }
+  ctx.slots.inject('conversation.view', () => {
+    const patched = new Map<ViewEntry, { original: ComponentType<ViewProps>; wrapped: ComponentType<ViewProps> }>()
     const patch = (): void => {
-      for (const entry of slots.entries('conversation.chat.flow')) {
-        if (patched.has(entry)) continue
+      for (const entry of slots.entries('conversation.view')) {
+        if (entry.options.id !== 'chat' || entry.options.priority === 10000 || patched.has(entry)) continue
         const Original = entry.component
-        function ScopedFlow(props: FlowProps) {
+        function ScopedView(props: ViewProps) {
           const side = useContext(SideContext)
-          return side === null ? createElement(Original, props) : <HistoryFlow Original={Original} props={props} side={side} />
+          return side === null ? createElement(Original, props) : <HistoryView Original={Original} props={props} side={side} />
         }
-        entry.component = ScopedFlow
-        patched.set(entry, { original: Original, wrapped: ScopedFlow })
+        entry.component = ScopedView
+        patched.set(entry, { original: Original, wrapped: ScopedView })
       }
     }
     patch()
-    const off = slots.subscribe('conversation.chat.flow', patch)
-    return () => { off(); for (const [entry, value] of patched) if (entry.component === value.wrapped) entry.component = value.original }
+    const off = slots.subscribe('conversation.view', patch)
+    const wake = ctx.slots.register({ name: 'conversation.view', id: 'chat', priority: 10000 }, () => null)
+    return () => { off(); for (const [entry, value] of patched) if (entry.component === value.wrapped) entry.component = value.original; wake() }
   })
 }
 
@@ -154,6 +162,6 @@ function registerAssistantAnchors(ctx: Context): void {
 export function registerNativeConversation(ctx: Context): void {
   ctx.slots.inject('sidenote.conversation', () => ctx.slots.register({ name: 'sidenote.conversation' }, Content))
   ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({ name: 'conversation.chat.turnTail', id: 'dsh-sidenote-reflow', order: 20 }, ReflowAction))
-  registerHistoryFlow(ctx)
+  registerInheritedHistory(ctx)
   registerAssistantAnchors(ctx)
 }

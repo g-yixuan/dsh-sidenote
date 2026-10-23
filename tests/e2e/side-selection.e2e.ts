@@ -1,6 +1,6 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { writeFileSync } from 'node:fs'
-import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, selectModel } from './journey'
+import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, selectModel, dragText } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
 test.afterEach(async ({ page }, info) => {
@@ -8,27 +8,6 @@ test.afterEach(async ({ page }, info) => {
   await page.screenshot({ path: `test-results/${name}.png` })
   if (info.status !== info.expectedStatus) writeFileSync(`test-results/${name}.yml`, await page.locator('body').ariaSnapshot())
 })
-
-async function dragText(page: Page, body: Locator, text: string) {
-  await body.scrollIntoViewIfNeeded()
-  const points = await body.evaluate((el, needle) => {
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const at = (node.textContent ?? '').indexOf(needle)
-      if (at < 0) continue
-      const first = document.createRange(), last = document.createRange()
-      first.setStart(node, at); first.setEnd(node, at + 1)
-      last.setStart(node, at + needle.length - 1); last.setEnd(node, at + needle.length)
-      const a = first.getBoundingClientRect(), b = last.getBoundingClientRect()
-      return { x1: a.left + 0.1, y1: a.top + a.height / 2, x2: b.right - 0.1, y2: b.top + b.height / 2 }
-    }
-    return null
-  }, text)
-  expect(points).not.toBeNull()
-  await page.mouse.move(points!.x1, points!.y1); await page.mouse.down()
-  await page.mouse.move(points!.x2, points!.y2, { steps: 12 }); await page.mouse.up()
-  await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toContain(text)
-}
 
 async function restoreSameSide(page: Page, child: string) {
   await page.reload()
