@@ -8,8 +8,12 @@ test('shared host journey: real fork, inherited history, accepted side message a
   const errors: string[] = []
   page.on('pageerror', error => errors.push(String(error)))
   await prepareSeedPage(page)
+  // Decorating the native View must not add a fallback-labelled empty tab.
+  await expect(page.getByRole('tab', { name: 'Chat', exact: true })).toHaveCount(1)
+  await expect(page.getByRole('tab', { name: 'chat', exact: true })).toHaveCount(0)
   expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!).some(text => text.includes('I forked the main session'))).toBe(true)
   const child = await openSideChat(page)
+  await expect(page.getByRole('tab', { name: 'chat', exact: true })).toHaveCount(0)
   const side = sideChatOf(page)
   // Exercise the host TerminalBlock too: opening inherited history alone leaves
   // tool cards collapsed and misses required-label changes in newer hosts.

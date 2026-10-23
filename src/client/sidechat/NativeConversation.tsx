@@ -128,8 +128,13 @@ function registerInheritedHistory(ctx: Context): void {
     }
     patch()
     const off = slots.subscribe('conversation.view', patch)
-    const wake = ctx.slots.register({ name: 'conversation.view', id: 'chat', priority: 10000 }, () => null)
-    return () => { off(); for (const [entry, value] of patched) if (entry.component === value.wrapped) entry.component = value.original; wake() }
+    // Registration notifications batch by microtask. Invalidate the outlet,
+    // then remove the wake entry immediately so it never becomes a View tab.
+    const refresh = (): void => {
+      if (slots.entries('conversation.view').length > 0) ctx.slots.register({ name: 'conversation.view', id: 'chat', priority: 10000 }, () => null)()
+    }
+    refresh()
+    return () => { off(); for (const [entry, value] of patched) if (entry.component === value.wrapped) entry.component = value.original; refresh() }
   })
 }
 
