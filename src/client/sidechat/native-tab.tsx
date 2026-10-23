@@ -48,6 +48,7 @@ import {
 } from './metaStore.ts'
 import { t } from '../locales.ts'
 import css from './sidechat.module.css'
+import { renderSideConversation, type ConversationRendererProps } from './NativeConversation.tsx'
 
 /** 原生注册表里的实现 id（槽 key；kind 沿用 SIDE_TAB_TYPE 保持自文档化）。 */
 const NATIVE_IMPL_ID = 'dsh-sidenote:side-chat'
@@ -141,7 +142,7 @@ interface NativeBodyInjected {
 }
 
 /** 面板体外壳：把 useTabInfo（可能对未提交 record throw）也包进错误边界。 */
-function NativeSideChatBody(props: NativeBodyInjected & NativeTabFrameworkProps): ReactNode {
+function NativeSideChatBody(props: NativeBodyInjected & NativeTabFrameworkProps & ConversationRendererProps): ReactNode {
   return (
     <NativeTabBoundary>
       <NativeSideChatBodyInner {...props} />
@@ -150,7 +151,7 @@ function NativeSideChatBody(props: NativeBodyInjected & NativeTabFrameworkProps)
 }
 
 /** 面板体：原生 tab → SideChatPanel 的 TabComponentProps 合成适配。 */
-function NativeSideChatBodyInner(props: NativeBodyInjected & NativeTabFrameworkProps): ReactNode {
+function NativeSideChatBodyInner(props: NativeBodyInjected & NativeTabFrameworkProps & ConversationRendererProps): ReactNode {
   const { ctx, sessionId, reflow, annotations, useTabInfo } = props
   const info: NativeTabInfo = useTabInfo()
   const nativeTab = info.tab
@@ -200,7 +201,7 @@ function NativeSideChatBodyInner(props: NativeBodyInjected & NativeTabFrameworkP
 
   return (
     <div className={css.nativeHost} data-dsh-sidenote-native-host="">
-      <SideChatPanel ctx={ctx} store={undefined} scope={scope} tab={tab} visible={nativeTab.visible} reflow={reflow} annotations={annotations} quoteRequestId={parseOpenParams(nativeTab.navigation.params)?.quoteRequestId} />
+      <SideChatPanel ctx={ctx} store={undefined} scope={scope} tab={tab} visible={nativeTab.visible} reflow={reflow} annotations={annotations} renderConversation={(reference, side) => renderSideConversation(props, reference, side)} quoteRequestId={parseOpenParams(nativeTab.navigation.params)?.quoteRequestId} />
     </div>
   )
 }
@@ -266,6 +267,7 @@ export function registerNativeSideChatTab(ctx: Context, reflow: ReflowStore, ann
     const disposeBody = ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
       name: 'sidebar.right.pane.tab',
       key: NATIVE_IMPL_ID,
+      children: { 'sidenote.conversation': { kind: 'single', scope: 'session' } },
       inject: (sessionId: unknown) => ({ ctx, sessionId: sessionId as string, reflow, annotations }),
     }, NativeSideChatBody))
     const disposeTitle = ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({

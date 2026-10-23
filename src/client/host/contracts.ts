@@ -393,6 +393,10 @@ export type KnownSlotKey =
   | 'settings.general.item'
   | 'sidebar.right.pane.tab'
   | 'sidebar.right.pane.tab.title'
+  | 'sidenote.conversation'
+  | 'conversation.chat.flow'
+  | 'conversation.chat.node'
+  | 'conversation.chat.turnTail'
 
 /** The client slots service face (register returns the disposer). */
 export interface SlotsService {

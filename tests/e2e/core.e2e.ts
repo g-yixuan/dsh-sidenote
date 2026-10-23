@@ -13,19 +13,22 @@ test('shared host journey: real fork, inherited history, accepted side message a
   const side = sideChatOf(page)
   // Exercise the host TerminalBlock too: opening inherited history alone leaves
   // tool cards collapsed and misses required-label changes in newer hosts.
-  await side.getByText('Bash · List workspace files', { exact: true })
-    .locator('xpath=ancestor-or-self::*[@data-disclosure-row][1]').click()
+  for (const button of await side.getByRole('button', { name: /^(Completed|已完成)/ }).all()) {
+    if (await button.isEnabled()) await button.click()
+  }
+  await side.getByRole('button', { name: /^(Read files and ran commands|读取了文件并运行了命令)/ }).click()
+  await side.getByRole('button', { name: /^Bash List workspace files$/ }).click()
   const terminal = side.locator('[data-terminal]')
   await expect(terminal).toContainText('ls -1')
   await expect(terminal).toContainText('package.json')
-  const input = side.getByPlaceholder(/^(Message…|输入消息)/)
+  const input = side.locator('[data-composer-input]')
   const message = 'Shared host journey: send to this child only'
   await input.fill(message)
   await input.press('Enter')
   // An optimistic bubble or cleared draft alone does not prove admission.
   await expect.poll(() => userMessagesOf(child).some(text => text.includes(message)), { timeout: 30_000 }).toBe(true)
   expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!).some(text => text.includes(message))).toBe(false)
-  await expect(input).toHaveValue('')
+  await expect(input).toHaveText('')
   await expect(side.getByText(message, { exact: true })).toBeVisible()
   expect(errors).toEqual([])
   writeFileSync('test-results/shared-host-admission.json', JSON.stringify({

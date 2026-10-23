@@ -34,3 +34,7 @@
 [`release.yml`](../.github/workflows/release.yml) 校验 Release tag 与 `package.json` 版本一致，并确认版本提交已合入 `main`，随后构建、检查类型、运行单测并发布带 provenance 的 npm 包。该版本已在 npm 上存在时，跳过发布。
 
 手动运行 workflow 只做构建、检查与 dry-run，不发布；正式发布由 GitHub Release 触发。
+
+## 兼容窗口变更
+
+发布前核对两处 DSH engines、UI primitives peer、两组固定 CI 和实际 GitHub required checks 一致。退出窗口的宿主停在最后兼容插件：本轮 0.1 系列固定 0.6.4，保留历史包，不需要重新发布。新版本只包含当前原生实现，不向旧包回补每个功能。npm latest / dist-tag 不会根据宿主选版本；旧用户使用 `dsh plugin --profile web add --save-exact dsh-sidenote@0.6.4`。支持窗口及退役说明见[兼容政策](compatibility.md)。

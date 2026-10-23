@@ -34,3 +34,7 @@ GitHub Actions publishes through OIDC authorization without requiring a local np
 [`release.yml`](../.github/workflows/release.yml) verifies the Release tag matches `package.json` and the version commit has been merged into `main`, then builds, typechecks, runs unit tests, and publishes the npm package with provenance. Publishing is skipped if the version already exists on npm.
 
 A manual workflow run only builds, validates, and performs a dry-run. Publishing is triggered by a GitHub Release.
+
+## Compatibility-window changes
+
+Before release, align both DSH engine declarations, the UI primitives peer, both pinned CI jobs and the actual GitHub required checks. Retired hosts keep their last compatible plugin: 0.1 hosts pin 0.6.4 in this transition. Retain that npm package without republishing or backporting every feature. New releases use only the current native implementation. npm latest / dist-tags do not select by host; older users run `dsh plugin --profile web add --save-exact dsh-sidenote@0.6.4`. See the [compatibility policy](compatibility_EN.md).

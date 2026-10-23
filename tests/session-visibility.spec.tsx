@@ -195,7 +195,7 @@ it('uses the available host navigator and closes the source tab before opening t
   const workspace = { openSession: vi.fn((id: string) => { order.push(`open:${id}`) }) }
   const ctx = {
     get: (name: string) => name === 'uiWorkspace' ? workspace : name === 'sidebarRight' ? { openTab() {}, close: () => order.push('close') } : undefined,
-    sessions: { fork: vi.fn(async () => 'saved'), open: vi.fn() },
+    sessions: { fork: vi.fn(async () => 'saved'), open: vi.fn(), binding: () => ({ session: { getSnapshot: () => ({ running: false }) } }) },
   } as unknown as Context
   await saveSideChatSession(ctx, 'child', 'tab', 'parent')
   expect(order).toEqual(['close', 'open:saved'])
@@ -206,4 +206,17 @@ it('uses the available host navigator and closes the source tab before opening t
   openSession(legacy, 'parent')
   expect(legacy.sessions.open).toHaveBeenCalledWith('parent')
   expect(() => openSession({ get: () => undefined, sessions: {} } as unknown as Context, 'parent')).toThrow('navigation is unavailable')
+})
+
+it.each(['running', 'queued', 'submitting'])('keeps the source open instead of saving an incomplete %s session', async state => {
+  const fork = vi.fn()
+  const close = vi.fn()
+  const input = { setDraft() {}, submit() {}, state: { subscribe: () => () => {}, getSnapshot: () => ({ draft: '', phase: state === 'submitting' ? 'submitting' : 'plain', queue: state === 'queued' ? [{}] : [] }) } }
+  const ctx = {
+    get: (name: string) => name === 'conversation' ? { input: { for: () => input } } : name === 'sidebarRight' ? { openTab() {}, close } : undefined,
+    sessions: { fork, scope: () => ({}), binding: () => ({ session: { getSnapshot: () => ({ running: state === 'running' }) } }) },
+  } as unknown as Context
+  await expect(saveSideChatSession(ctx, 'child', 'tab', 'parent')).rejects.toThrow()
+  expect(fork).not.toHaveBeenCalled()
+  expect(close).not.toHaveBeenCalled()
 })

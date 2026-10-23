@@ -158,3 +158,6 @@
   font-size: 12px;
   color: var(--dsw-alias-label-secondary, #646a73);
 }
+.sentContext { color: var(--dsw-alias-label-secondary); font-size: 13px; margin: 8px 0; }
+.sentContext summary { cursor: pointer; }
+.sentContext pre, .sentContext blockquote { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }

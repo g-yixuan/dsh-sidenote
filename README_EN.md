@@ -35,9 +35,9 @@ With DSH already installed, run:
 dsh plugin --profile web add dsh-sidenote
 ```
 
-Open DSH Web and click **Side** in the session header, or select a passage in a reply. You can also open a side chat with `/side` and switch focus between main and side inputs with `Alt+J`.
+Open DSH Web and click **Side** in the session header, or select a passage in a reply. You can also open a side chat with `/side` and switch focus between main and side inputs with `Alt+S`.
 
-Native sidebar hosts need no additional `dsh-better-sidebar` installation. For older hosts, use the exact combination in the [compatibility table](docs/compatibility_EN.md).
+The current branch supports DSH 0.2.0-rc.2 / 0.2.1-rc.2 without dsh-better-sidebar. Older hosts pin the last compatible dsh-sidenote@0.6.4; see the [compatibility policy](docs/compatibility_EN.md).
 
 ## One task. Room to explore.
 
@@ -82,9 +82,7 @@ See the [user guide](docs/usage_EN.md) for controls, recovery behavior, and sele
 
 ## Compatibility and help
 
-Verified native sidebar combinations use **DSH 0.1.5-rc.2, 0.1.7-rc.2, 0.2.0-rc.2, 0.2.1-rc.2, or 0.2.1-rc.3**. Three legacy BS combinations retain validation. The exact versions in the [compatibility and maintenance policy](docs/compatibility_EN.md) define the supported scope; check the corresponding Release for published versions.
-
-Support for DSH 0.2.1-rc.3 and the V4 reflow fix are source changes in this contribution and are not yet published on npm. The published 0.6.4 package still does not declare rc.3 support. Until a release includes the fix, use a package built from the updated source.
+The current branch maintains two exact hosts: **DSH 0.2.0-rc.2 and 0.2.1-rc.2**, reusing native Conversation. Outside the window, users retain plugin 0.6.4; the current branch no longer backports features or runs those host checks. The exact versions in the [compatibility and maintenance policy](docs/compatibility_EN.md) define the supported scope; check the corresponding Release for published versions.
 
 For troubleshooting, enable **Settings → General → dsh-sidenote diagnostic mode** to inspect and manually export the integration status. [Report a problem or suggest an improvement](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose).
 

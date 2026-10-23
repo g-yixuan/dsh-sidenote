@@ -86,10 +86,10 @@ test('compatibility report is visible, observes real admission, and exports soft
   await expect(dialog.getByText(/^(Main input|主输入框)$/)).toBeVisible()
   await dialog.getByRole('button', { name: /^(Close compatibility diagnostics|关闭兼容诊断)$/ }).click()
   const child = await openSideChat(page)
-  const input = sideChatOf(page).getByPlaceholder(/^(Message…|输入消息)/)
+  const input = sideChatOf(page).locator('[data-composer-input]')
   await input.fill('diagnostics ordinary body')
   // Add through the real toolbar; only selected quote data enters the model.
-  const body = sideChatOf(page).locator('[data-sidenote-quote-body]').filter({ hasText: 'full history snapshot' }).first()
+  const body = sideChatOf(page).locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()
   await body.scrollIntoViewIfNeeded()
   await body.evaluate(el => {
     const range = document.createRange(); range.selectNodeContents(el)
@@ -118,9 +118,9 @@ if (process.env.DSH_E2E_CAPABILITY_FAULT) test('missing side input is visible, r
   await expect(entry(page)).toHaveCount(0)
   const child = await openSideChat(page)
   const side = sideChatOf(page)
-  const input = side.getByPlaceholder(/^(Message…|输入消息)/)
+  const input = side.locator('[data-composer-input]')
   await input.fill('body retained across missing input')
-  const body = side.locator('[data-sidenote-quote-body]').filter({ hasText: 'full history snapshot' }).first()
+  const body = side.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()
   await body.scrollIntoViewIfNeeded()
   await body.evaluate(el => {
     const range = document.createRange(); range.selectNodeContents(el)
@@ -135,7 +135,7 @@ if (process.env.DSH_E2E_CAPABILITY_FAULT) test('missing side input is visible, r
   await page.getByRole('button', { name: 'Simulate missing side input', exact: true }).click()
   await input.press('Enter')
   await expect(side.getByText(/Cannot send right now|The input is not ready|暂时无法发送|输入尚未就绪/)).toBeVisible()
-  await expect(input).toHaveValue('body retained across missing input')
+  await expect(input).toHaveText('body retained across missing input')
   const records = () => page.evaluate(id => JSON.parse(localStorage.getItem('dsh-sidenote:annotations:v1:' + id) ?? '[]'), child)
   await expect.poll(records).toMatchObject([{ state: 'active', note: 'retained quote note' }])
   expect(userMessagesOf(child).some(text => text.includes('body retained across missing input'))).toBe(false)
@@ -149,7 +149,7 @@ if (process.env.DSH_E2E_CAPABILITY_FAULT) test('missing side input is visible, r
   // Recovery must become visible through the normal composer without a
   // diagnostic recheck; submitting while it still says waiting is a retry.
   await expect(side.getByText(/Cannot send right now|The input is not ready|暂时无法发送|输入尚未就绪/)).not.toBeVisible()
-  await expect(input).toHaveValue('body retained across missing input')
+  await expect(input).toHaveText('body retained across missing input')
   await input.press('Enter')
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes('body retained across missing input'))).toHaveLength(1)
   await expect.poll(records).toMatchObject([{ state: 'sent' }])

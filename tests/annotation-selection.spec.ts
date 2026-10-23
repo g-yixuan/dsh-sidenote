@@ -68,6 +68,16 @@ describe('scoped assistant selection', () => {
     expect(selection.anchorText).toBe('first paragraphconst one = 1\nconst two = 2last paragraph')
   })
 
+  it('excludes native reasoning while whole-message selections retain the actual answer', () => {
+    const a = side('child')
+    a.body.innerHTML = '<div data-variant="think"><p>native reasoning</p></div><p>final answer</p>'
+    select(a.body.querySelector('[data-variant="think"] p')!.firstChild!)
+    expect(captureSelection('parent')).toBeNull()
+    select(a.body, 0, a.body, a.body.childNodes.length)
+    expect(captureSelection('parent')?.anchorText).toBe('final answer')
+    expect(captureSelection('parent')?.text).toBe('final answer')
+  })
+
   it('reanchors only within the recorded session/surface/message, and never guesses a missing occurrence', () => {
     side('wrong-child')
     const a = side('right-child', 'a:1', 'same phrase / same phrase')

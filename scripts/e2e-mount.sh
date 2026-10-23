@@ -3,9 +3,7 @@
 # dsh-sidenote 挂载冒烟编排（仿 dsh-better-sidebar scripts/e2e-mount.sh）：
 #
 #   1. 全新 scratch DSH_HOME（绝不触碰真实 ~/.dsh）+ web profile 模板；
-#   2. 官方 CLI 安装 npm 版 dsh-better-sidebar（可选 peer，仅 legacy/共存
-#      泳道安装；BS_VERSION=none 的无-BS 直连档跳过）与本插件
-#      tarball（file:<tgz>）；
+#   2. 官方 CLI 安装本次构建的 npm tarball；
 #   3. 伪造一个含已完成 turn 的会话 jsonl（scripts/seed-session.mjs），
 #      使 fork 路径无需模型凭证即可验证；
 #   4. 启动真实 `dsh web --port 0`（keyless），Playwright 无头渲染断言。
@@ -107,33 +105,13 @@ cat > "$PROFILE_DIR/package.json" <<EOF
   }
 }
 EOF
-# 老宿主的运行依赖放到 profile 自己的解析路径：0.1.1 的 HMR 必须保留
-# registerConfig；0.1.5 的 sandbox-local 仅列在 CLI devDependencies 中。
+# Both maintained hosts use the same native runtime.
 DSH_VERSION="$($DSH_CMD --version)"
 if [ -n "${DSH_EXPECTED_VERSION:-}" ] && [ "$DSH_VERSION" != "$DSH_EXPECTED_VERSION" ]; then
   die "请求宿主 $DSH_EXPECTED_VERSION，实际 CLI $DSH_VERSION"
 fi
 say "实际 CLI：$DSH_VERSION"
-node - "$PROFILE_DIR/package.json" "$DSH_VERSION" <<'JS'
-const fs = require('node:fs')
-const file = process.argv[2]
-const version = process.argv[3]
-const profile = JSON.parse(fs.readFileSync(file, 'utf8'))
-if (version.startsWith('0.1.1-')) profile.dependencies['@deepseek-ai/cordis-plugin-hmr'] = '1.0.16'
-if (version === '0.1.5-rc.2') profile.dependencies['@deepseek-ai/dsh-sandbox-local'] = version
-fs.writeFileSync(file, JSON.stringify(profile, null, 2) + '\n')
-JS
-case "$DSH_VERSION" in
-  0.1.1-*)
-    cat > "$PROFILE_DIR/cordis.patch.yml" <<'EOF'
-- id: hmr
-  disabled: false
-  config:
-    root: []
-EOF
-    ;;
-  *) printf '[]\n' > "$PROFILE_DIR/cordis.patch.yml" ;;
-esac
+printf '[]\n' > "$PROFILE_DIR/cordis.patch.yml"
 cat > "$PROFILE_DIR/pnpm-workspace.yaml" <<'EOF'
 packages:
   - .
@@ -151,15 +129,8 @@ minimumReleaseAgeExclude:
   - dsh-sidenote
 EOF
 
-# 步骤 2：better-sidebar（缺省 0.12.3 = legacy 档；BS_VERSION=none = 无-BS
-# 直连档——optional peer 后的主路径；0.19.1 = 转发层共存档）。
-BS_VERSION="${BS_VERSION:-0.12.3}"
-if [ "$BS_VERSION" != "none" ]; then
-  say "安装 dsh-better-sidebar@${BS_VERSION}..."
-  $DSH_CMD plugin --profile web add "dsh-better-sidebar@${BS_VERSION}"
-else
-  say "跳过 dsh-better-sidebar（无-BS 直连档）"
-fi
+BS_VERSION="${BS_VERSION:-none}"
+[ "$BS_VERSION" = "none" ] || die "This branch validates native hosts only; legacy hosts pin plugin 0.6.4"
 say "安装本插件 tarball..."
 $DSH_CMD plugin --profile web add "file:$TARBALL"
 
@@ -167,7 +138,7 @@ node -e '
   const fs = require("fs");
   const p = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
   const bundles = p.dsh?.profile?.bundles ?? [];
-  const required = process.argv[2] === "none" ? ["dsh-sidenote"] : ["dsh-better-sidebar", "dsh-sidenote"];
+  const required = ["dsh-sidenote"];
   const missing = required.filter((b) => !bundles.includes(b));
   if (missing.length) { console.error("挂载未注册:", missing.join(", ")); process.exit(1); }
 ' "$PROFILE_DIR/package.json" "$BS_VERSION"
@@ -190,6 +161,46 @@ const old = fs.readFileSync(file, 'utf8')
 fs.writeFileSync(file, (old.trim() === '[]' ? '' : old) + '\n- insert:\n  - id: sidenote-e2e-inventory\n    name: ' + JSON.stringify(fixture) + '\n    config:\n      output: ' + JSON.stringify(output) + '\n')
 fs.appendFileSync(file, '- insert:\n  - id: sidenote-e2e-model\n    name: ' + JSON.stringify(require('node:path').join(require('node:path').dirname(fixture), 'controlled-model.mjs')) + '\n')
 JS
+
+# Optional real-provider lane. Only the server inherits the credential; the
+# profile stores its environment reference and Playwright never receives it.
+if [ -n "${DSH_E2E_REAL_KEY_FILE:-}" ]; then
+  [ -r "$DSH_E2E_REAL_KEY_FILE" ] || die "Cannot read real-provider key file"
+  IFS= read -r DSH_E2E_OFFICIAL_KEY < "$DSH_E2E_REAL_KEY_FILE" || [ -n "${DSH_E2E_OFFICIAL_KEY:-}" ]
+  [ -n "${DSH_E2E_OFFICIAL_KEY:-}" ] || die "Empty real-provider key file"
+  export DSH_E2E_OFFICIAL_KEY DSH_E2E_REAL_MODEL=1
+  cp "$ROOT/tests/e2e/official-wire.mjs" "$SCRATCH/official-wire.mjs"
+  node - "$PROFILE_DIR/cordis.patch.yml" "$SCRATCH" <<'JS'
+const fs = require('node:fs')
+const [file, scratch] = process.argv.slice(2)
+fs.appendFileSync(file, '\n- insert:\n  - id: sidenote-e2e-official-wire\n    name: ' + JSON.stringify(scratch + '/official-wire.mjs') + '\n    config:\n      output: ' + JSON.stringify(scratch + '/official-wire.json') + '\n')
+JS
+  cat >> "$PROFILE_DIR/cordis.patch.yml" <<'EOF'
+- id: llm-pi-ai
+  config:
+    providers:
+      sidenote-official:
+        apiKeyEnv: DSH_E2E_OFFICIAL_KEY
+        api: openai-completions
+        baseURL: https://api.deepseek.com
+        reasoning: off
+        compat:
+          thinkingFormat: deepseek
+          supportsReasoningEffort: true
+          requiresReasoningContentOnAssistantMessages: true
+        models:
+          - id: deepseek-flash
+            name: DeepSeek Flash (official E2E)
+            input: [text, image]
+            contextWindow: 32768
+            maxTokens: 2048
+            reasoningEfforts:
+              off: null
+              low: low
+              high: high
+              xhigh: max
+EOF
+fi
 mkdir -p "$ROOT/test-results"
 node - "$SCRATCH/host-inventory.json" "${DSH_EXPECTED_VERSION:-}" "$DSH_VERSION" "$BS_VERSION" "$ROOT/package.json" "$ROOT/lib/client.js" <<'JS'
 const fs = require('node:fs')
@@ -208,6 +219,7 @@ say "启动 dsh web（port=${PORT}）..."
 # 绝不能弹用户的真实浏览器窗口。
 $DSH_CMD web --port "$PORT" --no-open > "$WEB_LOG" 2>&1 &
 SERVER_PID=$!
+unset DSH_E2E_OFFICIAL_KEY
 
 # 就绪行解析：DSH 0.1.2+ 打印的是带一次性 token 的鉴权 URL
 # （`dsh web: http://127.0.0.1:<port>/?token=<43字符>`，token 换浏览器
@@ -258,13 +270,8 @@ assert_inventory
 
 # 步骤 5：Playwright 无头渲染 lane（无-BS 档跑直连冒烟，BS 档跑全量 journey）
 say "运行 Playwright 无头渲染 lane..."
-if [ "$BS_VERSION" = "none" ]; then
-  SPEC_FILTER="mount-direct.e2e.ts"
-else
-  SPEC_FILTER="mount.e2e.ts"
-fi
 DSH_E2E_URL="$URL" DSH_E2E_WORKSPACE="$WORKSPACE_DIR" DSH_E2E_SEED_SESSION="$SEED_SESSION_ID" DSH_E2E_HOME="$DSH_HOME" \
-  pnpm exec playwright test "$SPEC_FILTER" annotations.e2e.ts core.e2e.ts running.e2e.ts side-selection.e2e.ts diagnostics.e2e.ts visibility.e2e.ts ${GREP_FILTER:+--grep "$GREP_FILTER"}
+  pnpm exec playwright test mount-direct.e2e.ts annotations.e2e.ts core.e2e.ts running.e2e.ts side-selection.e2e.ts diagnostics.e2e.ts visibility.e2e.ts parity.e2e.ts interaction.e2e.ts official-model.e2e.ts ${GREP_FILTER:+--grep "$GREP_FILTER"}
 
 assert_inventory
 

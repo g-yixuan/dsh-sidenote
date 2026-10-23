@@ -9,17 +9,7 @@ import {
   partitionInherited,
   nodeToMessage,
   transcriptOf,
-  truncateText,
 } from '../../src/client/chat/transcript.ts'
-
-describe('truncateText', () => {
-  it('未超限原样返回', () => {
-    expect(truncateText('abc', 3)).toBe('abc')
-  })
-  it('超限截断并加省略号', () => {
-    expect(truncateText('abcd', 3)).toBe('abc…')
-  })
-})
 
 describe('contentTextOf', () => {
   it('text 块拼接、image 块占位、未知块忽略', () => {
@@ -62,7 +52,7 @@ describe('nodeToMessage', () => {
   it('assistant 节点：纯工具调用头不渲染（结果节点承载卡片）', () => {
     expect(nodeToMessage({ kind: 'assistant', seq: 4, blocks: [{ kind: 'tool-call', callId: 'c', name: 'Bash', argsRaw: '{}' }] })).toBeNull()
   })
-  it('tool-result 节点 → 工具卡片（带名/失败标记/正文截断）', () => {
+  it('tool-result 节点 → 工具结果（带名/失败标记/完整正文）', () => {
     const long = 'x'.repeat(5000)
     const message = nodeToMessage({
       kind: 'tool-result',
@@ -75,7 +65,7 @@ describe('nodeToMessage', () => {
     expect(message?.role).toBe('tool')
     expect(message?.toolName).toBe('Bash')
     expect(message?.isError).toBe(true)
-    expect(message?.text.length).toBe(4001) // 4000 + …
+    expect(message?.text).toBe(long)
   })
   it('tool-result 缺 call 头时回退 callId', () => {
     expect(nodeToMessage({ kind: 'tool-result', seq: 6, callId: 'c9', call: null, content: [] })?.toolName).toBe('c9')
@@ -126,8 +116,6 @@ describe('transcriptOf', () => {
         toolName: 'Bash',
         text: '',
         streaming: true,
-        // 无 callView → generic 兜底卡（cards.ts 纪律）。
-        card: { kind: 'generic', title: 'Bash', icon: 'other' },
       },
     ])
   })

@@ -2,59 +2,58 @@
 
 [中文](compatibility.md) · English
 
-This table lists validated combinations and maintenance promises for the current main branch. For published versions, check the corresponding Release; 0.6.2 and earlier do not declare support for DSH 0.2.1-rc.2, and the published 0.6.4 package does not declare 0.2.1-rc.3 support. The rc.3 adaptation is a source change in this contribution and needs a separate release before it is available from npm. Engine ranges are installation gates, not proof that every rc or plugin combination inside them was validated.
+The development branch maintains the latest **two admitted exact DSH releases that share the native Conversation implementation**. This does not mean two major versions or automatic admission of npm latest. Published installations follow their Release declarations; the already-published 0.6.4 package keeps its original compatibility range.
 
-| Exact combination | Category | Validation gate |
+| Exact host | Current branch | Outside-window installation |
 |---|---|---|
-| DSH 0.1.7-rc.2, no BS | Maintained | Full fixed journeys for every relevant PR |
-| DSH 0.1.5-rc.2, no BS | Extended maintenance for the current user environment | The same full fixed journeys |
-| DSH 0.1.1-rc.2 + BS 0.12.3 | Frozen legacy, lower-bound representative | Full fixed journeys and existing commitments |
-| DSH 0.1.1-rc.2 + BS 0.18.0 | Frozen legacy, separate combination | Full fixed journeys; removal requires a retirement PR |
-| DSH 0.1.2-rc.1 + BS 0.18.0 | Frozen legacy, API-generation representative | Full fixed journeys |
-| DSH 0.2.0-rc.2, no BS | Maintained; exact release admitted | Full fixed journeys and a required host check |
-| DSH 0.2.1-rc.2, no BS | Maintained; exact release admitted | Full fixed journeys and a required host check |
-| DSH 0.2.1-rc.3, no BS | Maintained; adapted in this source change | Full fixed journeys; register the new required check before merging |
+| DSH 0.2.1-rc.2, no BS | Full maintenance; required CI | — |
+| DSH 0.2.0-rc.2, no BS | Full maintenance; required CI | — |
+| DSH 0.1.7-rc.2 / 0.1.5-rc.2, no BS | Retired | Pin dsh-sidenote 0.6.4 |
+| DSH 0.1.1-rc.2 + BS 0.12.3 / 0.18.0 | Retired | Pin 0.6.4 and the original BS version |
+| DSH 0.1.2-rc.1 + BS 0.18.0 | Retired | Pin 0.6.4 and the original BS version |
 
-BS means dsh-better-sidebar. Unlisted combinations are unverified. Independence from BS does not prove every native-host + BS 0.19+ coexistence combination. Alpha hosts have no release compatibility commitment.
+BS means dsh-better-sidebar. The current branch does not depend on it. Unlisted hosts, alpha releases and BS coexistence combinations are unverified.
 
-0.5.0 includes unified main/side annotations, side-reply selection, content retention and recovery on failure, and opt-in compatibility diagnostics. The earlier [host admission CI](https://github.com/g-yixuan/dsh-sidenote/actions/runs/38281154300) and [final feature validation CI](https://github.com/g-yixuan/dsh-sidenote/actions/runs/38344084161) record actual runtime versions, build digests and evidence for each maintained combination; the latter passed six combinations / 153 real E2E tests and 313 unit tests. Runtime cases use a controlled model; external model answers are outside this validation. The old 0.4.6 release does not contain these changes.
+Outside the window, the current branch carries no separate chat UI or per-PR host matrix and does not backport features or routine fixes. Historical npm packages and Releases remain available. No long-lived branch per host is needed. A critical problem may warrant a separately scoped patch decision; this does not imply indefinite maintenance.
 
-For the 0.2 series, installation admits only exact `0.2.0-rc.2`, `0.2.1-rc.2` and `0.2.1-rc.3`: `>=0.1.1-rc.1 <0.2.0 || =0.2.0-rc.2 || =0.2.1-rc.2 || =0.2.1-rc.3`; UI primitives admits the same three exact releases. DSH 0.2.1 gives `engines.dsh` precedence when checking plugin compatibility, so both DSH engine declarations and the UI primitives peer range stay aligned. Other 0.2 rc, stable and alpha releases still need admission.
+## Keeping an older host compatible
 
-[Admission for 0.2.1-rc.2](https://github.com/g-yixuan/dsh-sidenote/pull/32) uses an isolated DSH_HOME, the official plugin installation channel and the current plugin build. Full journeys cover main/side annotations, real forks and durable delivery, images, failure recovery, Queue/Steer/Stop, busy forks, reflow and side-chat hiding. Settings opens from the account menu at the lower left on this host. Runtime cases use a local controlled model; external model services and coexistence with BS on the new host are outside this validation.
+Pin its last compatible plugin:
 
-The 0.2.1-rc.3 adaptation also changes reflow messages to the producer-owned `source.kind: 'dsh-sidenote'`, retaining `form: 'notice'` and the summary. The V4 session format rejects the retired `{ kind: 'plugin', plugin: 'dsh-sidenote' }` wrapper, so widening the installation range alone does not fix the next parent turn. This V4 check also exists in rc.2; it was not introduced by rc.3. The shared host journey now checks two-turn side context, explicit return, parent isolation before sending and exactly one durable reflow after sending, using a local controlled model.
+```bash
+dsh plugin --profile web add --save-exact dsh-sidenote@0.6.4
+```
 
-Frozen support retains its integration and declared workflows without backporting every new host feature. Data loss, delivery to the wrong session and installation regressions still need attention. The default window is two fully validated host lines plus one explicit extended environment; it never removes old checks automatically. Retirement requires a separate PR recording the last validated plugin/host versions, impact, alternatives and bilingual notice. Without reliable data, do not infer host-version shares from npm downloads or add telemetry.
+This writes an exact profile dependency so ordinary range updates cannot cross the compatibility boundary. Explicitly choosing another version is a separate operation. After upgrading to an admitted host, install a compatible newer plugin.
 
-## Integration and diagnosis
+Three layers enforce this policy:
 
-The main message/composer DOM, session input, durable content, acceptance, model and sidebar differences touched here live in `src/client/host/`. Features retain source/target semantics, fork lifecycle and saving rules. Keep evidenced generation boundaries; do not introduce an adapter-class registry by version.
+- **Repository:** maintain declarations, implementation and validation. The current range `=0.2.0-rc.2 || =0.2.1-rc.2` appears in `engines.dsh`, `dsh.engines.dsh` and the UI primitives peer. DSH 0.2.0 checks DSH peers, so root engines alone is insufficient.
+- **npm:** retain historical packages and point `latest` at the current release. Dist-tags are aliases, not host-aware selection. Older packages need neither removal nor a new package name.
+- **DSH installer/market:** enforce compatibility. The 0.2.1 market can filter compatible releases if its index contains their metadata. Direct CLI installation rejects an incompatible target or restores the prior installation; it does not promise to search every historical npm version. Automatic fallback on earlier installers is unverified, hence the exact-version command above.
 
-Side-chat hiding is owned entirely by the plugin. Before a creation request, the sidebar temporarily holds new rows until the returned child ID is durably registered; existing rows keep updating, and failures release the hold. Only the workspace list input is filtered; the global catalog, bindings and message delivery are preserved. DSH 0.1.7+ keeps side chats unarchived so its archive gate cannot block model execution. Historical hosts retain archiving. Saving creates a visible regular copy, closes the source tab before navigation, and adapts both `uiWorkspace.openSession` and historical `sessions.open`.
+Before raising the host requirement, identify retired hosts and their last compatible plugin. Update all three ranges, bilingual guides, CI and the actual GitHub ruleset in the same PR. Retain the old npm package after publishing. Feature PRs do not bump the package version; releases use a separate PR.
 
-The list seam lives in `host/sessionList.tsx`, detects the native workspace slot, preserves grouping, search, actions, locale and injection, and restores the original component on disposal. It uses mutable runtime slot entries rather than a promised session-hiding API. Unrecognized shapes retain the native list; side chats may remain visible without archiving them into a model-blocked state on newer hosts. The eight fixed combinations continue to guard this seam.
+## Native conversation reuse
 
-Content search retains the host's result limit; filtering hidden side chats does not fetch additional results beyond that page.
+Main and side share the host's Conversation, SessionProvider, composer, message flow, queue, commands, file references, attachments, model and reasoning controls, approvals and questions. The plugin adds forks, inherited-history folding, annotations, reflow, saving and recovery. Controlled annotation/reflow sends still use native arbitration and authoritative acceptance.
 
-The browser-local visibility index outlives tabs and the five-entry recently closed menu and is scoped to the DSH address. Upgrade migration uses surviving side-chat metadata and recently closed records. Older sessions with no remaining identity record cannot be reliably classified and stay visible. On DSH 0.1.7+, **Settings → General → Show side chats in the session list** reveals registered side chats. A storage warning explains page-only operation when persistence fails. This neither restores deleted sessions nor unarchives chats archived by historical versions.
+Integration seams live in `src/client/host/`. Decorating flow and keyed message registry entries preserves the native renderer. History filtering, quote anchors, progress snapshots and workspace-list hiding rely on runtime slot seams covered by the fixed matrix, rather than a promised permanent hiding API. Unknown shapes retain the native interface without guessing message sources or recipients.
 
-Diagnostics are off by default, with no diagnostic header button or overall restriction badge during ordinary use. To debug or report a problem, enable **Settings → General → dsh-sidenote diagnostic mode**, then open **Compatibility diagnostics** in the session header to inspect or recheck available, waiting, unknown and unavailable capabilities. The choice is local to this browser and DSH address and survives refresh. If the browser refuses local saving, the settings row explains that it applies only to the current page. Disabling the mode immediately hides the panel and button without changing body, attachments, quotes or side chats, or disabling capability observation and input recovery. It neither reads nor writes the host's global developer setting. All maintained combinations use the same plugin opt-in rather than following newer hosts' enabled-by-default developer mode.
+Side chats stay hidden by default. Their browser/address-local identity outlives tabs and the five-entry recently closed menu; active native sessions are not archived. Saving produces a visible copy of completed history and is blocked while running, submitting or queued. “Show side chats in the session list” reveals registered children without restoring deleted sessions or unarchiving historical ones.
 
-Missing services, sessions or DOM at boot remain waiting; a supplied interface missing a required method is unavailable, while a failed read remains unknown. Empty sessions, absent side chats and unknown versions do not trigger automatic error notifications. Acceptance is confirmed only after observing durable user/steering or authoritative Queue/Inbox data for the current session generation, never from draft clearing or an optimistic bubble. Rechecking only reads state: it does not send test messages, create side chats or call a model.
+## Diagnostics
 
-Restricted operations retain saved quotes, body and attachments, with reasons in the existing editor/chip/composer. Recheck and retry after recovery; if another native draft conflicts, retain local content and review it before sending. A missing precise source hides its badge without deleting the quote or guessing another session.
+Diagnostics are off by default. Enable **Settings → General → dsh-sidenote diagnostic mode**, then inspect or recheck available, waiting, unknown and unavailable capabilities in the header. The preference belongs to this browser and DSH address; failed persistence is labeled page-only. Disabling diagnostics preserves capability observation, failure retention and recovery and does not change host developer settings.
 
-Reports are downloaded only when **Export report** is clicked and are never uploaded automatically. They contain software versions, capabilities, reasons and integration paths only, excluding session IDs, user text, authenticated URLs, cookies, keys and local filesystem paths. The plugin version comes from the build manifest. Host/components without reliable metadata stay unknown; CI inventories read actual running components rather than inferring them from devDependencies or the CLI.
+Acceptance requires durable user/steering or authoritative Queue/Inbox data for the target session, never draft clearing or an optimistic bubble. Recheck is read-only and calls no model. Failed sends retain body, attachments and quotes for retry. Missing precise source messages hide badges without deleting quotes.
 
-## Validation and candidate admission
+Reports download only on request and are never uploaded automatically. They contain software versions, capabilities, reasons and seams, excluding session IDs, prompts, authenticated URLs, cookies, keys and local paths. Inventories read running components; missing versions are not inferred from the CLI or devDependencies. Content search retains the host result limit without fetching extra results after filtering.
 
-1. Resolve an official dist-tag once, then pin the exact version. Installation failures must fail, never fall back to latest.
-2. Isolate DSH_HOME/profile, workspace and port; verify the CLI, runtime components and current bundle digest. Do not upgrade the daily instance.
-3. Every fixed combination runs the same main→main, main→side, side→side, editor/chip, full protocol, failure/retry, recovery/isolation and reflow journeys. Related Queue/Steer/Stop, busy fork, model and image cases use real host chains too.
-4. Separate install/host failures, plugin API/DOM changes and test locator errors. Preserve failures, make focused fixes and rerun maintained combinations without lowering assertions or skipping features.
-5. Complete relevant functionality, real runtime cases and visible-browser validation before promoting a candidate via PR. Update support claims, installation ranges, both guides and required checks together, checking the actual GitHub ruleset context names.
+## Validation and rolling admission
 
-All seven existing fixed CI combinations remain, with `plugin-mount (0.2.1-rc.3, none)` added as the eighth host check. Before merging, maintainers must register the new check in the GitHub ruleset and verify registration of the existing matrix checks; changing the workflow does not update the ruleset automatically. Weekly canary resolves latest once, then runs that exact version with the same journeys and inventory. Failures retain evidence and remain visible in their job; they never automatically expand support or change the user's environment. Use existing GitHub Actions status rather than a new notification bot.
+Relevant PRs require `ci`, `plugin-mount (0.2.0-rc.2, none)` and `plugin-mount (0.2.1-rc.2, none)`. Both hosts use official installation, isolated DSH_HOME, runtime component versions and the current bundle digest for the same full user journeys. A controlled model makes queue, stop, rejection and recovery repeatable; the separate official Flash lane validates external responses and real tools. Reports distinguish message acceptance from successful model replies.
 
-Ctrl/Cmd+Enter Steer follows the host's step boundaries. A subsequent send wakes the queue preserved by Stop. Record message acceptance and successful model answers separately.
+Pin each candidate exactly, complete functional, real-runtime and UI validation, then admit it through a PR that removes the oldest window member, records its last compatible plugin and synchronizes required-check names. The window never grows indefinitely or justifies rebuilding chat to keep two members. Narrow support explicitly if native interfaces cannot be shared.
+
+Weekly canary resolves latest once and validates that exact release. Failures retain evidence and may indicate a need for admission; they never change compatibility declarations or user environments automatically.

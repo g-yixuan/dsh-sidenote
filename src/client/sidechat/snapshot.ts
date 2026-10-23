@@ -139,3 +139,5 @@ export function buildMainlineSnapshot(ctx: Context, parentSessionId: string, now
     return null
   }
 }
+
+export { splitSnapshotPrefix } from '../annotations/format.ts'

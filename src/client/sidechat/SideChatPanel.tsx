@@ -1,507 +1,158 @@
-/**
- * 侧边聊天 Tab 面板（L2 薄视图）：相位编排 + 消息流 + composer。
- * 宿主接线（fork/archive/模型同步/Tab meta/窗口打开）全部在 lifecycle.ts（L3）——
- * 本文件无直接宿主调用（WI-00 分层纪律）。
- *
- * 打开流程（design.md 详细方案 2）：组件挂载时 tab.meta 无 childId →
- * lifecycle.forkAndRegister（fork 全量快照 → 归档隐藏 → meta 登记 → 模型同步）。
- * 恢复流程：有 meta.childId → ctx.sessions.binding(childId) 直接绑定；
- * 列表就绪后仍不在列 → 「会话已不存在」态。
- *
- * 消息流：binding.session 快照订阅（useSyncExternalStore），visible=false 时
- * 暂停订阅。非 staged 会话需 off-face open() 开窗（lifecycle.openSessionWindow），
- * 否则消息流永远为空（client-runtime 只为 staged 会话开窗的已知偏差）。
- */
-import { focusMainComposer } from '../host/dom.ts'
-import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import type { Context, SessionFace, TabComponentProps } from '../host/contracts.ts'
-import { useComposer, type Composer } from './composer.ts'
-import { appendDraftText, clearPendingDraft, parseSideChatMeta, phaseOf } from './model.ts'
+/** Side-chat lifecycle and product extensions around the shared Conversation. */
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import type { SessionReference, TabComponentProps } from '../host/contracts.ts'
+import { focusMainComposer, focusSideComposer } from '../host/dom.ts'
+import { sessionStatusSource } from '../host/chat.ts'
+import { useComposer } from './composer.ts'
+import { appendDraftText, clearPendingDraft, pairQuestions, parseSideChatMeta, phaseOf } from './model.ts'
 import { transcriptOf } from '../chat/transcript.ts'
-import { EmptyState, MessageList, StateScreen } from './rows.tsx'
-import { armInheritedTurnPurge, chatSourceOf, ensurePanelOpen, forkAndRegister, openSession, openSessionWindow, readModelName, retainSession, saveSideChatSession, setSideChatTopic, unarchiveSideSession, updateTabMeta } from './lifecycle.ts'
+import { StateScreen } from './rows.tsx'
+import { armInheritedTurnPurge, chatSourceOf, ensurePanelOpen, forkAndRegister, openSession, openSessionWindow, retainSession, saveSideChatSession, setSideChatTopic, unarchiveSideSession, updateTabMeta } from './lifecycle.ts'
 import { topicOf } from './identity.ts'
 import { buildMainlineSnapshot } from './snapshot.ts'
-import { directNativeLeg, registerLiveSideChat, notifyLiveSideChats } from './native.ts'
+import { registerLiveSideChat, notifyLiveSideChats } from './native.ts'
 import { dropClosedSideChat, recordClosedSideChat } from './recentClosed.ts'
-import { ToolCard } from '../chat/ToolCard.tsx'
-import { ComposerBar } from './ComposerBar.tsx'
-import { ReasoningRow } from '../chat/ReasoningRow.tsx'
-import { FoldCard } from '../chat/FoldCard.tsx'
-import { createFoldStore } from '../chat/viewState.ts'
 import type { ReflowStore } from '../reflow.ts'
 import type { AnnotationStore } from '../annotations/model.ts'
+import { registerSubmissionExtras } from '../annotations/submissionExtras.ts'
+import { addReply, finalReplies, isReplyAdded, type RenderConversation, type SideConversation } from './NativeConversation.tsx'
 import { showToast } from './toast.tsx'
-import { createPendingStore } from './pending.ts'
-import { PendingCardList } from './PendingCard.tsx'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
 import css from './sidechat.module.css'
 
 const NOOP_UNSUBSCRIBE = (): void => {}
-/** uSES 空快照常量（禁产新引用——`?? []` 字面量每次新数组会无限重渲）。 */
-const NO_PENDING: readonly import('./pending.ts').PendingItem[] = []
 
-/** D2 写型工具名（无 diff 卡时的名字兜底）。 */
-const WRITE_TOOLS = new Set(['edit', 'write', 'str-replace-editor', 'str_replace_editor'])
-/** 首次写提示的一次性 localStorage 键。 */
-const WRITE_NOTICE_KEY = 'dsh-sidenote:write-notice:v1'
-
-export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; annotations: AnnotationStore; quoteRequestId?: string }) {
+export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; annotations: AnnotationStore; renderConversation: RenderConversation; quoteRequestId?: string }) {
   useLocaleTick()
   const { ctx, scope, tab, visible } = props
   const meta = parseSideChatMeta(tab.meta)
   const childId = meta.childId
   const [forkError, setForkError] = useState<string | null>(null)
-  const [, refreshBinding] = useState(0)
+  const [reference, setReference] = useState<SessionReference>()
   const forkStarted = useRef(false)
-
-  // 绑定丢失自愈（审查 M-2）：meta 记录被清（多窗口清扫/HMR/occurrence
-  // 替换）时 childId 从有到无——重置 fork 守卫允许重 fork，而不是永久卡
-  // 在 forking（子会话可能仍在盘，重 fork 是开销而非错误）。
-  const prevChildId = useRef(childId)
-  useEffect(() => {
-    if (prevChildId.current !== undefined && childId === undefined) {
-      forkStarted.current = false
-    }
-    prevChildId.current = childId
-  }, [childId])
-
-  // 程序化入口（/side、bridge 划选提问）打开 Tab 时面板可能处于折叠态，
-  // 挂载即幂等展开（编排细节在 lifecycle.ts）。
-  const { store } = props
-  useEffect(() => {
-    ensurePanelOpen(store)
-  }, [store])
-
-  // ── 首开：fork → archive → 登记 meta（编排细节在 lifecycle.ts） ──
+  const rootRef = useRef<HTMLDivElement>(null)
+  useEffect(() => { ensurePanelOpen(props.store) }, [props.store])
   useEffect(() => {
     if (childId !== undefined || forkStarted.current) return
     forkStarted.current = true
-    let cancelled = false
-    // busy fork 的遗传 turn 监护在 forkAndRegister 内就位（meta 登记前）；
-    // 关 tab/卸载只中止编排，监护一旦 arm 独立存活（它护子会话，不护本组件）。
     const controller = new AbortController()
-    forkAndRegister(ctx, scope.sessionId, tab.id, controller.signal)
-      .catch((error) => {
-        if (!cancelled && !controller.signal.aborted) setForkError(error instanceof Error ? error.message : String(error))
-      })
-    return () => { cancelled = true; controller.abort() }
+    void forkAndRegister(ctx, scope.sessionId, tab.id, controller.signal).catch((error: unknown) => {
+      if (!controller.signal.aborted) setForkError(error instanceof Error ? error.message : String(error))
+    })
+    return () => { controller.abort() }
   }, [ctx, scope.sessionId, tab.id, childId])
-
-  // 0.1.7 起 binding() 只借用已 retain 的 generation。面板为整个挂载期
-  // 自持一份引用；旧宿主没有 retain 时，继续依赖原有的列表隐式 binding。
   useEffect(() => {
     if (childId === undefined) return
-    let acquired: ReturnType<typeof retainSession>
-    try {
-      acquired = retainSession(ctx, childId)
-    } catch (error) {
-      console.warn('[dsh-sidenote] 侧边会话 retain 失败:', childId, error)
-      return
-    }
-    if (acquired === undefined) return
-    const reference = acquired
-    let released = false
-    // 0.1.7 自愈：旧版本归档过的侧边子会话会被 ArchivedSessionGate 拒跑。
+    const acquired = retainSession(ctx, childId)
+    setReference(acquired)
     unarchiveSideSession(ctx, childId)
-    // retain 同步 materialize binding；补一次渲染即可进入 chat 相位并先订阅
-    // opening 中的事件。ready 只用于吞接入失败，不能等它才开始订阅。
-    refreshBinding((value) => value + 1)
-    void reference.ready.catch((error: unknown) => {
-      if (!released) console.warn('[dsh-sidenote] 侧边会话打开失败:', childId, error)
-    })
-    return () => {
-      released = true
-      reference.release()
-    }
+    let active = true
+    void acquired?.ready.catch((error: unknown) => { if (active) setForkError(String(error)) })
+    return () => { active = false; acquired?.release() }
   }, [ctx, childId])
-
-  // ── 列表订阅：phase（就绪与否）+ byId（在列与否）驱动「会话已不存在」判定 ──
-  const listSnap = useSyncExternalStore(
-    useCallback((notify: () => void) => ctx.sessions.list.subscribe(notify), [ctx]),
-    () => ctx.sessions.list.getSnapshot(),
-  )
-  const listed = childId !== undefined && listSnap.byId?.[childId] !== undefined
+  const list = useSyncExternalStore(useCallback(notify => ctx.sessions.list.subscribe(notify), [ctx]), () => ctx.sessions.list.getSnapshot())
   const binding = childId === undefined ? undefined : ctx.sessions.binding(childId)
   const session = binding?.session
-
-  // 遗传 turn 监护的重挂载补齐。保留 session 就绪门，确保无 retain 的旧宿主
-  // 在列表加载并 materialize binding 后重试；声明在 open effect 前避免先开窗。
+  const phase = phaseOf({ childId, forkError, bound: session !== undefined, listPhase: list.phase, listed: childId !== undefined && list.byId?.[childId] !== undefined })
   useEffect(() => {
-    if (meta.forkedMidTurn !== true || meta.inheritedPurged === true) return
-    if (childId === undefined || session === undefined) return
-    armInheritedTurnPurge(ctx, childId, scope.sessionId, tab.id, meta.leakedPromptPrefix, meta.boundarySeq)
-  }, [ctx, childId, session, meta.forkedMidTurn, meta.inheritedPurged, meta.leakedPromptPrefix, meta.boundarySeq, scope.sessionId, tab.id])
-
-  // 绑定即开窗口（幂等）：拉历史尾页 + 开始接收实时事件。
-  useEffect(() => {
+    if (meta.forkedMidTurn && !meta.inheritedPurged && childId && session) armInheritedTurnPurge(ctx, childId, scope.sessionId, tab.id, meta.leakedPromptPrefix, meta.boundarySeq)
     openSessionWindow(session)
-  }, [session])
-
-  const phase = phaseOf({
-    childId,
-    forkError,
-    bound: session !== undefined,
-    listPhase: listSnap.phase,
-    listed,
-  })
-
-  // ── 消息流订阅：visible=false 时暂停（订阅身份随 visible 变化即断开） ──
-  const snapshot = useSyncExternalStore(
-    useCallback(
-      (notify: () => void) => (visible && session !== undefined ? session.subscribe(notify) : NOOP_UNSUBSCRIBE),
-      [visible, session],
-    ),
-    () => (session === undefined ? null : session.getSnapshot()),
-  )
-  // 内容面双兼容（W00-fork-replay-012）：0.1.2 的 nodes/partial/runningCalls 在
-  // uiConversation.chat target 的 .legacy 切片，0.1.1 在 Session 快照顶层。
-  // chatSourceOf 探测链优先新面、miss 回退旧面；running/openState 两版都在
-  // Session 快照上，继续读旧面。
-  // 内容面双兼容（W00-fork-replay-012）：0.1.2 的 nodes/partial/runningCalls 在
-  // uiConversation.chat target 的 .legacy 切片，0.1.1 在 Session 快照顶层。
-  // chatSourceOf 探测链优先新面、miss 回退旧面；running/openState 两版都在
-  // Session 快照上，继续读旧面。
-  const chat = useMemo(
-    () => chatSourceOf(ctx, childId === undefined ? undefined : ctx.sessions.binding(childId)),
-    [ctx, childId, session],
-  )
-  const chatLegacy = useSyncExternalStore(
-    useCallback(
-      (notify: () => void) => (visible && chat !== undefined ? chat.subscribe(notify) : NOOP_UNSUBSCRIBE),
-      [visible, chat],
-    ),
-    () => chat?.getLegacy() ?? null,
-  )
-  const messages = useMemo(() => transcriptOf(chatLegacy ?? snapshot), [chatLegacy, snapshot])
-
-  // 折叠态外置 store（P0-2 状态零丢失的架构约束）：Tab 切换/重挂不丢展开态。
-  // 注意：必须在相位早退之前创建（hooks 纪律——forking/error 相位渲染的
-  // hooks 数与 chat 相位必须一致，否则 React #310「Rendered more hooks」）。
-  const fold = useMemo(() => createFoldStore(childId === undefined ? undefined : `dsh-sidenote:fold:v1:${childId}`), [childId])
-
-  // P0-4：主会话（父）运行状态订阅——三态指示（跑着/等审批/空闲）。
-  // visible=false 暂停订阅（与消息流同纪律）。
-  const parentSession = meta.parentSessionId === undefined
-    ? undefined
-    : ctx.sessions.binding(meta.parentSessionId)?.session
-  const parentSnap = useSyncExternalStore(
-    useCallback(
-      (notify: () => void) => (visible && parentSession !== undefined ? parentSession.subscribe(notify) : NOOP_UNSUBSCRIBE),
-      [visible, parentSession],
-    ),
-    () => (parentSession === undefined ? null : parentSession.getSnapshot()),
-  )
-  // R8：审批/提问数据源（双版本探测链——0.1.2 uiSession.pendingInteractions
-  // 优先，0.1.1 Session 快照 pending 回退；面缺席 undefined → 回退纯跳转
-  // pendingBar）。hooks 纪律：必须在相位早退之前（#310 教训）。
-  const pendingStore = useMemo(
-    () => (childId === undefined || session === undefined ? undefined : createPendingStore(ctx, session, childId)),
-    [ctx, session, childId],
-  )
-  const pendingItems = useSyncExternalStore(
-    useCallback(
-      (notify: () => void) => (visible && pendingStore !== undefined ? pendingStore.subscribe(notify) : NOOP_UNSUBSCRIBE),
-      [visible, pendingStore],
-    ),
-    // NO_PENDING 常量：uSES getSnapshot 禁产新引用（`?? []` 每次新数组 →
-    // 无限重渲——实证教训）。
-    () => pendingStore?.getSnapshot() ?? NO_PENDING,
-  )
-
-  // D2 提示的消除态（hooks 纪律：必须在相位早退之前——#310 教训）。
-  const [writeNoticeDismissed, setWriteNoticeDismissed] = useState(
-    () => typeof localStorage !== 'undefined' && localStorage.getItem(WRITE_NOTICE_KEY) === '1',
-  )
-
-  // ── composer（input 机器优先，降级本地草稿 + session.prompt） ──
-  // Delivery_04：busy fork 的首条消息在发送瞬间拼接主线进展快照（现取，
-  // 不是 fork 时刻——主线还在跑，发送时才最新）；只有宿主真正接受后才
-  // 清标记，失败剥离临时前缀、保留正文，重试时重新读取最新进展。
-  const tabMetaRef = useRef(meta)
-  tabMetaRef.current = meta
-  const composerOptions = useMemo(() => ({
-    annotations: props.annotations,
+  }, [ctx, session, childId, scope.sessionId, tab.id, meta.forkedMidTurn, meta.inheritedPurged, meta.leakedPromptPrefix, meta.boundarySeq])
+  const snapshot = useSyncExternalStore(useCallback(notify => session?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [session]), () => session?.getSnapshot() ?? null)
+  const chat = useMemo(() => chatSourceOf(ctx, binding), [ctx, childId, session])
+  const legacy = useSyncExternalStore(useCallback(notify => chat?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [chat]), () => chat?.getLegacy() ?? null)
+  const messages = useMemo(() => transcriptOf(legacy ?? snapshot), [legacy, snapshot])
+  const metaRef = useRef(meta)
+  metaRef.current = meta
+  const extras = useMemo(() => ({
     firstSendPrefix: (): string | null => {
-      const m = tabMetaRef.current
-      if (m.forkedMidTurn !== true || m.parentSessionId === undefined) return null
-      const block = buildMainlineSnapshot(ctx, m.parentSessionId)
-      if (block === null) return null
-      return block
+      const current = metaRef.current
+      return current.forkedMidTurn && current.parentSessionId ? buildMainlineSnapshot(ctx, current.parentSessionId) : null
     },
-    onAccepted: (): void => {
-      updateTabMeta(ctx, scope.sessionId, tab.id, (cur) => ({ ...cur, forkedMidTurn: undefined }))
+    onAccepted: (): void => { updateTabMeta(ctx, scope.sessionId, tab.id, current => ({ ...current, forkedMidTurn: undefined })) },
+    onSubmitText: (text: string): void => {
+      const topic = topicOf(text)
+      if (topic && metaRef.current.topic === undefined) setSideChatTopic(ctx, scope.sessionId, tab.id, topic)
     },
-    // 内容身份（Delivery_05）：首条消息摘要落为 topic（sticky——已有
-    // topic 不再覆盖）。body 是干净用户文本（快照前缀不进 body）。
-    onSubmitText: (body: string): void => {
-      if (tabMetaRef.current.topic !== undefined) return
-      const topic = topicOf(body)
-      if (topic !== undefined) setSideChatTopic(ctx, scope.sessionId, tab.id, topic)
-    },
-  }), [ctx, scope.sessionId, tab.id, props.annotations])
-  const composer = useComposer(ctx, session, childId, composerOptions)
-
-  // ── 模型标签：读子会话当前模型（fork 时已同步主会话选择；读取失败保持默认文案） ──
-  const [modelName, setModelName] = useState<string | null>(null)
+  }), [ctx, scope.sessionId, tab.id])
+  const composer = useComposer(ctx, session, childId)
+  useEffect(() => childId === undefined ? undefined : registerSubmissionExtras(childId, extras), [childId, extras])
   useEffect(() => {
-    if (childId === undefined || session === undefined) return
-    let cancelled = false
-    void readModelName(ctx, childId).then((name) => {
-      if (!cancelled && name !== null) setModelName(name)
-    })
-    return () => { cancelled = true }
-  }, [ctx, childId, session])
-
-  // ── 桥接草稿移交：meta.pendingDraft → composer 草稿，应用后清除 ──
-  const pendingDraft = meta.pendingDraft
-  const rootRef = useRef<HTMLDivElement>(null)
+    if (meta.topic !== undefined) return
+    const first = messages.find(message => message.role === 'user' && (message.seq ?? -1) > (meta.boundarySeq ?? -1))
+    if (first) extras.onSubmitText(first.text)
+  }, [messages, meta.topic, meta.boundarySeq, extras])
   useEffect(() => {
-    if (pendingDraft === undefined || pendingDraft === '' || phase !== 'chat') return
-    composer.appendDraft(pendingDraft)
+    if (!meta.pendingDraft || phase !== 'chat' || !composer.machine) return
+    composer.appendDraft(meta.pendingDraft)
     updateTabMeta(ctx, scope.sessionId, tab.id, clearPendingDraft)
-    // 划选提问的落点体验：草稿注入后焦点直达输入框，用户接着打字即可。
-    // visible 预聚焦 effect 只在可见性跳变时跑，已可见的 tab 覆盖不到。
-    requestAnimationFrame(() => { rootRef.current?.querySelector('textarea')?.focus() })
-    // appendDraft 随草稿逐键换身份；不列入依赖 —— effect 只在
-    // pendingDraft/相位变化时真正动作（清除后 pendingDraft 为 undefined，幂等）。
-  }, [pendingDraft, phase, ctx, tab.id])
-
-  // Native right sidebar（DSH ≥ 0.1.5 原生栏直连腿；legacy 宿主上由
-  // better-sidebar ≥ 0.19 转发到同一原生栏）: publish this panel so the
-  // programmatic entry points (/side, selection bridge) can reach its tab id and
-  // seed the draft — the layout snapshot cannot see native tabs (see native.ts).
-  // latest-ref：composer/meta/phase/title 每渲新引用，进 deps 会高频重注册。
-  const composerRef = useRef(composer)
-  composerRef.current = composer
-  const metaRef = useRef(tab.meta)
-  metaRef.current = tab.meta
-  const phaseRef = useRef(phase)
-  phaseRef.current = phase
-  const statusRef = useRef({ phase, childId, error: forkError ?? undefined, requestId: props.quoteRequestId })
-  statusRef.current = { phase, childId, error: forkError ?? undefined, requestId: props.quoteRequestId }
+    requestAnimationFrame(() => { if (rootRef.current) focusSideComposer(rootRef.current) })
+  }, [meta.pendingDraft, phase, composer.machine, ctx, scope.sessionId, tab.id])
+  const live = useRef({ composer, meta: tab.meta, phase, title: tab.title, childId, error: forkError ?? undefined, requestId: props.quoteRequestId })
+  live.current = { composer, meta: tab.meta, phase, title: tab.title, childId, error: forkError ?? undefined, requestId: props.quoteRequestId }
   useEffect(() => { notifyLiveSideChats() }, [phase, childId, forkError, props.quoteRequestId])
-  const titleRef = useRef(tab.title)
-  titleRef.current = tab.title
+  useEffect(() => { if (childId) dropClosedSideChat(scope.sessionId, childId) }, [childId, scope.sessionId])
   useEffect(() => {
-    // 恢复到同一子会话后，清掉刷新或原生卸载留下的恢复记录。
-    const metaNow = parseSideChatMeta(metaRef.current)
-    if (metaNow.childId !== undefined) {
-      dropClosedSideChat(scope.sessionId, metaNow.childId)
-    }
-    const dispose = registerLiveSideChat(
-      scope.sessionId,
-      tab.id,
-      (text) => {
-        // 相位门：未到 chat（forking/loading）时 composer 还是本地草稿，机器
-        // 绑定后本地草稿被丢弃——改走 meta.pendingDraft，由既有 pendingDraft
-        // effect 在相位就绪后应用（与 legacy 路径同机制）。
-        if (phaseRef.current !== 'chat') {
-          updateTabMeta(ctx, scope.sessionId, tab.id, (m) => ({ ...m, pendingDraft: appendDraftText(m.pendingDraft ?? '', text) }))
-          return
-        }
-        composerRef.current.appendDraft(text)
-        requestAnimationFrame(() => { rootRef.current?.querySelector('textarea')?.focus() })
-      },
-      () => metaRef.current,
-      () => titleRef.current,
-      () => statusRef.current,
-    )
-    const remember = (): void => {
-      const m = parseSideChatMeta(metaRef.current)
-      if (m.childId === undefined || m.parentSessionId === undefined) return
-      recordClosedSideChat(m.parentSessionId, {
-        childId: m.childId, parentSessionId: m.parentSessionId, title: titleRef.current,
-        tabId: tab.id, savedMeta: { ...m, number: (metaRef.current as { number?: number } | null)?.number },
-        ...(m.topic !== undefined ? { topic: m.topic } : {}), closedAt: Date.now(),
-      })
-    }
-    // Browser refresh may lose either host's layout and does not run React
-    // unmount. Preserve the child for the existing recent-side-chat menu.
-    window.addEventListener('pagehide', remember)
-    return () => {
-      dispose()
-      // 后悔药数据源（native）：用户 × 关 native tab 不经 descriptor.onClose
-      // （tab-adapter 卸载只 records.drop），以面板卸载补记；误记由挂载时的
-      // drop 自愈。legacy 由 descriptor.onClose 负责，不双写。
-      window.removeEventListener('pagehide', remember)
-      if (directNativeLeg(ctx)) remember()
-    }
-  }, [scope.sessionId, tab.id, ctx])
-
-  // D3a 保存为正式会话：fork 子会话为独立主会话（无 unarchive API，
-  // fork 即转正——内置侧边对话同款路径）→ 主视图打开 → 关本 Tab →
-  // 全局 toast 确认去向（P4：Tab 关闭后面板树卸载，toast 挂在 body 级
-  // 宿主上，寿命不受波及）。
-  const promote = useCallback(() => {
-    if (childId === undefined) return
-    void (async () => {
-      try {
-        await saveSideChatSession(ctx, childId, tab.id, scope.sessionId)
-        showToast(t('promoteDone'))
-      } catch (error) {
-        console.warn('[dsh-sidenote] 保存为正式会话失败:', error)
+    const dispose = registerLiveSideChat(scope.sessionId, tab.id, text => {
+      if (live.current.phase !== 'chat' || !live.current.composer.machine) {
+        updateTabMeta(ctx, scope.sessionId, tab.id, current => ({ ...current, pendingDraft: appendDraftText(current.pendingDraft ?? '', text) }))
+      } else {
+        live.current.composer.appendDraft(text)
+        requestAnimationFrame(() => { if (rootRef.current) focusSideComposer(rootRef.current) })
       }
-    })()
-  }, [ctx, childId, tab.id, scope.sessionId])
-
-  // P0-4 焦点切换：Alt+J 在主 ↔ 侧之间跳（code 判定而非 key——macOS
-  // Option 组合会产 '∆' 等变体字符，code 布局无关稳定）。
+    }, () => live.current.meta, () => live.current.title, () => ({ phase: live.current.phase, childId: live.current.childId, error: live.current.error, requestId: live.current.requestId }))
+    const remember = (): void => {
+      const current = parseSideChatMeta(live.current.meta)
+      if (!current.childId || !current.parentSessionId) return
+      recordClosedSideChat(current.parentSessionId, { childId: current.childId, parentSessionId: current.parentSessionId, title: live.current.title, tabId: tab.id,
+        savedMeta: { ...current, number: (live.current.meta as { number?: number } | null)?.number }, ...(current.topic ? { topic: current.topic } : {}), closedAt: Date.now() })
+    }
+    window.addEventListener('pagehide', remember)
+    return () => { dispose(); window.removeEventListener('pagehide', remember); remember() }
+  }, [ctx, scope.sessionId, tab.id])
   useEffect(() => {
     if (!visible) return
     const onKey = (event: KeyboardEvent): void => {
-      if (!event.altKey || event.metaKey || event.ctrlKey || event.code !== 'KeyJ') return
+      if (!event.altKey || event.key.toLowerCase() !== 's') return
       event.preventDefault()
-      const inSide = rootRef.current?.contains(document.activeElement) === true
-      if (inSide) {
-        // 回主：聚焦主 composer（0.1.1 textarea / 0.1.2 contenteditable 双兼容）。
-        focusMainComposer(document.body)
-      } else {
-        rootRef.current?.querySelector('textarea')?.focus()
-      }
+      if (rootRef.current?.contains(document.activeElement)) focusMainComposer(document.body)
+      else if (rootRef.current) focusSideComposer(rootRef.current)
     }
     document.addEventListener('keydown', onKey)
     return () => { document.removeEventListener('keydown', onKey) }
   }, [visible])
-
-  // 新消息自动跟滚：仅在用户本就在底部附近时跟（读历史时不被拽走——
-  // Copilot #1167 滚动重置是用户恨点）；离开底部时浮「跳到最新」按钮。
-  const bodyRef = useRef<HTMLDivElement>(null)
-  const [nearBottom, setNearBottom] = useState(true)
-  const tailKey = messages.length === 0 ? '' : `${messages[messages.length - 1]!.key}:${messages[messages.length - 1]!.text.length}:${messages[messages.length - 1]!.reasoning?.length ?? 0}`
-  useEffect(() => {
-    const el = bodyRef.current
-    if (el !== null && visible && nearBottom) el.scrollTop = el.scrollHeight
-  }, [tailKey, visible, nearBottom])
-  // P0-2：滚动位置随会话持久化（刷新恢复）。
-  const scrollKey = childId === undefined ? undefined : `dsh-sidenote:scroll:v1:${childId}`
-  const scrollTimer = useRef(0)
-  const onBodyScroll = useCallback(() => {
-    const el = bodyRef.current
-    if (el === null) return
-    setNearBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80)
-    if (scrollKey !== undefined) {
-      window.clearTimeout(scrollTimer.current)
-      scrollTimer.current = window.setTimeout(() => {
-        try { localStorage.setItem(scrollKey, String(el.scrollTop)) } catch { /* 隐私模式 */ }
-      }, 300)
-    }
-  }, [scrollKey])
-  const jumpToLatest = useCallback(() => {
-    const el = bodyRef.current
-    if (el !== null) el.scrollTop = el.scrollHeight
-    setNearBottom(true)
-  }, [])
-
-  // 滚动恢复：消息首次非空渲染后回跳一次（之后归 onScroll/nearBottom 管）。
-  const scrollRestored = useRef(false)
-  useEffect(() => {
-    if (scrollRestored.current || scrollKey === undefined || messages.length === 0) return
-    scrollRestored.current = true
-    let saved: string | null = null
-    try { saved = localStorage.getItem(scrollKey) } catch { /* ignore */ }
-    if (saved !== null && bodyRef.current !== null) {
-      bodyRef.current.scrollTop = Number(saved)
-      const el = bodyRef.current
-      setNearBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80)
-    }
-  }, [messages.length, scrollKey])
-
-  if (phase === 'fork-error') {
-    return (
-      <StateScreen
-        title={t('forkErrorTitle')}
-        detail={forkError ?? undefined}
-        hint={t('forkErrorHint')}
-      />
-    )
+  const parent = meta.parentSessionId ? ctx.sessions.binding(meta.parentSessionId)?.session : undefined
+  const parentSnapshot = useSyncExternalStore(useCallback(notify => parent?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [parent]), () => parent?.getSnapshot() ?? null)
+  const status = sessionStatusSource(ctx)
+  const parentPending = useSyncExternalStore(useCallback(notify => status?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [status]), () => status?.getSnapshot().get(meta.parentSessionId ?? scope.sessionId)?.pendingInteraction != null)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string>()
+  const promote = async (): Promise<void> => {
+    if (!childId || saving) return
+    setSaving(true); setSaveError(undefined)
+    try { await saveSideChatSession(ctx, childId, tab.id, scope.sessionId); showToast(t('promoteDone')) }
+    catch (error) { setSaveError(error instanceof Error ? error.message : String(error)) }
+    finally { setSaving(false) }
   }
-  if (phase === 'missing') {
-    return (
-      <StateScreen
-        title={t('missingTitle')}
-        detail={t('missingDetail')}
-        hint={t('missingHint')}
-      />
-    )
-  }
-  if (phase === 'forking' || phase === 'loading') {
-    return <StateScreen title={t('preparing')} />
-  }
-
+  useSyncExternalStore(props.reflow.subscribe, props.reflow.getSnapshot)
+  if (phase === 'fork-error') return <StateScreen title={t('forkErrorTitle')} detail={forkError ?? undefined} hint={t('forkErrorHint')} />
+  if (phase === 'missing') return <StateScreen title={t('missingTitle')} detail={t('missingDetail')} hint={t('missingHint')} />
+  if (phase !== 'chat' || !reference || !childId) return <StateScreen title={t('preparing')} />
+  const side: SideConversation = { sessionId: childId, parentSessionId: meta.parentSessionId ?? scope.sessionId, title: tab.title, boundarySeq: meta.boundarySeq, reflow: props.reflow }
+  const replies = finalReplies(messages, meta.boundarySeq, new Set(chat?.getCompletedReplySeqs?.() ?? []))
+  const questions = pairQuestions(messages)
+  const allAdded = replies.length > 0 && replies.every(reply => isReplyAdded(side, reply, questions.get(reply.key)))
   const running = snapshot?.running === true
-  const openFailed = snapshot?.openState === 'error'
-  // D2 补偿（同权语义）：侧聊首次出现写型工具（diff 卡 / edit·write 族）时
-  // 给一次性轻提示——用户要「一眼知道它能动我文件」。
-  const hasWriteTool = messages.some(m =>
-    m.role === 'tool' && (m.card?.kind === 'diff' || (m.toolName !== undefined && WRITE_TOOLS.has(m.toolName))))
-  // R8 审批提示条：pending 两版本分居（0.1.1 在 Session 快照顶层；0.1.2 在
-  // 控制面——legacy 切片不含）。两面都读，兼容缺席。
-  const pendingCount = (
-    ((snapshot as { pending?: readonly unknown[] } | null)?.pending)
-    ?? ((chatLegacy as { pending?: readonly unknown[] } | null)?.pending)
-    ?? []
-  ).length
-
-  const parentPending = ((parentSnap as { pending?: readonly unknown[] } | null)?.pending ?? []).length
-  const parentState = parentSession === undefined
-    ? null
-    : parentPending > 0 ? 'pending' : parentSnap?.running === true ? 'running' : 'idle'
-
-  return (
-    <div ref={rootRef} className={css.root} data-sidenote-chat-session={childId} data-sidenote-view-title={tab.title}>
-      {parentState !== null && meta.parentSessionId !== undefined && (
-        <button
-          type="button"
-          className={css.parentStrip}
-          title={t('parentStripTitle')}
-          onClick={() => { if (meta.parentSessionId !== undefined) openSession(ctx, meta.parentSessionId) }}
-        >
-          <span className={parentState === 'running' ? css.dotRunning : parentState === 'pending' ? css.dotPending : css.dotIdle} />
-          {t(parentState === 'running' ? 'parentRunning' : parentState === 'pending' ? 'parentPending' : 'parentIdle')}
-        </button>
-      )}
-      <div ref={bodyRef} className={css.body} data-sidenote-transcript onScroll={onBodyScroll}>
-        {messages.length === 0 && !running
-          ? <EmptyState />
-          : <MessageList messages={messages} fold={fold} boundarySeq={meta.boundarySeq} reflow={props.reflow} parentSessionId={meta.parentSessionId} sideTitle={tab.title} onPromote={promote} />}
-        {openFailed && <div className={css.errorRow}>{t('historyFailed')}</div>}
-      </div>
-      {hasWriteTool && !writeNoticeDismissed && (
-        <div className={css.writeNotice}>
-          <span>{t('writeNotice')}</span>
-          <button
-            type="button"
-            className={css.writeNoticeClose}
-            aria-label={t('hintClose')}
-            onClick={() => {
-              setWriteNoticeDismissed(true)
-              try { localStorage.setItem(WRITE_NOTICE_KEY, '1') } catch { /* 隐私模式 */ }
-            }}
-          >×</button>
-        </div>
-      )}
-      {/* R8：数据源在场 → 面板内审批/提问答复卡；面缺席（老宿主）→ 回退
-          纯跳转 pendingBar（原行为不变）。 */}
-      {pendingStore !== undefined && pendingItems.length > 0 && (
-        <PendingCardList items={pendingItems} />
-      )}
-      {pendingStore === undefined && pendingCount > 0 && childId !== undefined && (
-        <button
-          type="button"
-          className={css.pendingBar}
-          onClick={() => { openSession(ctx, childId) }}
-        >
-          {t('pendingNotice')}
-        </button>
-      )}
-      {!nearBottom && (
-        <button type="button" className={css.jumpBottom} onClick={jumpToLatest}>
-          {t('jumpToLatest')}
-        </button>
-      )}
-      <ComposerBar ctx={ctx} session={session} composer={composer} running={running} visible={visible} modelName={modelName} childId={childId} onModelSwitched={setModelName} annotations={props.annotations} />
+  return <div ref={rootRef} className={css.root} data-sidenote-chat-session={childId} data-sidenote-view-title={tab.title}>
+    <div className={css.nativeToolbar}>
+      <button type="button" className={css.nativeAction} onClick={() => { openSession(ctx, side.parentSessionId) }}>{t(parentPending ? 'parentPending' : parentSnapshot?.running ? 'parentRunning' : 'parentIdle')}</button>
+      <span className={css.nativeToolbarActions}>
+        <button type="button" className={css.nativeAction} disabled={running || replies.length === 0 || allAdded} aria-pressed={allAdded} onClick={() => { for (const reply of replies) addReply(side, reply, questions.get(reply.key)) }}>{t(allAdded ? 'reflowAllDone' : 'reflowAll')}</button>
+        <button type="button" className={css.nativeAction} disabled={running || composer.pending || saving} title={t(running || composer.pending ? 'promoteBusy' : 'promoteTitle')} onClick={() => { void promote() }}>{t('promote')}</button>
+      </span>
     </div>
-  )
+    {saveError && <div className={css.errorRow} role="alert">{saveError}</div>}
+    <div className={css.nativeConversation} data-sidenote-transcript>{props.renderConversation(reference, side)}</div>
+  </div>
 }

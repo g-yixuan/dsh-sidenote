@@ -38,6 +38,7 @@ export const en = {
   diagAcceptance: 'Message acceptance observation', diagChat: 'Conversation content', diagModel: 'Model controls',
   diagSideAcceptance: 'Side message acceptance',
   inputUnavailable: 'Cannot send right now. Body, attachments and quotes have been retained.',
+  snapshotContext: 'Main conversation progress at first send',
   inputWaiting: 'The input is not ready. Body, attachments and quotes have been retained. Please try again shortly.',
   draftRecoveryConflict: 'The host has another draft. Your local body is retained; review this session in the main view before retrying.',
   quoteWorkflowWaiting: 'Annotations are not ready yet. Please try again shortly.',
@@ -175,6 +176,7 @@ export const en = {
 
   // 回流通道（侧边 → 主会话）
   reflowToMain: 'Send back to main session',
+  sendAnnotations: 'Send annotations',
   reflowFrom: 'From side chat ({title}):',
   reflowDone: 'Added above the main composer',
   reflowFailed: "Couldn't reach the main session",
@@ -209,6 +211,7 @@ export const en = {
   reflowAllDone: 'Reflowed ✓',
   promote: 'Save as session',
   promoteTitle: 'Fork this side chat into a standalone session in the main list',
+  promoteBusy: 'Wait for the reply and queued messages to finish before saving',
   promoteDone: 'Saved as a regular session — it\'s open in the main view now',
 
   // 工具卡叶子块 labels（0.1.2 起必填——host/labels.ts）
@@ -224,7 +227,7 @@ export const en = {
   // WI-03 主线状态条（P0-4 三态）
   parentStripTitle: 'Main session status — click to jump back',
   parentRunning: 'Main: running',
-  parentPending: 'Main: awaiting approval',
+  parentPending: 'Main: awaiting your input',
   parentIdle: 'Main: idle',
 }
 
@@ -260,6 +263,7 @@ export const zh: Record<CopyKey, string> = {
   diagAcceptance: '消息接受观察', diagChat: '会话内容读取', diagModel: '模型控件',
   diagSideAcceptance: '侧聊消息接受',
   inputUnavailable: '暂时无法发送，正文、附件和注释已保留。',
+  snapshotContext: '首次发送时的主线进展',
   inputWaiting: '输入尚未就绪，正文、附件和注释已保留，请稍后重试。',
   draftRecoveryConflict: '宿主另有草稿，本地正文已保留；请在主视图核对该会话草稿后再试。',
   quoteWorkflowWaiting: '注释功能暂未就绪，请稍后重试。',
@@ -387,6 +391,7 @@ export const zh: Record<CopyKey, string> = {
   hintClose: '知道了',
 
   reflowToMain: '回流到主会话',
+  sendAnnotations: '发送注释',
   reflowFrom: '来自侧边聊天（{title}）：',
   reflowDone: '已回流到主会话输入框上方',
   reflowFailed: '主会话不可达',
@@ -418,6 +423,7 @@ export const zh: Record<CopyKey, string> = {
   reflowAllDone: '已回流 ✓',
   promote: '保存为正式会话',
   promoteTitle: '把侧边聊天转为会话列表里的正式会话',
+  promoteBusy: '请等待回复及待发消息处理完成后再保存',
   promoteDone: '已保存为正式会话——已在主视图打开',
 
   readWindow: '{shown}/{total} 行',
@@ -431,7 +437,7 @@ export const zh: Record<CopyKey, string> = {
 
   parentStripTitle: '主线会话状态——点击回到主对话',
   parentRunning: '主线：运行中',
-  parentPending: '主线：待审批',
+  parentPending: '主线：等待处理',
   parentIdle: '主线：空闲',
 }
 
