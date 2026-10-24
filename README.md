@@ -23,7 +23,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-60708E" alt="MIT license"></a>
 </p>
 
-![新版浅色界面：左侧保留主对话，右侧深入讨论，结论回到主输入框](docs/assets/workflow.jpg)
+![划选文字后可添加到对话或在侧边提问；同屏展示侧聊回答、待发送的批注与回流标签，以及已发送消息中的上下文气泡](docs/assets/workflow.jpg)
 
 <p align="center"><sub>dsh-sidenote 0.7.2 · DSH 0.2.1-rc.2 · DeepSeek V4.1 Flash · 真实交互录制</sub></p>
 
