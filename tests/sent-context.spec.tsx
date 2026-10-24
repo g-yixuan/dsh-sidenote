@@ -13,7 +13,7 @@ const reflow = '<reflow source="侧边 · 调查">\n<问>问题</问>\n<答>完�
 const cleanup: (() => void)[] = []
 afterEach(() => { for (const dispose of cleanup.splice(0).reverse()) dispose() })
 
-function mount(text: string, modern: boolean, key = 'user', injected = '') {
+function mount(text: string, modern: boolean, key = 'user', injected = '', imageOnly = false) {
   type Props = { node: { data: { content: readonly { type: string; text?: string }[] } } }
   const host = document.createElement('div')
   document.body.append(host)
@@ -43,7 +43,7 @@ function mount(text: string, modern: boolean, key = 'user', injected = '') {
     },
   } as unknown as Context
   registerUserContext(ctx)
-  const content = Object.freeze([Object.freeze({ type: 'image' }), Object.freeze({ type: 'text', text })] as const)
+  const content: readonly { readonly type: string; readonly text?: string }[] = Object.freeze([Object.freeze({ type: 'image' }), ...(imageOnly ? [] : [Object.freeze({ type: 'text', text })])])
   const nodes = [...(injected ? [{ kind: 'context', seq: 9, source: { kind: 'dsh-sidenote' }, content: [{ type: 'text', text: injected }] }] : []), { kind: 'user', seq: 10 }]
   const props = { node: { data: { seq: 10, content } }, useChat: (select: any) => select({ legacy: { nodes } }) }
   act(() => { root.render(createElement(entry.component, props)) })
@@ -52,6 +52,12 @@ function mount(text: string, modern: boolean, key = 'user', injected = '') {
 }
 
 describe.each([true, false])('sent context inside the native user bubble (UserText=%s)', modern => {
+  it('keeps injected context visible beside an image-only input without changing its attachments', () => {
+    const { host, content } = mount('', modern, 'user', reflow, true)
+    expect(host.querySelector('[data-native-bubble] [data-dsh-sidenote-bubble]')).not.toBeNull()
+    expect(host.querySelector('[data-native-attachments]')?.textContent).toBe('image')
+    expect(content).toEqual([{ type: 'image' }])
+  })
   it('shows real injected reflows in their owning bubble without adding them to the durable body', () => {
     const { host, content, rerender } = mount('这是一个侧边回流测试', modern, 'user', '以下是用户从侧边对话带回的结论（参考上下文）：\n\n' + reflow)
     const bubble = host.querySelector('[data-native-bubble]')!

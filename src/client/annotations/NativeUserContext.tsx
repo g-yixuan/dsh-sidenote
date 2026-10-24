@@ -109,7 +109,8 @@ export function registerUserContext(ctx: Context): void {
             const body = protocol ? afterSnapshot.slice(protocol.length).trimStart() : afterSnapshot
             // Retain the native bubble for an annotation-only message; this
             // presentation-only word joiner never enters the durable content.
-            const content = blocks.map((block, index) => index === at ? { ...block, text: body || (protocol ? '\u2060' : '') } : block)
+            const displayText = body || (protocol ? '\u2060' : '')
+            const content = at < 0 ? [...blocks, { type: 'text', text: displayText }] : blocks.map((block, index) => index === at ? { ...block, text: displayText } : block)
             const projected = { ...props, node: { ...props.node, data: { ...props.node.data, content } } }
             return <>
               {snapshot && <details className={css.sentContext} data-sidenote-progress-snapshot><summary>{t('snapshotContext')}</summary><pre>{snapshot.snapshot}</pre></details>}
