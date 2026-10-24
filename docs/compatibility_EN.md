@@ -10,12 +10,12 @@ The development branch maintains **a current regular host, a previous host, and 
 |---|---|---|
 | DSH 0.2.1-rc.2, no BS | Current regular host; required CI | — |
 | DSH 0.2.0-rc.2, no BS | Previous host; required CI | — |
-| DSH 0.2.1-rc.3, no BS | Admitted preview; equally required CI | Not supported by 0.7.0; use a subsequent Release containing admission |
+| DSH 0.2.1-rc.3, no BS | Admitted preview; equally required CI | Native support starts with dsh-sidenote 0.7.1 |
 | DSH 0.1.7-rc.2 / 0.1.5-rc.2, no BS | Retired | Pin dsh-sidenote 0.6.5 |
 | DSH 0.1.1-rc.2 + BS 0.12.3 / 0.18.0 | Retired | Pin 0.6.5 and the original BS version |
 | DSH 0.1.2-rc.1 + BS 0.18.0 | Retired | Pin 0.6.5 and the original BS version |
 
-0.6.5 includes @lilongsky’s V4 reflow fix and the follow-up failure acknowledgements, retaining the previous UI and validated rc.3 compatibility. Native rc.3 admission is validated separately, not inferred from the old UI. The published 0.7.0 package still supports only the first two hosts; upgrading rc.3 requires a subsequent Release containing admission.
+0.6.5 includes @lilongsky’s V4 reflow fix and the follow-up failure acknowledgements, retaining the previous UI and validated rc.3 compatibility. Native rc.3 admission is validated separately, not inferred from the old UI. Native support starts at 0.7.1; historical 0.7.0 still supports only the first two hosts. rc.3 users can run `dsh plugin --profile web add --save-exact dsh-sidenote@0.7.1`.
 
 BS means dsh-better-sidebar. The current branch does not depend on it. Unlisted hosts, alpha releases and BS coexistence combinations are unverified.
 
