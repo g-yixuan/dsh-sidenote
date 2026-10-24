@@ -10,12 +10,12 @@
 |---|---|---|
 | DSH 0.2.1-rc.2，不装 BS | 当前常规版本，必需 CI | — |
 | DSH 0.2.0-rc.2，不装 BS | 过渡版本，必需 CI | — |
-| DSH 0.2.1-rc.3，不装 BS | 已准入预览版，同等必需 CI | 0.7.0 尚不支持，使用包含准入的后续 Release |
+| DSH 0.2.1-rc.3，不装 BS | 已准入预览版，同等必需 CI | 原生支持自 dsh-sidenote 0.7.1 起 |
 | DSH 0.1.7-rc.2 / 0.1.5-rc.2，不装 BS | 已退役 | 固定 dsh-sidenote 0.6.5 |
 | DSH 0.1.1-rc.2 + BS 0.12.3 / 0.18.0 | 已退役 | 固定 dsh-sidenote 0.6.5 及原 BS 版本 |
 | DSH 0.1.2-rc.1 + BS 0.18.0 | 已退役 | 固定 dsh-sidenote 0.6.5 及原 BS 版本 |
 
-0.6.5 包含 @lilongsky 的 V4 回流修复及后续失败确认保护，保留旧界面与已验证的 rc.3 兼容。rc.3 原生准入另行验证，不以旧界面结果替代；已发布的 0.7.0 仍仅支持前两版，升级须选择包含本次准入的 Release。
+0.6.5 包含 @lilongsky 的 V4 回流修复及后续失败确认保护，保留旧界面与已验证的 rc.3 兼容。rc.3 原生准入另行验证，不以旧界面结果替代；原生支持自 0.7.1 起，历史 0.7.0 仍仅支持前两版。rc.3 可运行 `dsh plugin --profile web add --save-exact dsh-sidenote@0.7.1`。
 
 BS 指 dsh-better-sidebar。当前主线不再依赖它；未列出的宿主、alpha 及 BS 共存组合未经验证。
 
