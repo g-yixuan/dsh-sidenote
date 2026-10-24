@@ -15,7 +15,7 @@ import { xmlAttr } from './protocol.ts'
 
 /**
  * reflow 注入通道（Workitem_06）：优先经宿主路由 /sidenote/reflow 以
- * agent.inject 落父会话日志（plugin-source 独立事件，context row 折叠）；
+ * agent.inject 落父会话日志（插件自有 source 独立事件，context row 折叠）；
  * 路由缺席/父会话无 live agent/超时 → 调用方回落搭车形态（发送拦截器
  * 序列化前缀）。逐个 item 投递；成功项由调用方从 store 移除（不等发送
  * 确认——注入已入 inbox，chip 消失表达「已注入」）。
@@ -29,7 +29,7 @@ export interface ReflowInjectResult {
   injectedIds: ReadonlySet<number>
 }
 
-/** 尝试经宿主路由注入一批回流项；任何失败都降级为「全未注入」。 */
+/** 只消费宿主明确确认的项；未注入项由调用方搭车，发送拒绝时继续保留。 */
 export async function tryInjectReflows(parentSessionId: string, items: readonly ReflowItem[]): Promise<ReflowInjectResult> {
   if (items.length === 0) return { injectedIds: new Set() }
   const empty: ReflowInjectResult = { injectedIds: new Set() }
@@ -43,7 +43,7 @@ export async function tryInjectReflows(parentSessionId: string, items: readonly 
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           parentSessionId,
-          // inject 形态下块是独立 plugin-source 消息（审查 M6：自造标签在
+          // inject 形态下块是独立插件来源消息（审查 M6：自造标签在
           // 无用户正文相伴时可能被当第三方元数据）——前置一行自然语言引导
           // 规避。搭车路径的块结构不变（气泡反解析兼容）。
           items: items.map(item => ({
@@ -57,7 +57,12 @@ export async function tryInjectReflows(parentSessionId: string, items: readonly 
       clearTimeout(timer)
     }
     if (!res.ok) return empty
-    const data = await res.json() as { ok?: boolean }
+    const data = await res.json() as { ok?: boolean, injectedIndexes?: unknown }
+    if (Array.isArray(data.injectedIndexes)) {
+      const indexes = data.injectedIndexes.filter((index): index is number => typeof index === 'number' && Number.isInteger(index) && index >= 0 && index < items.length)
+      return { injectedIds: new Set(indexes.map(index => items[index]!.id)) }
+    }
+    // Older host halves acknowledge the complete batch with ok:true only.
     if (data.ok !== true) return empty
     return { injectedIds: new Set(items.map(item => item.id)) }
   } catch {

@@ -35,7 +35,7 @@ interface Harness {
  * 复刻宿主 composer 的最小识别面：`[data-composer-seat]` › `[data-composer-card]`
  * 内两个按钮（`#extra` 常 disabled，`#send` 是 DOM 末位 = 主按钮）。
  */
-function makeHarness(options: { draft?: string; buttonDisabled?: boolean; withAnnotation?: boolean; reflowItems?: { id: number; text: string; sideTitle: string }[] } = {}): Harness {
+function makeHarness(options: { draft?: string; buttonDisabled?: boolean; withAnnotation?: boolean; rejectFirstSend?: boolean; reflowItems?: { id: number; text: string; sideTitle: string }[] } = {}): Harness {
   const sendDisabled = options.buttonDisabled ?? true
   document.body.innerHTML = `
     <div data-composer-seat>
@@ -48,7 +48,8 @@ function makeHarness(options: { draft?: string; buttonDisabled?: boolean; withAn
   const state = { draft: options.draft ?? '', phase: 'plain' as const }
   const submitted: string[] = []
   const drafts: string[] = []
-  const sessionState = { sessionId: SESSION, running: false, nodes: [] as unknown[] }
+  const sessionState = { sessionId: SESSION, running: false, nodes: [] as unknown[], promptError: undefined as { op: string, error: { message: string } } | undefined }
+  let rejectNextSend = options.rejectFirstSend ?? false
   const sessionListeners = new Set<() => void>()
   const session = {
     getSnapshot: () => sessionState,
@@ -63,6 +64,13 @@ function makeHarness(options: { draft?: string; buttonDisabled?: boolean; withAn
     setDraft: (text: string) => { drafts.push(text); state.draft = text },
     submit: (mode?: string) => {
       submitted.push(mode ?? 'queue')
+      if (rejectNextSend) {
+        rejectNextSend = false
+        sessionState.promptError = { op: 'send', error: { message: 'host rejected this send' } }
+        for (const fn of sessionListeners) fn()
+        return
+      }
+      sessionState.promptError = undefined
       sessionState.nodes.push({ kind: 'user', seq: sessionState.nodes.length + 1, content: [{ type: 'text', text: state.draft }] })
       state.draft = ''
       for (const fn of sessionListeners) fn()
@@ -87,7 +95,7 @@ function makeHarness(options: { draft?: string; buttonDisabled?: boolean; withAn
     add: () => { throw new Error('unused in this spec') },
     remove: (id: number) => { removed.push(id) },
     clearSession: () => {},
-    list: () => reflowItems.map(item => ({
+    list: () => reflowItems.filter(item => !removed.includes(item.id)).map(item => ({
       id: item.id,
       sessionId: SESSION,
       sideTitle: item.sideTitle,
@@ -254,5 +262,27 @@ describe('send interceptor — Workitem_06 注入通道', () => {
     expect(harness.submitted).toEqual(['queue'])
     expect(harness.drafts).toEqual([])
     expect(harness.draft()).toBe('')
+  })
+
+  it('部分注入后正文发送拒绝：保留未投递结论和干净草稿，重试只投递剩余项', async () => {
+    harness = makeHarness({ draft: '保留正文', buttonDisabled: false, withAnnotation: false, rejectFirstSend: true, reflowItems: [{ id: 1, text: '已注入结论', sideTitle: '侧边' }, { id: 2, text: '待重试结论', sideTitle: '侧边' }] })
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: false, injectedIndexes: [0] }), { status: 200 }))
+      .mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ ok: false, injectedIndexes: [] }), { status: 200 }))))
+    click(document.querySelector('#send')!)
+    await flushMicrotasks()
+    expect(harness.removedReflow).toEqual([1])
+    expect(harness.draft()).toBe('保留正文')
+    expect(harness.drafts.some(text => text.includes('待重试结论'))).toBe(true)
+    expect(harness.drafts.some(text => text.includes('已注入结论'))).toBe(false)
+
+    click(document.querySelector('#send')!)
+    await flushMicrotasks()
+    expect(harness.removedReflow).toEqual([1, 2])
+    expect(harness.submitted).toEqual(['queue', 'queue'])
+    expect(harness.draft()).toBe('')
+    const retry = JSON.parse(vi.mocked(fetch).mock.calls[1]![1]!.body as string)
+    expect(retry.items).toHaveLength(1)
+    expect(retry.items[0].text).toContain('待重试结论')
   })
 })
