@@ -129,7 +129,7 @@ export function makeReflowHandler(ctx: HostContext) {
       return
     }
     const items = Array.isArray(body.items) ? body.items as ReflowItemPayload[] : []
-    const valid = items.filter(item => typeof item.text === 'string' && item.text !== '')
+    const valid = items.map((item, index) => ({ item, index })).filter(({ item }) => typeof item.text === 'string' && item.text !== '')
     if (typeof body.parentSessionId !== 'string' || body.parentSessionId === '' || valid.length === 0) {
       writeJson(res, 400, { ok: false, error: 'bad-request: parentSessionId/items required' })
       return
@@ -142,7 +142,8 @@ export function makeReflowHandler(ctx: HostContext) {
       return
     }
     // summary 收敛到官方上限（CONTEXT_SUMMARY_MAX_CHARS=120；审查 m3）。
-    for (const item of valid) {
+    const injectedIndexes: number[] = []
+    for (const { item, index } of valid) {
       const sideTitle = typeof item.sideTitle === 'string' ? item.sideTitle : ''
       const summary = (sideTitle === '' ? '侧边聊天的结论回流' : `来自「${sideTitle}」的结论回流`).slice(0, 120)
       try {
@@ -158,12 +159,13 @@ export function makeReflowHandler(ctx: HostContext) {
             summary,
           },
         }))
+        injectedIndexes.push(index)
       } catch (error) {
         // agent 在 get 与 inject 之间被回收：本条注入失败，其余继续。
         console.warn('[dsh-sidenote] reflow 注入单条失败:', error)
       }
     }
-    writeJson(res, 200, { ok: true })
+    writeJson(res, 200, { ok: injectedIndexes.length === valid.length, injectedIndexes })
   }
 }
 
