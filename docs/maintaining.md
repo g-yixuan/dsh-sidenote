@@ -7,22 +7,22 @@
 ## 开发与合并
 
 - `main` 是唯一日常主线。功能、修复、文档、CI、依赖与版本变更都从主题分支开 PR；维护者和 agent 遵守相同规则。
-- PR 合并前，`ci` 和两个固定宿主 `plugin-mount` 检查全部成功，review threads 已处理，分支与当前主线兼容。周度 `host-canary` 单独跟踪宿主漂移，不作为每条 PR 的必需检查。
+- PR 合并前，`ci` 和固定 `host-compatibility` 汇总检查成功；汇总依赖角色清单中的全部 `plugin-mount`，包括已准入预览版，失败、取消或跳过均不放行。review threads 已处理，分支与当前主线兼容。`host-canary` 单独跟踪 latest / next 漂移，不作为每条 PR 的必需检查。
 - 不直接推送、强推或删除 `main`，不以手动发布替代合并检查。紧急修复也走小 PR；CI 故障应先修复或公开说明有针对性的规则调整，不能默认忽略失败。
 - 维护者审查问题、改动范围、回归风险和验证证据。外部 PR 经维护者审查后合并。当前单维护者阶段，自己的 PR 可在自查并通过全部 CI 后合并；不设置无法满足的“第二个人批准”要求。
 - GitHub 的独立批准人数当前为 0，仍强制 PR、CI 和处理 review threads。有至少两位稳定维护者后，将人数调整为 1，自己的 PR 由另一人审查。
 - 通常使用 Squash and merge，让 PR 对应一个清晰的变更；需要保留独立提交或多人历史时可使用 merge commit。合并前核对作者和共同作者署名，不把外部贡献改成自己的署名。
 - PR 标题应描述用户可见行为，合并后按 GitHub 设置清理已合并分支。不要改写已合入的历史。
 
-`main` 的规则通过 GitHub ruleset 执行：必须 PR、基础 CI 与固定宿主矩阵、review thread 解决、禁止强推和删除，维护者不设常规绕过。修改 CI 矩阵的 PR 必须同步调整 ruleset 的检查名称，避免留下失效门槛；配置入口为仓库 Settings → Rules → Rulesets。
+`main` 的规则通过 GitHub ruleset 执行：必须 PR、ci 与固定 host-compatibility 汇总、review thread 解决、禁止强推和删除，维护者不设常规绕过。普通窗口滚动不再修改带版本号的 required check；改变门槛结构时，先确认新检查实际通过，再同步 ruleset 并回读验证，避免空门槛或忽略失败。配置入口为仓库 Settings → Rules → Rulesets。
 
 宿主验收复用同一套核心 journey：实际 fork 出子会话、继承历史与输入框可用、消息进入子会话持久日志且未进入父会话。tab 出现、fork 错误态或乐观清空草稿都不能单独算通过；无凭证验收只证明消息接受与交互，不能证明模型回答成功。
 
 每组 CI 保存 `test-results/host-inventory.json`、截图及失败日志。inventory 核对精确 CLI、实际激活的客户端 bundle 版本、宿主依赖版本与本次插件构建摘要；无法读取的组件记为未知，不用 CLI 或 devDependencies 补值。浏览器流程开始前拒绝旧构建，结束后再次核对。手工钉版验收时设置 `DSH_EXPECTED_VERSION`，脚本会拒绝实际版本不符或命令缺失，不自动换测 latest。
 
-当前仅保留 0.2.0-rc.2 和 0.2.1-rc.2 两组固定必需检查；历史五组退役，用户固定最后兼容插件 0.6.5；0.2.1-rc.3 的原生 Conversation 准入独立推进，此前也固定 0.6.5。周度 canary 只解析一次 latest，随后按该精确版本跑相同核心流程并保存证据；失败在对应 job 中可见。后续候选仍需完整功能、相关真实运行及可见浏览器验收，再通过 PR 更新支持表和 required checks，并核对实际 ruleset。
+角色当前为 current=0.2.1-rc.2、previous=0.2.0-rc.2、preview=0.2.1-rc.3，全部共用原生 Conversation。历史五组退役，用户固定 0.6.5；rc.3 支持需安装包含本次准入的后续 Release，不能用 0.7.0。周度或手动 canary 分别解析一次 latest / next，未准入候选保存记录并显式失败，已准入版本跑完整流程。新增宿主仍须完整功能、相关真实模型及可见浏览器验收，再通过 PR 更新角色、三处声明和双语支持表。候选探测不自动扩大范围。
 
-兼容状态、有限支持窗口与候选准入见[兼容政策](compatibility.md)。窗口外保留历史 npm 包，不在当前主线回补功能或保留旧实现；每次窗口滚动通过 PR 明确最后兼容版并同步 ruleset。
+兼容状态、角色滚动与候选准入见[兼容政策](compatibility.md)。新 next 只替换预览位置；新常规版本验收并随插件发布后，当前转为过渡，旧过渡退出，重合预览清空。窗口外保留历史 npm 包，不在主线回补功能或保留旧实现；每次退出在同一 PR 记录最后兼容插件及精确安装命令。
 
 ## Issue 与需求处理
 

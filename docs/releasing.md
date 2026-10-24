@@ -37,4 +37,4 @@
 
 ## 兼容窗口变更
 
-发布前核对两处 DSH engines、UI primitives peer、两组固定 CI 和实际 GitHub required checks 一致。退出窗口的宿主停在最后兼容插件：本轮 0.1 系列固定 0.6.5，保留历史包，不需要重新发布。新版本只包含当前原生实现，不向旧包回补每个功能。npm latest / dist-tag 不会根据宿主选版本；旧用户使用 `dsh plugin --profile web add --save-exact dsh-sidenote@0.6.5`。支持窗口及退役说明见[兼容政策](compatibility.md)。
+发布前运行 `node scripts/host-window.mjs`，核对 current / previous / 可选 preview 与两处 DSH engines、UI primitives peer 一致；全部生成的宿主任务和固定 ci + host-compatibility 必须成功，实际 ruleset 也必须要求这两个检查。预览支持仍需完整准入，不能只修改安装范围。常规窗口滚动无需替换 required check 名称；门槛结构变更时同步并回读 ruleset。退出宿主保留最后兼容插件与精确安装命令，本轮 0.1 系列固定 0.6.5，不需要重新发布。新版本只包含共用原生实现，不向旧包回补每个功能。npm latest / dist-tag 不按宿主选版本；旧用户使用 `dsh plugin --profile web add --save-exact dsh-sidenote@0.6.5`。支持窗口及退役说明见[兼容政策](compatibility.md)。

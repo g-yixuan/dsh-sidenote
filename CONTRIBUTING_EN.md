@@ -47,7 +47,7 @@ pnpm exec playwright install chromium
 BS_VERSION=none DSH_EXPECTED_VERSION=0.2.1-rc.2 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.1-rc.2 dsh" pnpm test:mount
 ```
 
-The script uses a temporary DSH_HOME. The [CI matrix](.github/workflows/ci.yml) defines tested combinations. CI covers only the two native hosts in the support window. Outside-window users pin the last compatible plugin; ordinary changes do not retest retired hosts.
+The script uses a temporary DSH_HOME. [CI](.github/workflows/ci.yml) generates its exact matrix from package.json's dshSupport: current, previous, and an optional admitted preview. Every matrix job must pass the host-compatibility summary gate. Outside-window users pin their last compatible plugin; ordinary changes do not retest retired hosts. See the [compatibility policy](docs/compatibility_EN.md) for roles and retirement.
 
 Keyless E2E verifies interactions and mounting, not model answers. Changes to opening a side chat while the main session is running, cancellation, queues, or progress snapshots also need a real running-session scenario and explicit validation results. State any limits of your validation.
 
