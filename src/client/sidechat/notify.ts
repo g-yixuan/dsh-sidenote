@@ -1,37 +1,17 @@
-/**
- * 完成通知（WI-03，L3 常驻监听层）：侧聊子会话 running true→false 翻转时
- * toast 提醒——用户焦点在主对话时侧聊长任务跑完能被看见（Zed
- * notify_when_agent_waiting 先例）。
- *
- * 事件源是 session.subscribe 快照推送（非轮询）；宿主 notifier 入账不依赖
- * 订阅者——面板不可见（SideChatPanel 的 uSES 断订阅）期间事件不丢。
- * 本层是常驻 ctx.effect：Tab 开闭由 betterSidebar.subscribeState 重扫驱动。
- */
+/** Observe durable completed turns for live side chats, including hidden panels. */
 import type { Context } from '../host/contracts.ts'
-import { collectSideTabs, parseSideChatMeta } from './model.ts'
 import { openSessionWindow, isPurgingInheritedTurn } from './lifecycle.ts'
-import { betterSidebarOf, directNativeLeg } from './native.ts'
 import { sideChatMetaStore, sideChatMetasAll } from './metaStore.ts'
 import { sideChatTitleOf } from './identity.ts'
+import { chatSourceOf, sessionStatusSource } from '../host/chat.ts'
+import { subscribeLiveSideChats } from './native.ts'
 import { showToast } from './toast.tsx'
 import { t } from '../locales.ts'
 
 interface Watcher {
   unsub: () => void
   wasRunning: boolean
-  /** 建 watcher 的时间——挂接瞬间的 running 翻转（残影）不报。 */
-  since: number
-}
-
-/** 挂接保护窗：watcher 建立后该窗口内的翻转不视为「一个真实 turn 跑完」。 */
-const ATTACH_GRACE_MS = 800
-
-/**
- * 翻转侦测核心（抽出来纯可测）：running true→false 且距挂接超过保护窗
- * 时返回 true。调用方持状态。
- */
-export function shouldNotify(wasRunning: boolean, running: boolean, attachedAt: number, now: number): boolean {
-  return wasRunning && !running && now - attachedAt > ATTACH_GRACE_MS
+  lastEndSeq: number
 }
 
 export function registerCompletionNotify(ctx: Context): void {
@@ -41,20 +21,7 @@ export function registerCompletionNotify(ctx: Context): void {
     // 枚举当前存活侧聊的 (childId, title)：直连腿读 metaStore（记录由面板
     // reconcile 创建、关闭检测清场，有记录即存活；childId 在 fork 完成后
     // 才登记）；legacy 腿读布局快照。
-    const collectAlive = (): Array<{ childId: string, title: string }> => {
-      if (directNativeLeg(ctx)) {
-        return sideChatMetasAll().flatMap((meta) => {
-          if (meta.childId === undefined) return []
-          return [{ childId: meta.childId, title: sideChatTitleOf(meta) }]
-        })
-      }
-      const snapshot = betterSidebarOf(ctx)?.getSnapshot()
-      if (snapshot?.state === undefined) return []
-      return collectSideTabs(snapshot.state).flatMap((tab) => {
-        const childId = parseSideChatMeta(tab.meta).childId
-        return childId === undefined ? [] : [{ childId, title: tab.title }]
-      })
-    }
+    const collectAlive = (): Array<{ childId: string, title: string }> => sideChatMetasAll().flatMap(meta => meta.childId === undefined ? [] : [{ childId: meta.childId, title: sideChatTitleOf(meta) }])
 
     const rescan = (): void => {
       let tabs: Array<{ childId: string, title: string }> = []
@@ -72,26 +39,28 @@ export function registerCompletionNotify(ctx: Context): void {
           const session = ctx.sessions.binding(childId)?.session
           if (session === undefined) continue
           openSessionWindow(session)
-          const watcher: Watcher = { unsub: () => {}, wasRunning: false, since: Date.now() }
-          watcher.unsub = session.subscribe(() => {
-            const snap = session.getSnapshot() as { running?: unknown } | null
-            const running = snap?.running === true
-            // busy fork 的遗传 turn 监护窗口（Delivery_04）：那个 turn 是主线
-            // 在飞消息的遗留副本、被我们 cancel——它的翻转不是「侧边回复完成」。
-            if (isPurgingInheritedTurn(childId)) {
+          const chat = chatSourceOf(ctx, ctx.sessions.binding(childId))
+          if (!chat?.getLastTurnEnd) continue
+          const status = sessionStatusSource(ctx)
+          const runningNow = (): boolean => status?.getSnapshot().get(childId)?.running ?? session.getSnapshot().running === true
+          const watcher: Watcher = { unsub: () => {}, wasRunning: runningNow(), lastEndSeq: chat.getLastTurnEnd()?.seq ?? -1 }
+          const check = (): void => {
+            const running = runningNow()
+            if (isPurgingInheritedTurn(childId)) { watcher.wasRunning = running; return }
+            const end = chat?.getLastTurnEnd?.()
+            if (end && end.seq > watcher.lastEndSeq) {
+              if (end.reason === 'completed' && watcher.wasRunning) {
+                const title = collectAlive().find(entry => entry.childId === childId)?.title ?? t('tabBaseTitle')
+                showToast(t('sideChatDone', { title }))
+              }
+              watcher.lastEndSeq = end.seq
               watcher.wasRunning = running
-              return
-            }
-            if (shouldNotify(watcher.wasRunning, running, watcher.since, Date.now())) {
-              // 标题现查（Delivery_05 M1 修复）：watcher 建于 childId 登记时
-              // （topic 尚未写入），闭包冻结标题会让 toast 永远显示裸「侧边」。
-              const title = collectAlive().find(entry => entry.childId === childId)?.title ?? t('tabBaseTitle')
-              showToast(t('sideChatDone', { title }))
-            }
-            watcher.wasRunning = running
-          })
-          // 挂接即取一次初值（正在跑的会话稍后跑完时报）。
-          watcher.wasRunning = (session.getSnapshot() as { running?: unknown } | null)?.running === true
+            } else if (running) watcher.wasRunning = true
+          }
+          const offSession = session.subscribe(check)
+          const offChat = chat?.subscribe(check)
+          const offStatus = status?.subscribe(check)
+          watcher.unsub = () => { offSession(); offChat?.(); offStatus?.() }
           watchers.set(childId, watcher)
         } catch {
           // 下轮重扫再试。
@@ -108,12 +77,12 @@ export function registerCompletionNotify(ctx: Context): void {
 
     // 重扫驱动：直连腿 = metaStore 变更（reconcile/childId 登记/关闭清场都会
     // notify）；legacy 腿 = betterSidebar 布局状态订阅。
-    const offState = directNativeLeg(ctx)
-      ? sideChatMetaStore.subscribe(rescan)
-      : (betterSidebarOf(ctx)?.subscribeState(rescan) ?? (() => {}))
+    const offState = sideChatMetaStore.subscribe(rescan)
+    const offLive = subscribeLiveSideChats(rescan)
     rescan()
     return () => {
       offState()
+      offLive()
       for (const w of watchers.values()) w.unsub()
       watchers.clear()
     }

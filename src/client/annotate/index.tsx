@@ -20,7 +20,7 @@ import { AnnotateOverlay } from './overlay.tsx'
 import { createAnnotationChip } from '../annotations/chip.tsx'
 import { createReflowChip } from './chip.tsx'
 import { installSendInterceptor } from './send.ts'
-import { installBubbleSurgery } from './bubble.ts'
+import { registerUserContext } from '../annotations/NativeUserContext.tsx'
 import type { ReflowStore } from '../reflow.ts'
 
 import { hostDiagnostics } from '../host/probes.ts'
@@ -44,7 +44,7 @@ export function registerAnnotations(ctx: Context, reflow: ReflowStore, store: An
       // 发送携带：拦截器在提交瞬间把协议块（注释 + 回流）拼入正文（草稿零污染）。
       const offInterceptor = installSendInterceptor(ctx, store, reflow)
       // 发送后留痕：用户气泡里的协议块隐藏为「批注 ×N」标签。
-      const offSurgery = installBubbleSurgery()
+      registerUserContext(ctx)
 
       // The「N 条注释」chip: conversation.input.dock is the official composer
       // attachment seat; slots.inject waits for the shell's declaration (the
@@ -56,7 +56,7 @@ export function registerAnnotations(ctx: Context, reflow: ReflowStore, store: An
           id: 'dsh-sidenote-annotations',
           order: 10,
           registrant: 'dsh-sidenote',
-        }, createAnnotationChip(store))
+        }, createAnnotationChip(ctx, store, reflow))
         const offReflow = ctx.slots.register({
           name: 'conversation.input.dock',
           id: 'dsh-sidenote-reflow',
@@ -72,7 +72,6 @@ export function registerAnnotations(ctx: Context, reflow: ReflowStore, store: An
 
       return () => {
         offInterceptor()
-        offSurgery()
         controller.dispose()
         // 同帧 render/unmount 会触发 React 警告——推迟到下一帧。
         setTimeout(() => { root.unmount() })

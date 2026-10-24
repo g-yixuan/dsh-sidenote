@@ -1,7 +1,11 @@
 /** Internal conversation DOM seams, validated by the pinned host journeys.
  * Main message markers and composer seats have no public replacement API. */
 export const MAIN_ASSISTANT = '[data-chat-flow-kind="assistant-step"]'
-export const NON_QUOTE = 'button, [role="button"], input, textarea, select, [contenteditable="true"], [data-code-block-banner], [data-sidenote-no-quote]'
+export const NON_QUOTE = 'button, [role="button"], input, textarea, select, [contenteditable="true"], [data-code-block-banner], [data-variant="think"], [data-sidenote-no-quote]'
+
+export function nativeAssistantBodies(root: ParentNode = document): HTMLElement[] {
+  return [...root.querySelectorAll<HTMLElement>(MAIN_ASSISTANT)]
+}
 
 export function elementOf(node: Node): Element | null {
   return node instanceof Element ? node : node.parentElement
@@ -43,7 +47,7 @@ export function quoteClipOf(body: HTMLElement, view: HTMLElement): { left: numbe
       }
     }
   }
-  const composer = view.querySelector<HTMLElement>(view.hasAttribute('data-sidenote-chat-session') ? '[data-sidenote-composer]' : '[data-composer-seat]')?.getBoundingClientRect()
+  const composer = view.querySelector<HTMLElement>('[data-composer-seat], [data-sidenote-composer]')?.getBoundingClientRect()
   if (composer !== undefined && composer.width > 0 && composer.left < clip.right && composer.right > clip.left) clip.bottom = Math.min(clip.bottom, composer.top)
   return clip
 }
@@ -51,7 +55,12 @@ export function quoteClipOf(body: HTMLElement, view: HTMLElement): { left: numbe
 export function mainComposerOf(node: Element): HTMLElement | null { return node.closest<HTMLElement>('[data-composer-seat]') }
 
 export function focusMainComposer(view: HTMLElement): void {
-  view.querySelector<HTMLElement>('[data-composer-seat] [data-composer-input], [data-composer-seat] textarea')?.focus()
+  const inputs = [...view.querySelectorAll<HTMLElement>('[data-composer-seat] [data-composer-input], [data-composer-seat] textarea')]
+  inputs.find(input => input.closest('[data-sidenote-chat-session]') === null)?.focus()
+}
+
+export function focusSideComposer(view: HTMLElement): void {
+  view.querySelector<HTMLElement>('[data-composer-input], textarea')?.focus()
 }
 
 /** 主 composer 的宿主容器（侧边面板 textarea 不在其中，天然不串）。 */
@@ -61,12 +70,18 @@ export function composerSeat(): HTMLElement | null {
 
 /** 发送按钮 = [data-composer-card] 内 DOM 序最后一个 button（仅 click 路径用，
  *  且只在非运行态作为识别面——运行态主按钮变身「停止」，整个 click 路径不拦）。 */
-export function findSendButtonInCard(): HTMLButtonElement | null {
-  const card = document.querySelector<HTMLElement>('[data-composer-card]')
+export function findSendButtonInCard(root: ParentNode = document): HTMLButtonElement | null {
+  const card = root.querySelector<HTMLElement>('[data-composer-card]')
   if (card === null) return null
   const buttons = card.querySelectorAll('button')
   const last = buttons[buttons.length - 1]
   return last instanceof HTMLButtonElement ? last : null
+}
+
+export function composerSessionId(seat: HTMLElement, fallback: string): string {
+  return seat.closest<HTMLElement>('[data-sidenote-chat-session]')?.dataset.sidenoteChatSession
+    ?? seat.closest<HTMLElement>('[data-conversation-session]')?.dataset.conversationSession
+    ?? fallback
 }
 
 
@@ -77,7 +92,7 @@ export function isMainComposerInput(target: EventTarget | null): boolean {
 }
 
 export function composerHasMenu(seat: HTMLElement): boolean {
-  return seat.querySelector('[role="listbox"], [aria-expanded="true"]') !== null
+  return seat.querySelector('[role="listbox"], [role="menu"], [aria-haspopup][aria-expanded="true"]') !== null
 }
 
 export function hasConversationMessages(): boolean {

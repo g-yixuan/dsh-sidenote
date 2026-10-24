@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf } from './journey'
+import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, selectModel } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
 test.afterEach(async ({ page }, info) => {
@@ -42,11 +42,10 @@ test('native Queue acceptance, Stop preserving queued quotes, and explicit Steer
   await prepareSeedPage(page)
   const child = await openSideChat(page)
   const side = sideChatOf(page)
-  await side.getByRole('button', { name: /^(Model:|模型：)/ }).click()
-  await page.getByRole('menuitem', { name: 'Controlled E2E', exact: true }).click()
-  await expect(side.getByRole('button', { name: /^(Model:|模型：) controlled$/ })).toBeVisible()
-  const input = side.getByPlaceholder(/^(Message…|输入消息)/)
-  const stop = side.getByRole('button', { name: /^(Stop the current reply|停止当前回复)$/ })
+  await selectModel(page, side, 'Controlled E2E')
+  await expect(side.getByRole('button', { name: /^(Select model|选择模型).*Controlled E2E/ })).toBeVisible()
+  const input = side.locator('[data-composer-input]')
+  const stop = side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })
   const records = () => page.evaluate(id => JSON.parse(localStorage.getItem('dsh-sidenote:annotations:v1:' + id) ?? '[]'), child)
   const parentBefore = userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)
 
@@ -61,7 +60,7 @@ test('native Queue acceptance, Stop preserving queued quotes, and explicit Steer
   expect(userMessagesOf(child).filter(text => text.includes('queued annotation body'))).toHaveLength(0)
   await stop.click()
   await expect(stop).toHaveCount(0)
-  await expect(input).toHaveValue('')
+  await expect(input).toHaveText('')
   // Stop aborts the current turn and keeps the native Inbox. The actual loop
   // remains idle until another send wakes it; do not mistake idle for a loss.
   expect(userMessagesOf(child).filter(text => text.includes('queued annotation body'))).toHaveLength(0)
@@ -100,8 +99,8 @@ test('busy fork keeps the parent running and consumes its progress snapshot once
   const child = await openSideChat(page)
   await expect(mainStop).toBeVisible()
   const side = sideChatOf(page)
-  const input = side.getByPlaceholder(/^(Message…|输入消息)/)
-  await expect(input).toHaveValue('')
+  const input = side.locator('[data-composer-input]')
+  await expect(input).toHaveText('')
   await addSideQuote(page, 'busy fork annotation')
   await input.fill('first accepted busy fork question'); await input.press('Enter')
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes('first accepted busy fork question'))).toHaveLength(1)
@@ -109,9 +108,9 @@ test('busy fork keeps the parent running and consumes its progress snapshot once
   expect(first.match(/<mainline-progress-snapshot /g)).toHaveLength(1)
   expect(first).toContain('main is still executing the busy fork request [e2e:hold]')
   expect(first).toContain('<note>busy fork annotation</note>')
-  await expect(input).toHaveValue('')
+  await expect(input).toHaveText('')
 
-  const sideStop = side.getByRole('button', { name: /^(Stop the current reply|停止当前回复)$/ })
+  const sideStop = side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })
   await expect(sideStop).toHaveCount(0)
   await input.fill('second busy fork question'); await input.press('Enter')
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes('second busy fork question'))).toHaveLength(1)

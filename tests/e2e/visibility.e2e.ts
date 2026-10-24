@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, openGeneralSettings } from './journey'
+import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, openGeneralSettings, selectModel } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
 
@@ -50,17 +50,16 @@ test('side session visibility: creation never flashes, hidden chats run, and a s
   await expect(row).toHaveCount(0)
 
   const side = sideChatOf(page)
-  await side.getByRole('button', { name: /^(Model:|模型：)/ }).click()
-  await page.getByRole('menuitem', { name: 'Controlled E2E', exact: true }).click()
+  await selectModel(page, side, 'Controlled E2E')
   const replies = side.getByText('Controlled E2E reply. This complete assistant response supports quote selection.', { exact: true })
   const inheritedReplies = await replies.count()
   const message = 'Hidden side session can run before saving a visible copy'
-  const input = side.getByPlaceholder(/^(Message…|输入消息)/)
+  const input = side.locator('[data-composer-input]')
   await input.fill(message); await input.press('Enter')
   await expect.poll(() => userMessagesOf(child).some(text => text.includes(message)), { timeout: 30_000 }).toBe(true)
   await expect(replies).toHaveCount(inheritedReplies + 1)
   await expect(replies.last()).toBeVisible()
-  await expect(side.getByRole('button', { name: /^(Stop the current reply|停止当前回复)$/ })).toHaveCount(0)
+  await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
   expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!).some(text => text.includes(message))).toBe(false)
   await expect(row).toHaveCount(0)
 

@@ -1,104 +1,48 @@
-/**
- * sidechat/notify.ts 单测：翻转侦测（shouldNotify）+ 常驻 watcher 集成
- * （Tab 重扫 → 会话订阅 → running 翻转 → toast；Tab 关闭清理）。
- */
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const { showToast } = vi.hoisted(() => ({ showToast: vi.fn() }))
 vi.mock('../src/client/sidechat/toast.tsx', () => ({ showToast }))
+import { registerCompletionNotify } from '../src/client/sidechat/notify.ts'
+import { dropSideChatMeta, sideChatMetasAll, writeSideChatMeta } from '../src/client/sidechat/metaStore.ts'
+import type { Context } from '../src/client/host/contracts.ts'
 
-import { registerCompletionNotify, shouldNotify } from '../src/client/sidechat/notify.ts'
-
-describe('shouldNotify', () => {
-  it('running true→false 且过保护窗才报', () => {
-    expect(shouldNotify(true, false, 1000, 3000)).toBe(true)
-    expect(shouldNotify(true, false, 1000, 1500)).toBe(false) // 保护窗内
-    expect(shouldNotify(false, true, 1000, 3000)).toBe(false)  // 启动不报
-    expect(shouldNotify(false, false, 1000, 3000)).toBe(false)
-  })
-})
-
-describe('registerCompletionNotify', () => {
-  beforeEach(() => { showToast.mockClear() })
-
-  function fakeHost(runningSeq: boolean[]) {
-    // 会话桩：每次 notify 时从 runningSeq 出队一个 running 值。
-    const listeners = new Set<() => void>()
-    const session = {
-      subscribe(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn) } },
-      getSnapshot: () => ({ running: runningSeq[0] ?? false }),
-    }
-    return {
-      session,
-      /** 推进一拍：running 出队并通知订阅者。 */
-      tick() { runningSeq.shift(); for (const fn of listeners) fn() },
-    }
+beforeEach(() => { showToast.mockClear(); for (const m of sideChatMetasAll()) dropSideChatMeta(m.sessionId, m.tabId); vi.useFakeTimers(); vi.setSystemTime(1000) })
+afterEach(() => { vi.useRealTimers() })
+function watch() {
+  let running = true, seq = 10, reason = 'completed'
+  const sessionListeners = new Set<() => void>(), chatListeners = new Set<() => void>()
+  const session = { getSnapshot: () => ({ running }), subscribe(fn: () => void) { sessionListeners.add(fn); return () => { sessionListeners.delete(fn) } } }
+  const target = { getSnapshot: () => ({ legacy: { nodes: [] }, timeline: { turnOrder: [1], turns: new Map([[1, { end: { seq, data: { reason: { kind: reason } } } }]]) } }), subscribe(fn: () => void) { chatListeners.add(fn); return () => { chatListeners.delete(fn) } } }
+  let dispose: (() => void) | undefined
+  writeSideChatMeta({ sessionId: 'parent', tabId: 'tab', childId: 'child', number: 1, createdAt: 1 })
+  const ctx = { effect(fn: () => () => void) { dispose = fn() }, get: (name: string) => name === 'uiConversation' ? { binding: () => ({ target: () => target }) } : undefined, sessions: { binding: () => ({ session }) } } as unknown as Context
+  registerCompletionNotify(ctx)
+  vi.setSystemTime(3000)
+  return {
+    idle() { running = false; for (const fn of sessionListeners) fn() },
+    end(kind: string) { reason = kind; seq++; for (const fn of chatListeners) fn() },
+    listenerCount: () => sessionListeners.size + chatListeners.size,
+    dispose: () => dispose?.(),
   }
-
-  function fakeCtx(sideTabs: { id: string; title: string; childId?: string }[], session: unknown) {
-    const stateListeners = new Set<() => void>()
-    const effects: Array<() => void | (() => void)> = []
-    return {
-      effects,
-      ctx: {
-        effect(fn: () => void | (() => void)) { effects.push(fn) },
-        betterSidebar: {
-          subscribeState(fn: () => void) { stateListeners.add(fn); return () => { stateListeners.delete(fn) } },
-          // SidebarSnapshot 真实形状（better-sidebar state.ts）：包装对象
-          // {sessionId, state, prefs}——state 才是 splits 树（M3 修复前的
-          // 夹具把包装对象伪造成 state，掩盖了生产形状的恒空 bug）。
-          getSnapshot: () => ({
-            sessionId: 's1',
-            state: {
-              splits: { kind: 'leaf', tabs: sideTabs.map(t => ({ id: t.id, type: 'dsh-sidenote:side', title: t.title, meta: { childId: t.childId } })) },
-            },
-          }),
-        },
-        sessions: { binding: () => ({ session }) },
-      } as never,
-      fireState() { for (const fn of stateListeners) fn() },
-    }
-  }
-
-  it('侧聊 Tab 出现 → 挂订阅；running 翻转 → toast（带 Tab 标题）；Tab 关闭 → 清理', () => {
-    const host = fakeHost([true, false])
-    const { ctx, effects } = fakeCtx([{ id: 't1', title: '侧边', childId: 'child-1' }], host.session)
-    registerCompletionNotify(ctx)
-    // 跑 effect（cordis effect 语义：注册即执行，返回清理函数）
-    for (const fn of effects) void fn()
-    // 挂接时刻 running=true（初值），等过保护窗再翻转
-    vi.useFakeTimers(); vi.setSystemTime(Date.now() + 2000)
-    host.tick() // running: true → false（出队后 getSnapshot 读 false）
-    vi.useRealTimers()
-    expect(showToast).toHaveBeenCalledTimes(1)
-    expect(showToast.mock.calls[0]![0]).toContain('侧边')
+}
+describe('completion notifications', () => {
+  it('does not equate an idle transition with a successful reply', () => {
+    const host = watch(); host.idle(); expect(showToast).not.toHaveBeenCalled(); host.end('completed'); expect(showToast).toHaveBeenCalledTimes(1); host.dispose()
   })
-
-  it('M1 回归：watcher 建立后 topic 才写入，toast 必须现查标题（不被闭包冻结）', () => {
-    const host = fakeHost([true, false])
-    let liveTitle = '侧边'
-    const effects: Array<() => void | (() => void)> = []
-    const ctx = {
-      effect(fn: () => void | (() => void)) { effects.push(fn) },
-      betterSidebar: {
-        subscribeState() { return () => {} },
-        getSnapshot: () => ({
-          sessionId: 's1',
-          state: {
-            splits: { kind: 'leaf', tabs: [{ id: 't1', type: 'dsh-sidenote:side', title: liveTitle, meta: { childId: 'child-1' } }] },
-          },
-        }),
-      },
-      sessions: { binding: () => ({ session: host.session }) },
-    } as never
-    registerCompletionNotify(ctx)
-    for (const fn of effects) void fn()
-    // watcher 已建（此刻标题还是裸「侧边」）；topic 随后写入
-    liveTitle = '侧边 · 部署泳道排查'
-    vi.useFakeTimers(); vi.setSystemTime(Date.now() + 2000)
-    host.tick()
-    vi.useRealTimers()
+  it.each(['cancelled', 'interrupted', 'error', 'max-tokens'])('does not announce %s as completed', kind => {
+    const host = watch(); host.idle(); host.end(kind); expect(showToast).not.toHaveBeenCalled(); host.dispose()
+  })
+  it('looks up the current title and disposes both subscriptions when closed', () => {
+    const host = watch(); writeSideChatMeta({ sessionId: 'parent', tabId: 'tab', childId: 'child', number: 1, topic: 'updated topic', createdAt: 1 }); host.idle(); host.end('completed')
+    expect(showToast.mock.calls[0]![0]).toContain('updated topic')
+    dropSideChatMeta('parent', 'tab'); expect(host.listenerCount()).toBe(0); host.dispose()
+  })
+  it('does not replay historical completion or suppress a genuinely fast new reply', () => {
+    const host = watch()
+    expect(showToast).not.toHaveBeenCalled()
+    vi.setSystemTime(1100)
+    host.idle(); host.end('completed')
     expect(showToast).toHaveBeenCalledTimes(1)
-    expect(showToast.mock.calls[0]![0]).toContain('部署泳道排查')
+    host.dispose()
   })
 })

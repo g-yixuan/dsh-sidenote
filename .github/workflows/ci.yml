@@ -39,48 +39,23 @@ jobs:
         run: pnpm test
 
   # Pack the plugin as an npm tarball, mount it into a REAL DSH instance
-  # through the official `dsh plugin --profile web add` channel (together with
-  # dsh-better-sidebar from npm), and drive the DSH web UI headlessly
+  # through the official `dsh plugin --profile web add` channel and drive the
+  # native DSH web UI headlessly
   # (Playwright Chromium) through the journey lanes. No API key needed — the
   # seeded session jsonl makes the fork path work keyless.
   plugin-mount:
     name: plugin-mount (${{ matrix.dsh-version }}, ${{ matrix.bs-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # 矩阵钉版（版本韧性架构第四节；「peer 钉版」在 DSH 插件生态无 npm 落点，
-    # 执行面只有这里的矩阵）：
-    # - DSH 维度：在用版本 0.1.1-rc.2 + 下一代 0.1.2-rc.1（覆盖宿主漂移方向）；
-    # - BS 维度：peer 下限 0.12.3 + 最新 0.18.0（0.1.2 适配版）。
-    # 已知排除：BS 0.12.3 × DSH 0.1.2-rc.1（BS 旧版宿主半在 0.1.2 崩溃，
-    # 非我方切点——spike 实证 2026-09-07）。
-    # lane 全量跑（3 组合并行成本可接受）；矩阵再扩张时上 @smoke 子集
-    # （lane tag 化是 WI-01 前置项）。
+    # Rolling support window: only the two admitted native hosts.
     strategy:
       fail-fast: false
       matrix:
         include:
-          - dsh-version: '0.1.1-rc.2'
-            bs-version: '0.12.3'
-          - dsh-version: '0.1.1-rc.2'
-            bs-version: '0.18.0'
-          - dsh-version: '0.1.2-rc.1'
-            bs-version: '0.18.0'
-          # 直连档（WI-07）：0.1.5 原生右栏、不装 better-sidebar——optional
-          # peer 后的主路径。跑 mount-direct.e2e.ts（e2e-mount.sh 按 BS_VERSION
-          # 分档）。0.1.5+BS0.19 共存档的选择器面与 legacy 不同（mount.e2e.ts
-          # 是 legacy 布局形态），矩阵化留后续。
-          - dsh-version: '0.1.5-rc.2'
-            bs-version: 'none'
-          - dsh-version: '0.1.7-rc.2'
-            bs-version: 'none'
-          # Exact admitted releases; preserve all historical combinations.
           - dsh-version: '0.2.0-rc.2'
             bs-version: 'none'
           - dsh-version: '0.2.1-rc.2'
             bs-version: 'none'
-          - dsh-version: '0.2.1-rc.3'
-            bs-version: 'none'
-    continue-on-error: ${{ matrix.experimental || false }}
     env:
       DSH_TELEMETRY_DISABLED: '1'
       BS_VERSION: ${{ matrix.bs-version }}
@@ -111,6 +86,9 @@ jobs:
       - name: Mount and run host journeys
         run: pnpm test:mount
 
+      - name: Reject incompatible updates and retain the pinned legacy release
+        run: pnpm test:compat
+
       - name: Upload host inventory and journey evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -121,10 +99,7 @@ jobs:
             test-results/
           if-no-files-found: ignore
 
-  # 宿主版本 canary（weekly）：latest DSH × latest BS——新版发布早发现。
-  # 与 plugin-mount 的差别：版本全部取 npm latest，不钉；失败即宿主又漂了。
-  # 0.4.0 起：canary 跑无-BS 直连档（latest 宿主 + 不装 BS）——mount.e2e.ts
-  # 是 legacy 布局选择器，在 0.1.5 原生栏形态下不适用；直连档才是主路径。
+  # Resolve latest once; failures signal a candidate admission, never expand support.
   host-canary:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest

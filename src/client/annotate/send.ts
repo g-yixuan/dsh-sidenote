@@ -1,16 +1,17 @@
 /** Main composer gestures forward controlled quotes through the native input.
  * Admission is observed on the frozen target, rather than inferred from draft clearing.
  */
-import type { Context, SessionId, SessionInput } from '../host/contracts.ts'
+import type { Context } from '../host/contracts.ts'
 import { resolveInput, inputAttachmentIds } from '../host/input.ts'
 export { resolveInput } from '../host/input.ts'
 import { currentSessionIdOf } from '../host/currentSession.ts'
 import { t } from '../locales.ts'
-import { submitAnnotations } from '../annotations/send.ts'
+import { submitControlledInput } from '../annotations/send.ts'
 import type { AnnotationStore } from '../annotations/model.ts'
-import { buildReflowBlock, tryInjectReflows, type ReflowStore } from '../reflow.ts'
+import type { ReflowStore } from '../reflow.ts'
+import { submissionExtrasOf } from '../annotations/submissionExtras.ts'
 
-import { composerSeat, findSendButtonInCard, isMainComposerInput, mainComposerOf, composerHasMenu } from '../host/dom.ts'
+import { findSendButtonInCard, isMainComposerInput, mainComposerOf, composerHasMenu, composerSessionId } from '../host/dom.ts'
 
 export function installSendInterceptor(ctx: Context, store: AnnotationStore, reflow: ReflowStore): () => void {
   /** 重入/连按护栏：事务进行中吞掉命中识别面的 Enter/点击（不重复驱动）。 */
@@ -35,37 +36,16 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     swallowTimer = window.setTimeout(clearSwallow, 2_000)
   }
 
-  const currentSessionId = (): string => currentSessionIdOf(ctx)
+  const currentSessionId = (seat?: HTMLElement): string => seat ? composerSessionId(seat, currentSessionIdOf(ctx)) : currentSessionIdOf(ctx)
 
-  const commitAsync = async (sessionId: SessionId, input: SessionInput, reflows: ReturnType<typeof reflow.list>, active: ReturnType<typeof store.listActive>, mode?: 'queue' | 'steer'): Promise<void> => {
-    try {
-      const { injectedIds } = await tryInjectReflows(sessionId, reflows)
-      for (const id of injectedIds) reflow.remove(id)
-      const hitchhikers = reflows.filter(item => !injectedIds.has(item.id))
-      if (hitchhikers.length === 0 && active.length === 0) {
-        if (input.state.getSnapshot().draft.trim() !== '' || inputAttachmentIds(input).length > 0) input.submit(mode)
-        return
-      }
-      const accepted = await submitAnnotations({
-        ctx, store, sessionId, input, annotations: active,
-        leadingBlocks: hitchhikers.map(item => buildReflowBlock(item)), mode,
-      })
-      if (accepted) for (const item of hitchhikers) reflow.remove(item.id)
-    } catch (error) {
-      store.setSubmission(sessionId, { pending: false, error: error instanceof Error ? error.message : String(error) })
-    } finally {
-      committingSessions.delete(sessionId)
-      const state = store.getSubmission(sessionId)
-      store.setSubmission(sessionId, { ...state, pending: false })
-    }
-  }
-
-  const hijack = (mode?: 'queue' | 'steer'): boolean => {
-    const sessionId = currentSessionId()
+  const hijack = (seat: HTMLElement, mode?: 'queue' | 'steer'): boolean => {
+    const sessionId = currentSessionId(seat)
     if (sessionId === '') return false
     const active = store.listActive(sessionId)
     const reflows = reflow.list(sessionId)
-    if (active.length === 0 && reflows.length === 0) return false
+    const extras = submissionExtrasOf(sessionId)
+    const prefix = extras?.firstSendPrefix()
+    if (active.length === 0 && reflows.length === 0 && !prefix) return false
     const input = resolveInput(ctx, sessionId)
     if (input === undefined) {
       store.setSubmission(sessionId, { pending: false, error: t('inputUnavailable') })
@@ -73,30 +53,26 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     }
     const snap = input.state.getSnapshot()
     const draft = snap.draft
+    if (active.length === 0 && reflows.length === 0 && draft.trim() === '' && inputAttachmentIds(input).length === 0) return false
     if (draft.trimStart().startsWith('/')) return false
     // 机器相位守卫：claimed/adjudicating/submitting = 弹窗/命令/事务在走。
     if (snap.phase !== 'plain') return false
     // 弹窗 DOM 守卫：@引用 listbox、「+」菜单展开等。
-    const seat = composerSeat()
-    if (seat === null) return false
     if (composerHasMenu(seat)) return false
 
     // 同步拦截成立，异步执行（inject 的有界等待不能在同步手势里）。
     committingSessions.add(sessionId)
-    store.setSubmission(sessionId, { pending: true })
-    void commitAsync(sessionId, input, reflows, active, mode)
+    void submitControlledInput(ctx, store, reflow, sessionId, mode).finally(() => { committingSessions.delete(sessionId) })
     return true
   }
 
   const onKeyDown = (event: KeyboardEvent): void => {
     const target = event.target
-    // 0.1.2 兼容（W00-send-intercept-012）：宿主 composer 从受控 <textarea>
-    // 重写为 Lexical contenteditable（div[data-composer-input]，Enter 走
-    // Lexical command 层）。识别面双兼容：新锚点 closest 优先，旧 textarea
-    // 回退；锚点 closest 天然覆盖内层 chip span/文本节点。
+    // Scoped native input markers also cover nested Lexical reference nodes.
     if (!isMainComposerInput(target)) return
+    const seat = mainComposerOf(target as Element)!
     if (event.isComposing || event.keyCode === 229) return
-    if (committingSessions.has(currentSessionId())) {
+    if ((committingSessions.has(currentSessionId(seat)) || store.getSubmission(currentSessionId(seat)).pending)) {
       if (event.key === 'Enter') {
         event.preventDefault()
         event.stopImmediatePropagation()
@@ -104,7 +80,7 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
       return
     }
     if (event.key !== 'Enter' || event.shiftKey) return
-    if (!hijack(event.metaKey || event.ctrlKey ? 'steer' : undefined)) return
+    if (!hijack(seat, event.metaKey || event.ctrlKey ? 'steer' : undefined)) return
     event.preventDefault()
     event.stopImmediatePropagation()
   }
@@ -116,24 +92,24 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     if (seat === null) return
     const button = target.closest('button')
     // 尾随 click：必须先于按钮识别吞掉（见 armSwallow），否则宿主按「停止」处理。
-    if (swallowNextClick && button === findSendButtonInCard()) {
+    if (swallowNextClick && button === findSendButtonInCard(seat)) {
       clearSwallow()
       event.preventDefault()
       event.stopImmediatePropagation()
       return
     }
     if (button === null) return
-    if (button !== findSendButtonInCard()) return
+    if (button !== findSendButtonInCard(seat)) return
     // Preserve native Stop while admission is in flight, too.
-    if (ctx.sessions.binding(currentSessionId())?.session.getSnapshot().running === true) return
-    if (committingSessions.has(currentSessionId())) {
+    if (ctx.sessions.binding(currentSessionId(seat))?.session.getSnapshot().running === true && resolveInput(ctx, currentSessionId(seat))?.state.getSnapshot().draft.trim() === '') return
+    if (committingSessions.has(currentSessionId(seat))) {
       event.preventDefault()
       event.stopImmediatePropagation()
       return
     }
     // 识别面收窄到卡片内末位按钮（goal bar 在 card 外、不构成误点）；
     // 运行态主按钮是「停止」——相位守卫已在 hijack 内（plain 才拦）。
-    if (!hijack()) return
+    if (!hijack(seat)) return
     event.preventDefault()
     event.stopImmediatePropagation()
   }
@@ -148,17 +124,19 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     if (event.button !== 0) return
     const target = event.target
     if (!(target instanceof Element)) return
+    const seat = mainComposerOf(target)
+    if (seat === null) return
     const button = target.closest('button')
     if (!(button instanceof HTMLButtonElement)) return
     if (!button.disabled) return
-    if (button !== findSendButtonInCard()) return
-    if (committingSessions.has(currentSessionId())) return
+    if (button !== findSendButtonInCard(seat)) return
+    if (committingSessions.has(currentSessionId(seat))) return
     // disabled 的成因必须是空草稿：离线/无模型等其它成因不属本拦截器授权范围。
-    const sessionId = currentSessionId()
+    const sessionId = currentSessionId(seat)
     if (sessionId === '') return
     const input = resolveInput(ctx, sessionId)
     if (input === undefined || input.state.getSnapshot().draft.trim() !== '') return
-    if (!hijack()) return
+    if (!hijack(seat)) return
     // 同一次手势的 click 紧随其后，而主按钮此刻已变身「停止」——吞掉这一发。
     armSwallow()
     event.preventDefault()
@@ -169,6 +147,7 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
   document.addEventListener('click', onClick, true)
   document.addEventListener('pointerdown', onPointerDown, true)
   return () => {
+    clearSwallow()
     document.removeEventListener('keydown', onKeyDown, true)
     document.removeEventListener('click', onClick, true)
     document.removeEventListener('pointerdown', onPointerDown, true)

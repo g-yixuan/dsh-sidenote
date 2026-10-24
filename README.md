@@ -35,9 +35,9 @@
 dsh plugin --profile web add dsh-sidenote
 ```
 
-打开 DSH Web，点击会话顶栏的 **「侧边」**，或划选一段回复开始。也可输入 `/side` 打开侧聊，用 `Alt+J` 切换主、侧输入焦点。
+打开 DSH Web，点击会话顶栏的 **「侧边」**，或划选一段回复开始。也可输入 `/side` 打开侧聊，用 `Alt+S` 切换主、侧输入焦点。
 
-原生侧栏宿主无需额外安装 `dsh-better-sidebar`；旧宿主按[兼容表](docs/compatibility.md)安装对应组合。
+当前主线支持 DSH 0.2.0-rc.2 / 0.2.1-rc.2，无需安装 `dsh-better-sidebar`。旧宿主固定最后兼容的 `dsh-sidenote@0.6.5`，具体命令见[兼容政策](docs/compatibility.md)。
 
 ## 一个任务，容得下更多思路
 
@@ -82,9 +82,7 @@ dsh plugin --profile web add dsh-sidenote
 
 ## 兼容与帮助
 
-已验证的原生侧栏组合为 **DSH 0.1.5-rc.2、0.1.7-rc.2、0.2.0-rc.2、0.2.1-rc.2、0.2.1-rc.3**；旧版的三组 BS 组合继续保留验收。支持范围以[兼容与维护政策](docs/compatibility.md)中的精确版本为准；已发布版本请查看对应 Release。
-
-0.6.5 包含 DSH 0.2.1-rc.3 适配、V4 回流来源修复和逐项投递确认。0.6.4 及更早版本不声明支持 rc.3。0.6.5 是原生 Conversation 重构前的兼容修复快照；后续新版的原生宿主范围以对应 Release 为准，窗口外可固定 `dsh-sidenote@0.6.5`。
+当前主线维护 **DSH 0.2.0-rc.2、0.2.1-rc.2** 两个精确宿主版本，侧聊直接复用原生 Conversation。窗口外用户停留在最后兼容的插件 0.6.5，当前主线不再逐个回补新功能或运行旧宿主检查。支持范围以[兼容与维护政策](docs/compatibility.md)中的精确版本为准；已发布版本请查看对应 Release。
 
 遇到问题时，可在 **设置 → 通用设置 → dsh-sidenote 诊断模式** 开启诊断，查看并手动导出接入状态。[报告问题或提出建议](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose)。
 

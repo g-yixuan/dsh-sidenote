@@ -14,9 +14,9 @@ test.beforeAll(registerSeedWorkspace)
 test('无-BS 直连档：真实 fork、历史与输入框就绪，无插件崩溃', async ({ page }) => {
   const pageErrors: string[] = []
   const consoleErrors: string[] = []
-  page.on('pageerror', (error) => pageErrors.push(String(error)))
+  page.on('pageerror', (error) => { pageErrors.push(String(error)); console.error('Browser error:', String(error)) })
   page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text())
+    if (message.type() === 'error') { consoleErrors.push(message.text()); console.error('Browser console:', message.text()) }
   })
 
   await prepareSeedPage(page)

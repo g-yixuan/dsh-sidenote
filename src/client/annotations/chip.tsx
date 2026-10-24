@@ -11,7 +11,11 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { IconCloseOutline16, IconListPenOutline16 } from '../host/icons.ts'
-import type { InputZone } from '../host/contracts.ts'
+import type { Context, InputZone } from '../host/contracts.ts'
+import { resolveInput } from '../host/input.ts'
+import { hostDiagnostics } from '../host/probes.ts'
+import type { ReflowStore } from '../reflow.ts'
+import { submitControlledInput } from './send.ts'
 import type { AnnotationStore } from './model.ts'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
@@ -24,7 +28,7 @@ interface ChipProps {
   readonly input: InputZone['input']
 }
 
-function AnnotationChipInner(props: { store: AnnotationStore; targetSessionId: string; side?: boolean }): ReactNode {
+function AnnotationChipInner(props: { store: AnnotationStore; targetSessionId: string; side?: boolean; onSend?: () => void; blocked?: boolean }): ReactNode {
   useLocaleTick()
   const { store, targetSessionId: sessionId } = props
   useSyncExternalStore(
@@ -78,6 +82,7 @@ function AnnotationChipInner(props: { store: AnnotationStore; targetSessionId: s
         <IconListPenOutline16 size={12} />
         <span>{t(active.length === 1 ? 'chipOne' : 'chipMany', { n: active.length })}</span>
       </button>}
+      {active.length > 0 && props.onSend && <button type="button" className={css.chip} disabled={submission.pending || props.blocked} onClick={props.onSend}>{t('sendAnnotations')}</button>}
       {expanded && active.length > 0 && (
         <ul className={css.chipPanel}>
           {active.map(annotation => (
@@ -115,13 +120,19 @@ function AnnotationChipInner(props: { store: AnnotationStore; targetSessionId: s
   )
 }
 
-export function AnnotationChip(props: { store: AnnotationStore; targetSessionId: string; side?: boolean }): ReactNode {
+export function AnnotationChip(props: { store: AnnotationStore; targetSessionId: string; side?: boolean; onSend?: () => void; blocked?: boolean }): ReactNode {
   return <AnnotationBoundary><AnnotationChipInner {...props} /></AnnotationBoundary>
 }
 
-/** Main dock adapter; side composers render the same AnnotationChip directly. */
-export function createAnnotationChip(store: AnnotationStore) {
+/** The same native dock entry is rendered in main and embedded conversations. */
+export function createAnnotationChip(ctx: Context, store: AnnotationStore, reflow: ReflowStore) {
   return function AnnotationChipEntry(props: ChipProps): ReactNode {
-    return <AnnotationChip store={store} targetSessionId={props.session.sessionId} />
+    const diagnostics = hostDiagnostics(ctx)
+    const capabilities = useSyncExternalStore(diagnostics.subscribe, diagnostics.getSnapshot)
+    useEffect(() => {
+      const state = store.getSubmission(props.session.sessionId)
+      if (!state.pending && state.error === t('inputUnavailable') && resolveInput(ctx, props.session.sessionId)) store.setSubmission(props.session.sessionId, { pending: false })
+    }, [capabilities, props.session.sessionId])
+    return <AnnotationChip store={store} targetSessionId={props.session.sessionId} blocked={props.input.phase !== 'plain' || props.input.draft.trimStart().startsWith('/')} onSend={() => { void submitControlledInput(ctx, store, reflow, props.session.sessionId) }} />
   }
 }

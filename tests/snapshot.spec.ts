@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { serializeSnapshot, snapshotEntriesOf, SNAPSHOT_BLOCK_MARK } from '../src/client/sidechat/snapshot.ts'
-import { splitSnapshotPrefix } from '../src/client/sidechat/rows.tsx'
+import { splitSnapshotPrefix } from '../src/client/sidechat/snapshot.ts'
 
 const userNode = (text: string) => ({ kind: 'user', seq: 1, content: [{ type: 'text', text }] })
 const assistantNode = (reply: string, thinking?: string) => ({

@@ -82,13 +82,14 @@ export interface ReflowItem {
   readonly text: string
   /** 该回答对应的用户提问（问答成对回流；缺省 = 无，如 fork 历史里的消息）。 */
   readonly question?: string
+  readonly sourceKey?: string
   readonly createdAt: number
 }
 
 export interface ReflowStore {
   getSnapshot(): number
   subscribe(fn: () => void): () => void
-  add(sessionId: string, sideTitle: string, text: string, question?: string): ReflowItem
+  add(sessionId: string, sideTitle: string, text: string, question?: string, sourceKey?: string): ReflowItem
   remove(id: number): void
   /** 发送确认后清空该会话的待回流集（一次性消费）。 */
   clearSession(sessionId: string): void
@@ -129,6 +130,7 @@ function revive(value: unknown): ReflowItem | null {
     sideTitle: r.sideTitle,
     text: r.text,
     ...(typeof r.question === 'string' && r.question.trim() !== '' ? { question: r.question } : {}),
+    ...(typeof r.sourceKey === 'string' ? { sourceKey: r.sourceKey } : {}),
     createdAt: typeof r.createdAt === 'number' ? r.createdAt : 0,
   }
 }
@@ -191,7 +193,7 @@ export function createReflowStore(
       listeners.add(fn)
       return () => { listeners.delete(fn) }
     },
-    add(sessionId, sideTitle, text, question) {
+    add(sessionId, sideTitle, text, question, sourceKey) {
       const item: ReflowItem = {
         id: nextId,
         sessionId,
@@ -199,6 +201,7 @@ export function createReflowStore(
         text,
         // 问答成对：空串/全空白视为无提问（缺省语义同未传）。
         ...(typeof question === 'string' && question.trim() !== '' ? { question } : {}),
+        ...(sourceKey !== undefined ? { sourceKey } : {}),
         createdAt: now(),
       }
       nextId += 1

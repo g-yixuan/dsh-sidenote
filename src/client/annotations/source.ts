@@ -1,4 +1,4 @@
-import { elementOf, mainMessageOf, mainAnchorBodies, NON_QUOTE, quoteClipOf, focusMainComposer } from '../host/dom.ts'
+import { elementOf, mainMessageOf, mainAnchorBodies, nativeAssistantBodies, NON_QUOTE, quoteClipOf, focusMainComposer, focusSideComposer } from '../host/dom.ts'
 
 export interface QuoteSource {
   body: HTMLElement
@@ -22,6 +22,9 @@ export function quoteSourceOf(node: Node, currentSessionId: string): QuoteSource
     if (!sessionId || anchor === null || view === null) return null
     return { body, anchor, view, sessionId, surface: 'side', key: anchor.dataset.sidenoteMessageKey, streaming: body.dataset.sidenoteStreaming === 'true' }
   }
+  const native = mainMessageOf(node, currentSessionId)
+  const side = element?.closest<HTMLElement>('[data-sidenote-chat-session]')
+  if (native && side && native.sessionId === side.dataset.sidenoteChatSession) return { ...native, view: side, surface: 'side' }
   if (element?.closest('[data-dsh-better-sidebar], [data-dsh-sidenote], [data-sidenote-chat-session]') !== null) return null
   return mainMessageOf(node, currentSessionId)
 }
@@ -32,9 +35,9 @@ export function sourceKey(source: QuoteSource): string | undefined {
 
 export function sourceBodies(sessionId: string, surface: 'main' | 'side', anchorKey: string, currentSessionId: string): HTMLElement[] {
   if (surface === 'main') return mainAnchorBodies(sessionId, anchorKey, currentSessionId)
-  return [...document.querySelectorAll<HTMLElement>('[data-sidenote-quote-body]')].filter(body => {
+  return [...document.querySelectorAll<HTMLElement>('[data-sidenote-quote-body]'), ...nativeAssistantBodies()].filter(body => {
     const source = quoteSourceOf(body, currentSessionId)
-    return source?.sessionId === sessionId && sourceKey(source) === anchorKey
+    return source?.surface === 'side' && source.sessionId === sessionId && sourceKey(source) === anchorKey
   })
 }
 
@@ -77,5 +80,5 @@ export function sourceClip(source: QuoteSource) { return quoteClipOf(source.body
 
 export function focusSourceComposer(source: QuoteSource): void {
   if (source.surface === 'main') focusMainComposer(source.view)
-  else source.view.querySelector<HTMLTextAreaElement>('[data-sidenote-composer] textarea')?.focus()
+  else focusSideComposer(source.view)
 }

@@ -44,12 +44,15 @@ pnpm test
 
 ```bash
 pnpm exec playwright install chromium
-BS_VERSION=none DSH_EXPECTED_VERSION=0.1.7-rc.2 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.1.7-rc.2 dsh" pnpm test:mount
+BS_VERSION=none DSH_EXPECTED_VERSION=0.2.1-rc.2 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.1-rc.2 dsh" pnpm test:mount
 ```
 
-脚本使用临时 DSH_HOME；版本组合以 [CI 矩阵](.github/workflows/ci.yml) 为准。CI 会运行 legacy 和直连组合，贡献者本地可先验证受影响的组合。
+脚本使用临时 DSH_HOME；版本组合以 [CI 矩阵](.github/workflows/ci.yml) 为准。CI 只验收当前窗口内的两个原生宿主；窗口外用户固定最后兼容插件，不再为每次修改回测旧宿主。
 
 无模型凭证的 E2E 验证交互与挂载，不验证模型回答。涉及主线运行中开侧聊、取消、队列或进展快照时，请额外说明真实运行场景和验证结果；没有验证的范围也应明确写出。
+
+
+`pnpm test:compat` 使用隔离 profile 安装精确 0.6.5，再用本地不兼容测试包验证更新拒绝和旧包恢复。真实模型单独运行：`DSH_E2E_REAL_KEY_FILE=/path/to/private-key-file pnpm test:mount --grep "official Flash"`（同时设置上例的精确 DSH_CMD / DSH_EXPECTED_VERSION）。Key 文件只由服务进程读取，不进入 profile、浏览器或产物；CI 默认不调用外部付费模型。此 lane 直连官方 api.deepseek.com / deepseek-flash，验证主侧工具、多轮、图片及实际推理等级请求，保存不含正文或鉴权信息的请求元数据。
 
 ## 代码与测试
 

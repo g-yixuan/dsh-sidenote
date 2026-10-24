@@ -1,19 +1,9 @@
-/**
- * 会话快照 → 消息视图模型（L0 纯逻辑，node 可测）。
- *
- * WI-01 起这里是消息渲染管线的唯一入口（自 sidechat/model.ts 迁入——
- * legacy 快照字段（nodes/partial/runningCalls，官方已标 Legacy）的消费
- * 单点化：0.1.2 迁移到 ChatSnapshot 新面时只动本文件）。
- *
- * 数据源事实（权威注释）：ConversationSnapshot.nodes 是 ConversationNode
- * 联合（kind 判别，seq 稳定——「seq is the React key」），partial/
- * runningCalls 承载在途流式输出。
- */
+/** Business projection for reflow, topic and reference serialization.
+ * The host Conversation owns all message and tool rendering. */
 import type { ConversationSnapshot } from '../host/contracts.ts'
-import { cardModelFromNode, cardModelOf, type ToolCardModel } from './cards.ts'
 import { t } from '../locales.ts'
 
-/** 面板渲染用的消息视图（自绘；工具卡片等复杂节点降级为简洁块）。 */
+/** 问答和来源的轻量投影；不承担界面渲染。 */
 export interface ChatMessage {
   /** React key（节点 seq / 在途 callId 派生，稳定）。 */
   key: string
@@ -32,15 +22,6 @@ export interface ChatMessage {
   streaming?: boolean
   /** 被打断冻结的 assistant 输出（渲染「已停止」标记）。 */
   interrupted?: boolean
-  /** tool 角色的渲染意图（card union 已映射为视图模型；缺省 = 纯文本卡）。 */
-  card?: ToolCardModel
-}
-
-/** 工具结果正文截断上限（面板是窄栏，超长输出不撑爆 DOM）。 */
-export const TOOL_TEXT_LIMIT = 4000
-
-export function truncateText(text: string, max: number): string {
-  return text.length <= max ? text : `${text.slice(0, max)}…`
 }
 
 interface LooseBlock {
@@ -118,30 +99,13 @@ export function nodeToMessage(node: unknown): ChatMessage | null {
       const toolName = typeof call?.name === 'string'
         ? call.name
         : typeof n.callId === 'string' ? n.callId : t('toolFallback')
-      const text = truncateText(contentTextOf(n.content), TOOL_TEXT_LIMIT)
-      // 双版本：0.1.1 节点带 callView/resultView（wire 渲染意图）走映射；
-      // 0.1.2 从节点移除（全包零命中实证）→ 客户端从原始字段+meta 推导。
-      const card = (n.callView ?? n.resultView) != null
-        ? cardModelOf({
-            toolName,
-            callView: n.callView as never,
-            resultView: n.resultView as never,
-            rawText: text,
-          })
-        : cardModelFromNode({
-            name: toolName,
-            argsRaw: typeof call?.argsRaw === 'string' ? call.argsRaw : undefined,
-            meta: n.meta,
-            rawText: text,
-            ...(n.isError === true ? { isError: true } : {}),
-          })
+      const text = contentTextOf(n.content)
       return {
         key: seqKey('t', n),
         ...seqOf(n),
         role: 'tool',
         toolName,
         text,
-        card,
         ...(n.isError === true ? { isError: true } : {}),
       }
     }
@@ -238,13 +202,7 @@ export function transcriptOf(snapshot: ConversationSnapshot | undefined | null):
           toolName,
           text: '',
           streaming: true,
-          card: c.callView != null
-            ? cardModelOf({ toolName, callView: c.callView as never, resultView: null })
-            : cardModelFromNode({
-                name: toolName,
-                argsRaw: typeof c.argsRaw === 'string' ? c.argsRaw : undefined,
-                rawText: '',
-              }),
+
         },
       })
     }
