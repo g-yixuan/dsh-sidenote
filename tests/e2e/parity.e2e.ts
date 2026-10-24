@@ -77,7 +77,14 @@ test('reflow: only local final answers enter the shared store and removal re-ena
   await main.getByRole('button', { name: /Remove reflow|移除回流/ }).click()
   await expect.poll(records).toHaveLength(0)
   await expect(single).toBeEnabled()
+  const completedTurns = () => sessionEventsOf(child).filter(event => event.type === 'turn/end' && event.data.reason?.kind === 'completed').length
+  const completed = completedTurns()
   await input.fill('local reflow answer two'); await input.press('Enter')
+  // The previous reply keeps this action enabled until admission starts.
+  // Wait for the new durable completion before clicking the whole-chat action.
+  await expect.poll(completedTurns).toBe(completed + 1)
+  await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
+  await expect(single).toHaveCount(2)
   await expect(all).toBeEnabled(); await all.click()
   await expect.poll(records).toHaveLength(2)
 })
