@@ -23,7 +23,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-60708E" alt="MIT license"></a>
 </p>
 
-![Current light interface: main conversation on the left, focused exploration on the right, and a finding returned to the main composer](docs/assets/workflow.jpg)
+![Selected text offers Add to conversation or Ask in side chat, alongside a side-chat answer, pending annotation and handback chips, and context bubbles in sent messages](docs/assets/workflow.jpg)
 
 <p align="center"><sub>dsh-sidenote 0.7.2 · DSH 0.2.1-rc.2 · DeepSeek V4.1 Flash · Recorded live</sub></p>
 
