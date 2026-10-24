@@ -50,6 +50,21 @@ describe('tryInjectReflows', () => {
     expect((await tryInjectReflows('p1', [ITEM])).injectedIds.size).toBe(0)
   })
 
+  it('部分注入成功只消费明确确认的项，其余继续搭车或保留', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ ok: false, injectedIndexes: [0, 2] }), { status: 200 }))
+    const items = [ITEM, { ...ITEM, id: 2 }, { ...ITEM, id: 3 }]
+    const result = await tryInjectReflows('p1', items)
+    expect([...result.injectedIds]).toEqual([1, 3])
+    expect(items.filter(item => !result.injectedIds.has(item.id)).map(item => item.id)).toEqual([2])
+  })
+
+  it('逐项确认优先于整批 ok，忽略无效索引', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ ok: true, injectedIndexes: [0, '1', -1, 1.5, 9] }), { status: 200 }))
+    expect([...(await tryInjectReflows('p1', [ITEM, { ...ITEM, id: 2 }])).injectedIds]).toEqual([1])
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ ok: true, injectedIndexes: [] }), { status: 200 }))
+    expect((await tryInjectReflows('p1', [ITEM])).injectedIds.size).toBe(0)
+  })
+
   it('超时（300ms）降级：abort 即回落', async () => {
     vi.useFakeTimers()
     try {

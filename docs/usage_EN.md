@@ -52,6 +52,8 @@ Submissions use the host's native input flow, retaining attachments, references,
 
 Click **Send back to main session** below a side reply. Both the question and its answer appear above the main composer. Preview or remove entries, then include them in your next main-thread message.
 
+Reflows are acknowledged individually after injection. Conclusions that were not injected travel with your next message. If that send is rejected, the draft and those pending conclusions remain available for retry; conclusions already acknowledged are not added to the message again.
+
 **Reflow all** brings back every question-and-answer pair in the side chat. The main composer can also reference side chats with `@`. Use **Save as session** to keep a discussion in the regular session list.
 
 ![A side-chat finding ready to accompany the main-thread draft](assets/workflow.jpg)

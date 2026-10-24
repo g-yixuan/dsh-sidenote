@@ -3,7 +3,7 @@
  * trust fence（Host/Origin/sec-fetch-site）、method 收口、payload 校验、
  * agents 探测降级、inject 调用形态（插件自有 source kind + form:notice + summary）。
  */
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeReflowHandler } from '../src/index.ts'
 
 function fakeReq(payload: unknown, headers: Record<string, string> = {}) {
@@ -35,6 +35,8 @@ function fakeCtx(agent: { inject: ReturnType<typeof vi.fn> } | undefined) {
 }
 
 describe('POST /sidenote/reflow（宿主 handler）', () => {
+  afterEach(() => { vi.restoreAllMocks() })
+
   it('fence：Host 非 loopback → 403；Origin 跨站 → 403', async () => {
     const agent = { inject: vi.fn() }
     const handler = makeReflowHandler(fakeCtx(agent) as never)
@@ -79,12 +81,29 @@ describe('POST /sidenote/reflow（宿主 handler）', () => {
     const res = fakeRes()
     await handler(fakeReq({ parentSessionId: 's1', items: [{ text: '<reflow>结论</reflow>', sideTitle: '侧边 2' }] }) as never, res as never)
     expect(res.calls.status).toBe(200)
-    expect(JSON.parse(res.calls.body!)).toEqual({ ok: true })
+    expect(JSON.parse(res.calls.body!)).toEqual({ ok: true, injectedIndexes: [0] })
     expect(agent.inject).toHaveBeenCalledTimes(1)
     const message = agent.inject.mock.calls[0]![0] as { content: { text: string }[], source: { kind: string, form: string, summary: string } }
     expect(message.content[0]!.text).toContain('<reflow>结论</reflow>')
     expect(message.source).toMatchObject({ kind: 'dsh-sidenote', form: 'notice' })
     expect(message.source).not.toHaveProperty('plugin')
     expect(message.source.summary).toContain('侧边 2')
+  })
+
+  it('注入全部失败不确认成功，客户端可保留或随正文发送', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const agent = { inject: vi.fn(() => { throw new Error('agent disposed') }) }
+    const res = fakeRes()
+    await makeReflowHandler(fakeCtx(agent) as never)(fakeReq({ parentSessionId: 's1', items: [{ text: '保留结论' }] }) as never, res as never)
+    expect(JSON.parse(res.calls.body!)).toEqual({ ok: false, injectedIndexes: [] })
+  })
+
+  it('部分失败只确认实际成功项，索引对应原请求而非过滤后的位置', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const agent = { inject: vi.fn().mockImplementationOnce(() => {}).mockImplementationOnce(() => { throw new Error('rejected') }).mockImplementationOnce(() => {}) }
+    const res = fakeRes()
+    await makeReflowHandler(fakeCtx(agent) as never)(fakeReq({ parentSessionId: 's1', items: [{ text: '第一条成功' }, { text: '' }, { text: '第三条失败' }, { text: '第四条成功' }] }) as never, res as never)
+    expect(agent.inject).toHaveBeenCalledTimes(3)
+    expect(JSON.parse(res.calls.body!)).toEqual({ ok: false, injectedIndexes: [0, 3] })
   })
 })
