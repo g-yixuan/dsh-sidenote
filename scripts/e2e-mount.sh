@@ -105,7 +105,7 @@ cat > "$PROFILE_DIR/package.json" <<EOF
   }
 }
 EOF
-# Both maintained hosts use the same native runtime.
+# Every admitted host uses the same native runtime.
 DSH_VERSION="$($DSH_CMD --version)"
 if [ -n "${DSH_EXPECTED_VERSION:-}" ] && [ "$DSH_VERSION" != "$DSH_EXPECTED_VERSION" ]; then
   die "请求宿主 $DSH_EXPECTED_VERSION，实际 CLI $DSH_VERSION"

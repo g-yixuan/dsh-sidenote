@@ -47,7 +47,7 @@ pnpm exec playwright install chromium
 BS_VERSION=none DSH_EXPECTED_VERSION=0.2.1-rc.2 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.1-rc.2 dsh" pnpm test:mount
 ```
 
-脚本使用临时 DSH_HOME；版本组合以 [CI 矩阵](.github/workflows/ci.yml) 为准。CI 只验收当前窗口内的两个原生宿主；窗口外用户固定最后兼容插件，不再为每次修改回测旧宿主。
+脚本使用临时 DSH_HOME；[CI](.github/workflows/ci.yml) 从 package.json 的 dshSupport 生成精确矩阵，验收当前、过渡及可选已准入预览宿主。所有矩阵任务都必须通过 host-compatibility 汇总门槛；窗口外用户固定最后兼容插件，不再为每次修改回测旧宿主。角色与退役规则见[兼容政策](docs/compatibility.md)。
 
 无模型凭证的 E2E 验证交互与挂载，不验证模型回答。涉及主线运行中开侧聊、取消、队列或进展快照时，请额外说明真实运行场景和验证结果；没有验证的范围也应明确写出。
 

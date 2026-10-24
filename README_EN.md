@@ -37,7 +37,7 @@ dsh plugin --profile web add dsh-sidenote
 
 Open DSH Web and click **Side** in the session header, or select a passage in a reply. You can also open a side chat with `/side` and switch focus between main and side inputs with `Alt+S`.
 
-The current branch supports DSH 0.2.0-rc.2 / 0.2.1-rc.2 without dsh-better-sidebar. Older hosts pin the last compatible dsh-sidenote@0.6.5; see the [compatibility policy](docs/compatibility_EN.md).
+The current branch supports DSH 0.2.1-rc.2 (current), 0.2.0-rc.2 (previous), and 0.2.1-rc.3 (admitted preview), without dsh-better-sidebar. Published ranges follow their Release declarations. Older hosts pin the last compatible dsh-sidenote@0.6.5; see the [compatibility policy](docs/compatibility_EN.md).
 
 ## One task. Room to explore.
 
@@ -82,7 +82,7 @@ See the [user guide](docs/usage_EN.md) for controls, recovery behavior, and sele
 
 ## Compatibility and help
 
-The current branch maintains two exact hosts: **DSH 0.2.0-rc.2 and 0.2.1-rc.2**, reusing native Conversation. Outside the window, users retain plugin 0.6.5; the current branch no longer backports features or runs those host checks. The exact versions in the [compatibility and maintenance policy](docs/compatibility_EN.md) define the supported scope; check the corresponding Release for published versions.
+The rolling window contains **current + previous regular hosts + at most one admitted preview**, sharing native Conversation. A new next does not displace regular hosts; the previous slot rolls only after regular-host admission ships. The exact `dshSupport` list in package.json generates CI's matrix, and a fixed summary requires every host to pass. Outside-window users retain their last compatible plugin without routine feature backports or historical-host checks. See the [compatibility and maintenance policy](docs/compatibility_EN.md) and each published Release's declarations.
 
 For troubleshooting, enable **Settings → General → dsh-sidenote diagnostic mode** to inspect and manually export the integration status. [Report a problem or suggest an improvement](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose).
 
