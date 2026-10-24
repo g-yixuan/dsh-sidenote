@@ -177,6 +177,8 @@ export const en = {
 
   // chip
   clearAll: 'Clear all',
+  clearAnnotations: 'Clear annotations',
+  clearReflows: 'Clear side-chat reflows',
   chipNote: ' ({note})',
 
   // 顶栏入口 + 首次引导
@@ -406,6 +408,8 @@ export const zh: Record<CopyKey, string> = {
   sentCardTitle: '注释 {n}（已发送）',
 
   clearAll: '清空全部',
+  clearAnnotations: '清空注释',
+  clearReflows: '清空侧边回流',
   chipNote: '（{note}）',
 
   headerSide: '侧边',

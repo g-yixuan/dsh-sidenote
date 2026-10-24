@@ -1,7 +1,7 @@
 /** Shared, compact context dock for both native composers. */
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
-import { IconCheckOutline16, IconEditOutline16, IconListPenOutline16, IconShareOutline16, IconTrashOutline16 } from '../host/icons.ts'
+import { IconCheckOutline16, IconCloseOutline16, IconEditOutline16, IconListPenOutline16, IconShareOutline16, IconTrashOutline16 } from '../host/icons.ts'
 import type { Context, InputZone } from '../host/contracts.ts'
 import { resolveInput } from '../host/input.ts'
 import { hostDiagnostics } from '../host/probes.ts'
@@ -71,7 +71,7 @@ function ContextChips({ ctx, store, reflow, sessionId }: { ctx: Context; store: 
     const place = () => {
       const rect = root.current!.getBoundingClientRect()
       const width = Math.min(480, rect.width, window.innerWidth - 24)
-      setPosition({ width, left: Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)), bottom: window.innerHeight - rect.top + 8, maxHeight: Math.min(440, rect.top - 16) })
+      setPosition({ width, left: Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)), bottom: window.innerHeight - rect.top + 8, maxHeight: Math.min(280, window.innerHeight / 3, rect.top - 16) })
     }
     place()
     window.addEventListener('resize', place)
@@ -97,15 +97,22 @@ function ContextChips({ ctx, store, reflow, sessionId }: { ctx: Context; store: 
     clearTimer()
     if (!open?.pinned) timer.current = setTimeout(() => { if (!panel.current?.contains(document.activeElement)) setOpen(null) }, 220)
   }
-  const chip = (kind: Kind) => <button type="button" className={css.chip} data-context-kind={kind} aria-haspopup="dialog" aria-expanded={shown && open.kind === kind} aria-controls={id} onPointerEnter={event => {
+  const clear = (kind: Kind) => {
+    clearTimer()
+    if (kind === 'annotations') for (const item of active) store.remove(item.id)
+    else reflow.clearSession(sessionId)
+    if (open?.kind === kind) setOpen(null)
+  }
+  const chip = (kind: Kind) => <span className={css.chip} data-open={shown && open.kind === kind || undefined} onPointerEnter={event => {
     if (event.pointerType === 'touch') return
     clearTimer()
     if (!open?.pinned) timer.current = setTimeout(() => { setOpen({ kind, pinned: false }) }, 160)
-  }} onPointerLeave={leave} onClick={() => {
-    clearTimer(); setOpen(open?.kind === kind && open.pinned ? null : { kind, pinned: true })
-  }}>
-    {kind === 'annotations' ? <IconListPenOutline16 size={14} /> : <IconShareOutline16 size={14} />}<span>{label(kind)}</span>
-  </button>
+  }} onPointerLeave={leave}>
+    <button type="button" className={css.chipMain} data-context-kind={kind} aria-haspopup="dialog" aria-expanded={shown && open.kind === kind} aria-controls={id} onClick={() => {
+      clearTimer(); setOpen(open?.kind === kind && open.pinned ? null : { kind, pinned: true })
+    }}>{kind === 'annotations' ? <IconListPenOutline16 size={14} /> : <IconShareOutline16 size={14} />}<span>{label(kind)}</span></button>
+    <span className={css.chipDismissShade}><button type="button" className={css.chipDismiss} disabled={submission.pending} aria-label={t(kind === 'annotations' ? 'clearAnnotations' : 'clearReflows')} title={t(kind === 'annotations' ? 'clearAnnotations' : 'clearReflows')} onClick={() => { clear(kind) }}><IconCloseOutline16 size={14} /></button></span>
+  </span>
   if (!active.length && !reflows.length && !submission.error) return null
   return <div ref={root} className={css.chipWrap} data-sidenote-context-dock data-sidenote-annotation-ui>
     {active.length > 0 && chip('annotations')}{reflows.length > 0 && chip('reflows')}
@@ -123,11 +130,7 @@ function ContextChips({ ctx, store, reflow, sessionId }: { ctx: Context; store: 
           <div className={css.contextActions}><button type="button" className={css.contextAction} disabled={submission.pending} aria-label={t('reflowRemoveTitle')} title={t('reflowRemoveTitle')} onClick={() => { reflow.remove(item.id) }}><IconTrashOutline16 size={16} /></button></div>
         </li>)}
       </ul>
-      <div className={css.contextFooter}><button type="button" className={css.chipClearAll} disabled={submission.pending} onClick={() => {
-        if (open.kind === 'annotations') for (const item of active) store.remove(item.id)
-        else reflow.clearSession(sessionId)
-        setOpen(null)
-      }}>{t('clearAll')}</button></div>
+      <div className={css.contextFooter}><button type="button" className={css.chipClearAll} disabled={submission.pending} onClick={() => { clear(open.kind) }}>{t('clearAll')}</button></div>
     </div>, document.body)}
   </div>
 }

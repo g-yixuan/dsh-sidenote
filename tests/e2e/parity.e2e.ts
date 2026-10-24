@@ -172,7 +172,26 @@ test('context-preview: horizontal chips reveal full editable details on hover wi
   }
   await annotations.hover()
   await panel.getByRole('button', { name: /Remove annotation|移除注释/ }).first().click()
-  await expect(dock.getByRole('button', { name: /1 annotation$|1 条注释/ })).toBeVisible()
+  const remaining = dock.getByRole('button', { name: /1 annotation$|1 条注释/ })
+  await expect(remaining).toBeVisible()
+  await main.locator('[data-composer-input]').fill('清除引用时保留这段正文')
+  const beforeClear = userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)
+  const widthBefore = (await remaining.boundingBox())!.width
+  await remaining.hover()
+  const clearAnnotations = dock.getByRole('button', { name: /^(Clear annotations|清空注释)$/ })
+  await clearAnnotations.hover()
+  expect((await remaining.boundingBox())!.width).toBe(widthBefore)
+  await page.screenshot({ path: 'test-results/context-clear-hover.png', animations: 'disabled' })
+  await clearAnnotations.click()
+  await expect(remaining).toHaveCount(0)
+  await expect(reflow).toBeVisible()
+  await expect(panel).toHaveCount(0)
+  await expect(main.locator('[data-composer-input]')).toHaveText('清除引用时保留这段正文')
+  await reflow.hover()
+  await dock.getByRole('button', { name: /^(Clear side-chat reflows|清空侧边回流)$/ }).click()
+  await expect(dock).toHaveCount(0)
+  await expect(panel).toHaveCount(0)
+  expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)).toEqual(beforeClear)
 })
 
 test('busy: native queue is visible and saving cannot discard running or queued work', async ({ page }) => {
