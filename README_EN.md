@@ -84,7 +84,7 @@ See the [user guide](docs/usage_EN.md) for controls, recovery behavior, and sele
 
 Verified native sidebar combinations use **DSH 0.1.5-rc.2, 0.1.7-rc.2, 0.2.0-rc.2, 0.2.1-rc.2, or 0.2.1-rc.3**. Three legacy BS combinations retain validation. The exact versions in the [compatibility and maintenance policy](docs/compatibility_EN.md) define the supported scope; check the corresponding Release for published versions.
 
-Support for DSH 0.2.1-rc.3 and the V4 reflow fix are source changes in this contribution and are not yet published on npm. The published 0.6.4 package still does not declare rc.3 support. Until a release includes the fix, use a package built from the updated source.
+0.6.5 includes DSH 0.2.1-rc.3 support, the V4 reflow source fix and per-item delivery acknowledgements. Versions through 0.6.4 do not declare rc.3 support. This is a compatibility-fix snapshot before the native Conversation refactor. Later releases define their admitted native-host scope; hosts outside that window can pin `dsh-sidenote@0.6.5`.
 
 For troubleshooting, enable **Settings → General → dsh-sidenote diagnostic mode** to inspect and manually export the integration status. [Report a problem or suggest an improvement](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose).
 

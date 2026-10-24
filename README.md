@@ -84,7 +84,7 @@ dsh plugin --profile web add dsh-sidenote
 
 已验证的原生侧栏组合为 **DSH 0.1.5-rc.2、0.1.7-rc.2、0.2.0-rc.2、0.2.1-rc.2、0.2.1-rc.3**；旧版的三组 BS 组合继续保留验收。支持范围以[兼容与维护政策](docs/compatibility.md)中的精确版本为准；已发布版本请查看对应 Release。
 
-DSH 0.2.1-rc.3 的适配和 V4 结论回流修复属于本次源码变更，尚未发布到 npm；已发布的 0.6.4 仍不声明支持 rc.3。发布前请使用包含本次修复的源码构建包。
+0.6.5 包含 DSH 0.2.1-rc.3 适配、V4 回流来源修复和逐项投递确认。0.6.4 及更早版本不声明支持 rc.3。0.6.5 是原生 Conversation 重构前的兼容修复快照；后续新版的原生宿主范围以对应 Release 为准，窗口外可固定 `dsh-sidenote@0.6.5`。
 
 遇到问题时，可在 **设置 → 通用设置 → dsh-sidenote 诊断模式** 开启诊断，查看并手动导出接入状态。[报告问题或提出建议](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose)。
 

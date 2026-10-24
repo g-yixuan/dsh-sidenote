@@ -2,7 +2,9 @@
 
 [中文](compatibility.md) · English
 
-This table lists validated combinations and maintenance promises for the current main branch. For published versions, check the corresponding Release; 0.6.2 and earlier do not declare support for DSH 0.2.1-rc.2, and the published 0.6.4 package does not declare 0.2.1-rc.3 support. The rc.3 adaptation is a source change in this contribution and needs a separate release before it is available from npm. Engine ranges are installation gates, not proof that every rc or plugin combination inside them was validated.
+This table lists validated combinations for the 0.6.5 fix snapshot. Versions through 0.6.2 do not declare DSH 0.2.1-rc.2 support; versions through 0.6.4 do not declare 0.2.1-rc.3 support. 0.6.5 includes rc.3 support and the V4 reflow fix; check its Release for the published package. Engine ranges are installation gates, not proof that every rc or plugin combination inside them was validated.
+
+0.6.5 retains the eight combinations below as a compatibility snapshot before the native Conversation refactor. The next native release will maintain only two exact hosts admitted for native chat. Other hosts, including 0.2.1-rc.3 until its native admission, pin 0.6.5; routine new features are not backported to this snapshot.
 
 | Exact combination | Category | Validation gate |
 |---|---|---|
@@ -13,7 +15,7 @@ This table lists validated combinations and maintenance promises for the current
 | DSH 0.1.2-rc.1 + BS 0.18.0 | Frozen legacy, API-generation representative | Full fixed journeys |
 | DSH 0.2.0-rc.2, no BS | Maintained; exact release admitted | Full fixed journeys and a required host check |
 | DSH 0.2.1-rc.2, no BS | Maintained; exact release admitted | Full fixed journeys and a required host check |
-| DSH 0.2.1-rc.3, no BS | Maintained; adapted in this source change | Full fixed journeys; register the new required check before merging |
+| DSH 0.2.1-rc.3, no BS | Admitted for this fix snapshot | Full fixed journeys and a required host check |
 
 BS means dsh-better-sidebar. Unlisted combinations are unverified. Independence from BS does not prove every native-host + BS 0.19+ coexistence combination. Alpha hosts have no release compatibility commitment.
 
