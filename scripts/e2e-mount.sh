@@ -130,7 +130,7 @@ minimumReleaseAgeExclude:
 EOF
 
 BS_VERSION="${BS_VERSION:-none}"
-[ "$BS_VERSION" = "none" ] || die "This branch validates native hosts only; legacy hosts pin plugin 0.6.4"
+[ "$BS_VERSION" = "none" ] || die "This branch validates native hosts only; legacy hosts pin plugin 0.6.5"
 say "安装本插件 tarball..."
 $DSH_CMD plugin --profile web add "file:$TARBALL"
 

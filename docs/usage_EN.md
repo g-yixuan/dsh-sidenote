@@ -14,13 +14,13 @@ Inherited history is collapsed by default. Click the inheritance card to expand 
 
 ![An independent conversation in the native sidebar](assets/sidechat.jpg)
 
-After closing a side chat, reopen the original child through the recently closed options in `/side`. Normal entries focus an existing tab. Native page kinds allow one tab per pane, with multiple panes through splitting. Only the two native hosts are maintained; outside-window hosts pin plugin 0.6.4; see the [compatibility policy](compatibility_EN.md).
+After closing a side chat, reopen the original child through the recently closed options in `/side`. Normal entries focus an existing tab. Native page kinds allow one tab per pane, with multiple panes through splitting. Only the two native hosts are maintained; outside-window hosts pin plugin 0.6.5; see the [compatibility policy](compatibility_EN.md).
 
 ### Session lists and recovery
 
 Side chats stay out of the sidebar list and search results from creation, without briefly flashing into the list. Closing tabs or reloading does not put registered side chats back in the list. Saving as a regular session creates a visible copy.
 
-On supported hosts, hidden side chats remain runnable. To find older side chats, enable **Settings → General → Show side chats in the session list**; the choice is local to this browser and DSH address. Historical 0.6.4 Releases retain their archive-based behavior. This setting does not recover deleted sessions or undo existing legacy archives; see the [compatibility policy](compatibility_EN.md).
+On supported hosts, hidden side chats remain runnable. To find older side chats, enable **Settings → General → Show side chats in the session list**; the choice is local to this browser and DSH address. Historical 0.6.5 Releases retain their archive-based behavior. This setting does not recover deleted sessions or undo existing legacy archives; see the [compatibility policy](compatibility_EN.md).
 
 ## Select and annotate
 
@@ -60,7 +60,7 @@ Reflows are acknowledged individually after injection. Conclusions that were not
 
 ## Installation and troubleshooting
 
-See the [overview](../README_EN.md#install) and [compatibility policy](compatibility_EN.md) for installation and verified versions. Supported native hosts need no BS; outside-window hosts pin the last compatible plugin, 0.6.4. Engine ranges do not imply that every version inside them is verified.
+See the [overview](../README_EN.md#install) and [compatibility policy](compatibility_EN.md) for installation and verified versions. Supported native hosts need no BS; outside-window hosts pin the last compatible plugin, 0.6.5. Engine ranges do not imply that every version inside them is verified.
 
 Diagnostics are off by default. For troubleshooting, enable **Settings → General → dsh-sidenote diagnostic mode**, then use **Compatibility diagnostics** in the header to inspect, recheck, or manually export the status.
 

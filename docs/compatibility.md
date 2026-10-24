@@ -2,15 +2,18 @@
 
 [English](compatibility_EN.md) · 中文
 
-当前开发主线只维护最近 **2 个通过完整准入、能共用原生 Conversation 的精确 DSH 发行版本**。不是最近两个大版本，也不自动接纳 npm latest。公开安装请以对应 Release 的声明为准；已发布的 0.6.4 保留原有兼容范围，不会被本次源码修改追溯改变。
+当前开发主线只维护最近 **2 个通过完整准入、能共用原生 Conversation 的精确 DSH 发行版本**。不是最近两个大版本，也不自动接纳 npm latest。公开安装请以对应 Release 的声明为准；已发布的 0.6.5 保留原有兼容范围，不会被本次源码修改追溯改变。
 
 | 精确宿主 | 当前主线 | 窗口外停留方式 |
 |---|---|---|
 | DSH 0.2.1-rc.2，不装 BS | 完整维护，固定 CI | — |
 | DSH 0.2.0-rc.2，不装 BS | 完整维护，固定 CI | — |
-| DSH 0.1.7-rc.2 / 0.1.5-rc.2，不装 BS | 已退役 | 固定 dsh-sidenote 0.6.4 |
-| DSH 0.1.1-rc.2 + BS 0.12.3 / 0.18.0 | 已退役 | 固定 dsh-sidenote 0.6.4 及原 BS 版本 |
-| DSH 0.1.2-rc.1 + BS 0.18.0 | 已退役 | 固定 dsh-sidenote 0.6.4 及原 BS 版本 |
+| DSH 0.2.1-rc.3，不装 BS | 原生 Conversation 待准入 | 固定 dsh-sidenote 0.6.5 |
+| DSH 0.1.7-rc.2 / 0.1.5-rc.2，不装 BS | 已退役 | 固定 dsh-sidenote 0.6.5 |
+| DSH 0.1.1-rc.2 + BS 0.12.3 / 0.18.0 | 已退役 | 固定 dsh-sidenote 0.6.5 及原 BS 版本 |
+| DSH 0.1.2-rc.1 + BS 0.18.0 | 已退役 | 固定 dsh-sidenote 0.6.5 及原 BS 版本 |
+
+0.6.5 包含 @lilongsky 的 V4 回流修复及后续失败确认保护，保留旧界面与已验证的 rc.3 兼容。rc.3 的旧界面验收不能替代本原生版准入；完成独立准入后再滚动两版本窗口。
 
 BS 指 dsh-better-sidebar。当前主线不再依赖它；未列出的宿主、alpha 及 BS 共存组合未经验证。
 
@@ -21,7 +24,7 @@ BS 指 dsh-better-sidebar。当前主线不再依赖它；未列出的宿主、a
 在旧宿主上固定最后兼容版：
 
 ```bash
-dsh plugin --profile web add --save-exact dsh-sidenote@0.6.4
+dsh plugin --profile web add --save-exact dsh-sidenote@0.6.5
 ```
 
 这会在 profile 写入精确依赖，避免按宽泛依赖范围跨过兼容边界；用户显式换版本属于另一个动作。升级到窗口内宿主后，再安装该宿主兼容的新版插件。

@@ -2,15 +2,18 @@
 
 [中文](compatibility.md) · English
 
-The development branch maintains the latest **two admitted exact DSH releases that share the native Conversation implementation**. This does not mean two major versions or automatic admission of npm latest. Published installations follow their Release declarations; the already-published 0.6.4 package keeps its original compatibility range.
+The development branch maintains the latest **two admitted exact DSH releases that share the native Conversation implementation**. This does not mean two major versions or automatic admission of npm latest. Published installations follow their Release declarations; the already-published 0.6.5 package keeps its original compatibility range.
 
 | Exact host | Current branch | Outside-window installation |
 |---|---|---|
 | DSH 0.2.1-rc.2, no BS | Full maintenance; required CI | — |
 | DSH 0.2.0-rc.2, no BS | Full maintenance; required CI | — |
-| DSH 0.1.7-rc.2 / 0.1.5-rc.2, no BS | Retired | Pin dsh-sidenote 0.6.4 |
-| DSH 0.1.1-rc.2 + BS 0.12.3 / 0.18.0 | Retired | Pin 0.6.4 and the original BS version |
-| DSH 0.1.2-rc.1 + BS 0.18.0 | Retired | Pin 0.6.4 and the original BS version |
+| DSH 0.2.1-rc.3, no BS | Native Conversation admission pending | Pin dsh-sidenote 0.6.5 |
+| DSH 0.1.7-rc.2 / 0.1.5-rc.2, no BS | Retired | Pin dsh-sidenote 0.6.5 |
+| DSH 0.1.1-rc.2 + BS 0.12.3 / 0.18.0 | Retired | Pin 0.6.5 and the original BS version |
+| DSH 0.1.2-rc.1 + BS 0.18.0 | Retired | Pin 0.6.5 and the original BS version |
+
+0.6.5 includes @lilongsky’s V4 reflow fix and the follow-up failure acknowledgements, retaining the previous UI and validated rc.3 compatibility. The old-UI result does not admit rc.3 for this native implementation; its separate admission will roll the two-version window.
 
 BS means dsh-better-sidebar. The current branch does not depend on it. Unlisted hosts, alpha releases and BS coexistence combinations are unverified.
 
@@ -21,7 +24,7 @@ Outside the window, the current branch carries no separate chat UI or per-PR hos
 Pin its last compatible plugin:
 
 ```bash
-dsh plugin --profile web add --save-exact dsh-sidenote@0.6.4
+dsh plugin --profile web add --save-exact dsh-sidenote@0.6.5
 ```
 
 This writes an exact profile dependency so ordinary range updates cannot cross the compatibility boundary. Explicitly choosing another version is a separate operation. After upgrading to an admitted host, install a compatible newer plugin.
