@@ -91,7 +91,7 @@ test.describe('annotation editor lifecycle', () => {
     await expect(sideInput).toHaveText('')
 
     const parentBefore = userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)
-    await side.getByRole('button', { name: /^(Send annotations|发送注释)$/ }).click()
+    await side.getByRole('button', { name: /^(Send|Send message|发送|发送消息|Queue message|加入队列|排队发送)$/ }).click()
     await expect.poll(() => userMessagesOf(childId!).filter(text => text.includes('<note>侧边外点保存的完整注解</note>'))).toHaveLength(1)
     const sent = userMessagesOf(childId!).find(text => text.includes('<note>侧边外点保存的完整注解</note>'))!
     expect(sent.match(/<quote>full history snapshot<\/quote>/g)).toHaveLength(2)
@@ -222,7 +222,7 @@ test.describe('annotation editor lifecycle', () => {
     await side.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
     await expect(side.locator('[data-composer-seat] img[src^="blob:"]')).toHaveCount(1)
     const parentBefore = userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)
-    await side.getByRole('button', { name: /^(Send annotations|发送注释)$/ }).click()
+    await side.getByRole('button', { name: /^(Send|Send message|发送|发送消息|Queue message|加入队列|排队发送)$/ }).click()
     await expect.poll(() => userMessagesOf(child).filter(text => text.includes('attachment quote admission'))).toHaveLength(1)
     const content = userMessageContentsOf(child).find(blocks => blocks.some(block => block.text?.includes('attachment quote admission')))!
     expect(content.some(block => block.type === 'image')).toBe(true)
@@ -286,7 +286,7 @@ test('real malformed-image rejection keeps quote and clean body, then retries on
   const body = 'retry after actual host rejection'
   await input.fill(body)
   await side.locator('input[type=file]').setInputFiles({ name: 'invalid.png', mimeType: 'image/png', buffer: Buffer.from('not a valid PNG image') })
-  await side.getByRole('button', { name: /^(Send annotations|发送注释)$/ }).click()
+  await side.getByRole('button', { name: /^(Send|Send message|发送|发送消息|Queue message|加入队列|排队发送)$/ }).click()
   await expect(side.getByRole('alert')).toBeVisible()
   await expect(input).toHaveText(body)
   expect(userMessagesOf(child).filter(text => text.includes(body))).toHaveLength(0)
@@ -294,7 +294,7 @@ test('real malformed-image rejection keeps quote and clean body, then retries on
   expect(await childItems()).toMatchObject([{ state: 'active', note: '失败后需要保留的注解' }])
   await side.getByRole('button', { name: /^(Remove image|移除图片)/ }).click()
   await side.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
-  await side.getByRole('button', { name: /^(Send annotations|发送注释)$/ }).click()
+  await side.getByRole('button', { name: /^(Send|Send message|发送|发送消息|Queue message|加入队列|排队发送)$/ }).click()
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes(body))).toHaveLength(1)
   expect(userMessagesOf(child).find(text => text.includes(body))!.match(/<annotation id=/g)).toHaveLength(1)
   await expect.poll(childItems).toMatchObject([{ state: 'sent' }])

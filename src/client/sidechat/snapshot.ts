@@ -25,6 +25,13 @@ export interface SnapshotEntry {
   toolName?: string
 }
 
+/** Read the plugin's persisted progress block as plain, expandable content. */
+export function snapshotEntriesFromText(text: string): SnapshotEntry[] {
+  const kinds = { 'user-request': 'request', reply: 'reply', thinking: 'thinking', 'tool-call': 'tool', streaming: 'streaming' } as const
+  return [...text.matchAll(/<(user-request|reply|thinking|tool-call|streaming)(?: name="([^"]*)")?>([\s\S]*?)<\/\1>/g)]
+    .map(match => ({ kind: kinds[match[1] as keyof typeof kinds], text: match[3]!.trim(), ...(match[2] ? { toolName: match[2] } : {}) }))
+}
+
 interface LooseBlock { type?: unknown; kind?: unknown; text?: unknown }
 
 function blocksText(blocks: unknown, kinds: readonly string[]): string {

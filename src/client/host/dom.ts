@@ -73,7 +73,7 @@ export function composerSeat(): HTMLElement | null {
 export function findSendButtonInCard(root: ParentNode = document): HTMLButtonElement | null {
   const card = root.querySelector<HTMLElement>('[data-composer-card]')
   if (card === null) return null
-  const buttons = card.querySelectorAll('button')
+  const buttons = card.querySelectorAll('button:not([data-sidenote-submit])')
   const last = buttons[buttons.length - 1]
   return last instanceof HTMLButtonElement ? last : null
 }

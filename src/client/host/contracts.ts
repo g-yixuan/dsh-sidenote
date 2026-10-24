@@ -399,6 +399,8 @@ export type KnownSlotKey =
   | 'conversation.view'
   | 'conversation.chat.node'
   | 'conversation.chat.turnTail'
+  | 'conversation.chat.assistant-actions'
+  | 'conversation.composer.bar'
   | 'conversation.user.text.node'
 
 /** The client slots service face (register returns the disposer). */

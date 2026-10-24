@@ -55,7 +55,7 @@ For example, select “When no results are found, help the user adjust their sea
 
 ### Bring useful answers back
 
-Click **Send back to main session** below a side reply to bring back both **the question and its answer**. They appear above the main composer and travel with your next message. You can also send back the whole conversation or save a side chat as a regular session.
+Click the **Bring back to main conversation** icon on the right of a side reply’s action row to bring back both **the question and its answer**. They appear above the main composer and travel with your next message. You can also send back the whole conversation or save a side chat as a regular session.
 
 ## See it in action
 

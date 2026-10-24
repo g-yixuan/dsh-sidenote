@@ -163,6 +163,7 @@
 .sentContext pre, .sentContext blockquote { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
 
 .userContextHost { display: contents; }
+:global([data-sidenote-context-replaced]) { display: none !important; }
 .sentChips { display: inline; white-space: normal; }
 .sentChipGroup { display: inline; }
 .sentChip {

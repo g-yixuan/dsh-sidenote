@@ -9,7 +9,7 @@ import { transcriptOf } from '../chat/transcript.ts'
 import { StateScreen } from './rows.tsx'
 import { armInheritedTurnPurge, chatSourceOf, ensurePanelOpen, forkAndRegister, openSession, openSessionWindow, retainSession, saveSideChatSession, setSideChatTopic, unarchiveSideSession, updateTabMeta } from './lifecycle.ts'
 import { topicOf } from './identity.ts'
-import { buildMainlineSnapshot } from './snapshot.ts'
+import { buildMainlineSnapshot, snapshotEntriesOf, snapshotEntriesFromText, splitSnapshotPrefix } from './snapshot.ts'
 import { registerLiveSideChat, notifyLiveSideChats } from './native.ts'
 import { dropClosedSideChat, recordClosedSideChat } from './recentClosed.ts'
 import type { ReflowStore } from '../reflow.ts'
@@ -124,6 +124,11 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   }, [visible])
   const parent = meta.parentSessionId ? ctx.sessions.binding(meta.parentSessionId)?.session : undefined
   const parentSnapshot = useSyncExternalStore(useCallback(notify => parent?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [parent]), () => parent?.getSnapshot() ?? null)
+  const parentChat = useMemo(() => chatSourceOf(ctx, ctx.sessions.binding(meta.parentSessionId ?? scope.sessionId)), [ctx, parent, meta.parentSessionId, scope.sessionId])
+  const parentLegacy = useSyncExternalStore(useCallback(notify => parentChat?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [parentChat]), () => parentChat?.getLegacy() ?? null)
+  const savedProgress = useMemo(() => messages.filter(message => message.role === 'user' && (message.seq ?? -1) > (meta.boundarySeq ?? -1)).map(message => splitSnapshotPrefix(message.text)).find(Boolean), [messages, meta.boundarySeq])
+  const progress = useMemo(() => savedProgress ? { entries: snapshotEntriesFromText(savedProgress.snapshot), takenAt: savedProgress.takenAt }
+    : meta.forkedMidTurn ? { entries: snapshotEntriesOf(parentLegacy?.nodes ?? [], parentLegacy?.partial) } : undefined, [savedProgress, meta.forkedMidTurn, parentLegacy])
   const status = sessionStatusSource(ctx)
   const parentPending = useSyncExternalStore(useCallback(notify => status?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [status]), () => status?.getSnapshot().get(meta.parentSessionId ?? scope.sessionId)?.pendingInteraction != null)
   const [saving, setSaving] = useState(false)
@@ -140,13 +145,13 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   if (phase === 'fork-error') return <StateScreen title={t('forkErrorTitle')} detail={forkError ?? undefined} hint={t('forkErrorHint')} />
   if (phase === 'missing') return <StateScreen title={t('missingTitle')} detail={t('missingDetail')} hint={t('missingHint')} />
   if (phase !== 'chat' || !reference || !childId) return <StateScreen title={t('preparing')} />
-  const side: SideConversation = { sessionId: childId, parentSessionId: meta.parentSessionId ?? scope.sessionId, title: tab.title, boundarySeq: meta.boundarySeq, reflow: props.reflow }
+  const side: SideConversation = { sessionId: childId, parentSessionId: meta.parentSessionId ?? scope.sessionId, title: tab.title, boundarySeq: meta.boundarySeq, reflow: props.reflow, progress, contextPending: meta.forkedMidTurn && !savedProgress }
   const replies = finalReplies(messages, meta.boundarySeq, new Set(chat?.getCompletedReplySeqs?.() ?? []))
   const questions = pairQuestions(messages)
   const allAdded = replies.length > 0 && replies.every(reply => isReplyAdded(side, reply, questions.get(reply.key)))
   const running = snapshot?.running === true
   const hasDraft = composer.hasDraft || props.annotations.countActive(childId) > 0
-  return <div ref={rootRef} className={css.root} data-sidenote-chat-session={childId} data-sidenote-view-title={tab.title}>
+  return <div ref={rootRef} className={css.root} data-sidenote-chat-session={childId} data-sidenote-view-title={tab.title} data-sidenote-context-pending={side.contextPending || undefined}>
     <div className={css.nativeToolbar}>
       <button type="button" className={css.nativeAction} onClick={() => { openSession(ctx, side.parentSessionId) }}>{t(parentPending ? 'parentPending' : parentSnapshot?.running ? 'parentRunning' : 'parentIdle')}</button>
       <span className={css.nativeToolbarActions}>

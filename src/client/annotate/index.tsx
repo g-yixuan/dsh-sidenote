@@ -19,7 +19,7 @@ import { createSelectionController } from './selection.ts'
 import { AnnotateOverlay } from './overlay.tsx'
 import { createAnnotationChip } from '../annotations/chip.tsx'
 import { createReflowChip } from './chip.tsx'
-import { installSendInterceptor } from './send.ts'
+import { registerNativeComposer } from '../annotations/NativeComposer.tsx'
 import { registerUserContext } from '../annotations/NativeUserContext.tsx'
 import type { ReflowStore } from '../reflow.ts'
 
@@ -42,7 +42,7 @@ export function registerAnnotations(ctx: Context, reflow: ReflowStore, store: An
       root.render(<AnnotateOverlay ctx={ctx} store={store} controller={controller} />)
 
       // 发送携带：拦截器在提交瞬间把协议块（注释 + 回流）拼入正文（草稿零污染）。
-      const offInterceptor = installSendInterceptor(ctx, store, reflow)
+      registerNativeComposer(ctx, store, reflow)
       // 发送后留痕：用户气泡里的协议块隐藏为「批注 ×N」标签。
       registerUserContext(ctx)
 
@@ -56,7 +56,7 @@ export function registerAnnotations(ctx: Context, reflow: ReflowStore, store: An
           id: 'dsh-sidenote-annotations',
           order: 10,
           registrant: 'dsh-sidenote',
-        }, createAnnotationChip(ctx, store, reflow))
+        }, createAnnotationChip(ctx, store))
         const offReflow = ctx.slots.register({
           name: 'conversation.input.dock',
           id: 'dsh-sidenote-reflow',
@@ -71,7 +71,6 @@ export function registerAnnotations(ctx: Context, reflow: ReflowStore, store: An
       })
 
       return () => {
-        offInterceptor()
         controller.dispose()
         // 同帧 render/unmount 会触发 React 警告——推迟到下一帧。
         setTimeout(() => { root.unmount() })

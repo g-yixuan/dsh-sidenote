@@ -13,6 +13,28 @@ export interface ChatSource {
   getCompletedReplySeqs?(): readonly number[]
 }
 
+export interface ChatReplySnapshot {
+  legacy?: ConversationSnapshot
+  timeline: { turnOrder: readonly number[]; turns: ReadonlyMap<number, { end?: { data: { reason: { kind: string } } } }> }
+  locations: { getTurn(turn: number): readonly string[] }
+  nodes: { get(key: string): { kind: string; data: { status?: string; finalNode?: { seq: number }; blocks?: readonly { kind: string; text?: string }[] } } | undefined }
+}
+
+export function completedReplySeqsOf(state: ChatReplySnapshot): number[] {
+  const result: number[] = []
+  for (const turn of state.timeline.turnOrder) {
+    if (state.timeline.turns.get(turn)?.end?.data.reason.kind !== 'completed') continue
+    for (const key of [...state.locations.getTurn(turn)].reverse()) {
+      const node = state.nodes.get(key)
+      if (node?.kind !== 'assistant-step') continue
+      const data = node.data
+      if (data.status === 'settled' && data.finalNode && data.blocks?.some(block => block.kind === 'text' && block.text?.trim()) && !data.blocks.some(block => block.kind === 'tool-call')) result.push(data.finalNode.seq)
+      break
+    }
+  }
+  return result
+}
+
 export function chatSourceOf(ctx: Context, binding: SessionBinding | undefined): ChatSource | undefined {
   const session = binding?.session
   if (session === undefined) return undefined
@@ -23,25 +45,7 @@ export function chatSourceOf(ctx: Context, binding: SessionBinding | undefined):
       return {
         subscribe: fn => target.subscribe(fn),
         getLegacy: () => (target.getSnapshot() as { legacy?: ConversationSnapshot } | undefined)?.legacy ?? null,
-        getCompletedReplySeqs: () => {
-          const state = target.getSnapshot() as {
-            timeline: { turnOrder: readonly number[]; turns: ReadonlyMap<number, { end?: { data: { reason: { kind: string } } } }> }
-            locations: { getTurn(turn: number): readonly string[] }
-            nodes: { get(key: string): { kind: string; data: { status?: string; finalNode?: { seq: number }; blocks?: readonly { kind: string; text?: string }[] } } | undefined }
-          }
-          const result: number[] = []
-          for (const turn of state.timeline.turnOrder) {
-            if (state.timeline.turns.get(turn)?.end?.data.reason.kind !== 'completed') continue
-            for (const key of [...state.locations.getTurn(turn)].reverse()) {
-              const node = state.nodes.get(key)
-              if (node?.kind !== 'assistant-step') continue
-              const data = node.data
-              if (data.status === 'settled' && data.finalNode && data.blocks?.some(block => block.kind === 'text' && block.text?.trim()) && !data.blocks.some(block => block.kind === 'tool-call')) result.push(data.finalNode.seq)
-              break
-            }
-          }
-          return result
-        },
+        getCompletedReplySeqs: () => completedReplySeqsOf(target.getSnapshot() as ChatReplySnapshot),
         getLastTurnEnd: () => {
           const state = target.getSnapshot() as { timeline?: { turnOrder: readonly number[]; turns: ReadonlyMap<number, { end?: { seq: number; data: { reason: { kind: string } } } }> } }
           const timeline = state.timeline

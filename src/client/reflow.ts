@@ -1,7 +1,7 @@
 /**
  * 回流通道的受控对象层（Delivery_02 Workitem_04 v2）：侧边聊天的结论以
  * 「待回流对象」进入主会话——主 composer 上方的 chip（可预览/可移除），
- * 发送瞬间由 annotate/send.ts 拦截器与注释协议块一起序列化进消息。
+ * 发送瞬间由 annotations/NativeComposer.tsx 原生提交入口与注释协议块一起序列化进消息。
  * 不经草稿文本流（用户裁定：直接进草稿「很脏」）。
  *
  * 气泡留痕：序列化形态是 XML 协议块（见 buildReflowBlock），随注释协议块

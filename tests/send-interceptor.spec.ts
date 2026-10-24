@@ -1,27 +1,14 @@
-/**
- * @vitest-environment jsdom
- *
- * 空草稿补位（send.ts 的 pointerdown 分支）回归测。
- *
- * 背景：宿主主按钮在 `draft.trim()==="" && attachments.length===0` 时是原生
- * `disabled`，而注释/回流按设计不进草稿 —— 这类按钮上浏览器不派发 `click`
- * （`mousedown` 同样不发），只有 `pointerdown` 能到（Chromium / Firefox /
- * WebKit 实测一致）。本测锁住拦截器的判定边界：只接管「因空草稿而 disabled
- * 的主按钮」，其余一切情况放行宿主。
- *
- * 注意：jsdom 的 dispatchEvent 不模拟浏览器对 disabled 控件的 click 抑制，
- * 因此这里验证的是**拦截器逻辑**，不是浏览器的投递行为。
- */
+/** @vitest-environment jsdom */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context, SessionInput } from '../src/client/host/contracts.ts'
 import type { ReflowStore } from '../src/client/reflow.ts'
 import { createAnnotationStore } from '../src/client/annotations/model.ts'
-import { installSendInterceptor } from '../src/client/annotate/send.ts'
+import { submitNativeWithContext } from '../src/client/annotations/NativeComposer.tsx'
 
 const SESSION = 's1'
 
 interface Harness {
-  dispose: () => void
+  send: (mode?: 'queue' | 'steer') => void
   submitted: string[]
   drafts: string[]
   removeAllAnnotations: () => void
@@ -31,19 +18,7 @@ interface Harness {
   removedReflow: number[]
 }
 
-/**
- * 复刻宿主 composer 的最小识别面：`[data-composer-seat]` › `[data-composer-card]`
- * 内两个按钮（`#extra` 常 disabled，`#send` 是 DOM 末位 = 主按钮）。
- */
-function makeHarness(options: { draft?: string; buttonDisabled?: boolean; withAnnotation?: boolean; rejectFirstSend?: boolean; reflowItems?: { id: number; text: string; sideTitle: string }[] } = {}): Harness {
-  const sendDisabled = options.buttonDisabled ?? true
-  document.body.innerHTML = `
-    <div data-composer-seat>
-      <div data-composer-card>
-        <button type="button" id="extra" disabled>attach</button>
-        <button type="button" id="send"${sendDisabled ? ' disabled' : ''}>send</button>
-      </div>
-    </div>`
+function makeHarness(options: { draft?: string; withAnnotation?: boolean; rejectFirstSend?: boolean; reflowItems?: { id: number; text: string; sideTitle: string }[] } = {}): Harness {
 
   const state = { draft: options.draft ?? '', phase: 'plain' as const }
   const submitted: string[] = []
@@ -104,13 +79,13 @@ function makeHarness(options: { draft?: string; buttonDisabled?: boolean; withAn
     })),
   }
 
-  const store = createAnnotationStore()
+  const store = createAnnotationStore(Date.now, null)
   if (options.withAnnotation !== false) {
     store.add({ sessionId: SESSION, anchorKey: 'k1', text: '原文片段', anchorText: '原文片段', occurrence: 0, note: '' })
   }
 
   return {
-    dispose: installSendInterceptor(ctx, store, reflow),
+    send: mode => submitNativeWithContext(ctx, store, reflow, SESSION, input.submit.bind(input), mode, 'click'),
     submitted,
     drafts,
     removeAllAnnotations: () => { for (const a of store.listActive(SESSION)) store.remove(a.id) },
@@ -120,131 +95,53 @@ function makeHarness(options: { draft?: string; buttonDisabled?: boolean; withAn
   }
 }
 
-function pointerDown(element: Element, button = 0): Event {
-  const Ctor = (globalThis as unknown as { PointerEvent?: typeof Event }).PointerEvent ?? Event
-  const event = new Ctor('pointerdown', { bubbles: true, cancelable: true })
-  Object.defineProperty(event, 'button', { value: button })
-  element.dispatchEvent(event)
-  return event
-}
-
-function click(element: Element): Event {
-  const event = new MouseEvent('click', { bubbles: true, cancelable: true })
-  element.dispatchEvent(event)
-  return event
-}
-
 const flushMicrotasks = (): Promise<void> => new Promise(resolve => { setTimeout(resolve, 0) })
 
-describe('send interceptor — 空草稿补位（disabled 主按钮）', () => {
+describe('native composer context submission', () => {
   let harness: Harness | undefined
 
   afterEach(() => {
-    harness?.dispose()
     harness = undefined
-    document.body.innerHTML = ''
+    vi.unstubAllGlobals()
   })
 
-  it('接管因空草稿而 disabled 的主按钮：拼入协议块后提交', async () => {
-    harness = makeHarness({ draft: '', buttonDisabled: true })
-    const event = pointerDown(document.querySelector('#send')!)
-    // Workitem_06：inject 尝试使提交落到 microtask 之后（有界等待）。
+  it('preserves the host-selected steer mode for context-only sends and ignores a repeated submit', async () => {
+    harness = makeHarness({ draft: '' })
+    harness.send('steer')
+    harness.send('steer')
     await flushMicrotasks()
+    expect(harness.submitted).toEqual(['steer'])
+    expect(harness.drafts[0]).toContain('I annotated 1 passage')
+  })
+
+  it('leaves slash commands and ordinary messages on the native path', () => {
+    harness = makeHarness({ draft: '/help' })
+    harness.send()
+    expect(harness.drafts).toEqual([])
     expect(harness.submitted).toEqual(['queue'])
-    expect(harness.drafts).toHaveLength(1)
-    expect(harness.drafts[0]).toContain('I annotated 1 passage(s) of the conversation above:')
-    expect(event.defaultPrevented).toBe(true)
-  })
-
-  it('enabled 的主按钮一律放行（正常路径仍由 click 拦截负责，不双驱动）', () => {
-    harness = makeHarness({ draft: '正文', buttonDisabled: false })
-    const event = pointerDown(document.querySelector('#send')!)
-    expect(harness.submitted).toEqual([])
-    expect(event.defaultPrevented).toBe(false)
-  })
-
-  it('disabled 但草稿非空（离线/无模型等其它成因）不接管', () => {
-    harness = makeHarness({ draft: '正文', buttonDisabled: true })
-    pointerDown(document.querySelector('#send')!)
-    expect(harness.submitted).toEqual([])
-  })
-
-  it('disabled 的非主按钮不接管（DOM 序识别面收窄到卡片内末位按钮）', () => {
-    harness = makeHarness({ draft: '', buttonDisabled: true })
-    pointerDown(document.querySelector('#extra')!)
-    expect(harness.submitted).toEqual([])
-  })
-
-  it('非主键手势不接管：右键 pointerdown 不触发发送', () => {
-    harness = makeHarness({ draft: '', buttonDisabled: true })
-    const event = pointerDown(document.querySelector('#send')!, 2)
-    expect(harness.submitted).toEqual([])
-    expect(event.defaultPrevented).toBe(false)
-  })
-
-  it('没有待发内容时不接管：死按钮保持死的，不产生空提交', () => {
-    harness = makeHarness({ draft: '', buttonDisabled: true })
-    harness.removeAllAnnotations()
-    pointerDown(document.querySelector('#send')!)
-    expect(harness.submitted).toEqual([])
-  })
-
-  it('dispose 后监听器全部摘除', () => {
-    harness = makeHarness({ draft: '', buttonDisabled: true })
-    harness.dispose()
-    pointerDown(document.querySelector('#send')!)
-    expect(harness.submitted).toEqual([])
-  })
-
-  it('吞掉同一次手势的尾随 click（否则宿主按「停止」取消本轮）', async () => {
-    harness = makeHarness({ draft: '', buttonDisabled: true })
-    pointerDown(document.querySelector('#send')!)
-    await flushMicrotasks()
-    expect(harness.submitted).toEqual(['queue'])
-    // 提交后草稿已空 → 宿主主按钮按 primaryStops 变身「停止」，这一发必须被吞。
-    const event = click(document.querySelector('#send')!)
-    expect(event.defaultPrevented).toBe(true)
-  })
-
-  it('没有 pointerdown 时 click 不被误吞（正常拦截路径不受影响）', () => {
-    harness = makeHarness({ draft: '', buttonDisabled: true })
-    harness.removeAllAnnotations()
-    const event = click(document.querySelector('#send')!)
-    expect(event.defaultPrevented).toBe(false)
-  })
-})
-
-describe('send interceptor — Workitem_06 注入通道', () => {
-  let harness: Harness | undefined
-
-  afterEach(() => {
-    harness?.dispose()
-    harness = undefined
-    document.body.innerHTML = ''
   })
 
   it('纯回流+空草稿+注入成功：不发消息、不吞后续输入（B-1 回归）', async () => {
-    harness = makeHarness({ draft: '', buttonDisabled: true, withAnnotation: false, reflowItems: [{ id: 1, text: '结论', sideTitle: '侧边' }] })
+    harness = makeHarness({ draft: '', withAnnotation: false, reflowItems: [{ id: 1, text: '结论', sideTitle: '侧边' }] })
     // fetch 成功（注入通道可用）
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 })))
-    const event = pointerDown(document.querySelector('#send')!)
+    harness.send()
     await flushMicrotasks()
     // 注入成功 → 拼稿为空 → 不开事务（submit 不被调）
     expect(harness.submitted).toEqual([])
     expect(harness.removedReflow).toEqual([1])
-    expect(event.defaultPrevented).toBe(true)
     // 用户随后输入不被吞（护栏已解锁，草稿保持）
     harness.type('后续输入')
     expect(harness.draft()).toBe('后续输入')
   })
 
   it('注入等待窗口内的用户输入不被回滚吃掉（M-1 回归）', async () => {
-    harness = makeHarness({ draft: '正文', buttonDisabled: false })
+    harness = makeHarness({ draft: '正文' })
     // fetch 挂起（模拟慢注入）→ 窗口内输入 → 注入失败 → 搭车拼稿应含窗口内输入
     vi.stubGlobal('fetch', vi.fn().mockImplementation(
       () => new Promise((_resolve, reject) => { setTimeout(() => reject(new Error('timeout')), 400) }),
     ))
-    click(document.querySelector('#send')!)
+    harness.send()
     harness.type('（窗口内补充）')
     await flushMicrotasks()
     await new Promise(resolve => setTimeout(resolve, 450))
@@ -254,9 +151,9 @@ describe('send interceptor — Workitem_06 注入通道', () => {
   })
 
   it('回流全部成功注入时仍通过原生机器发送已有正文', async () => {
-    harness = makeHarness({ draft: '继续处理正文', buttonDisabled: false, withAnnotation: false, reflowItems: [{ id: 1, text: '结论', sideTitle: '侧边' }] })
+    harness = makeHarness({ draft: '继续处理正文', withAnnotation: false, reflowItems: [{ id: 1, text: '结论', sideTitle: '侧边' }] })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 })))
-    click(document.querySelector('#send')!)
+    harness.send()
     await flushMicrotasks()
     expect(harness.removedReflow).toEqual([1])
     expect(harness.submitted).toEqual(['queue'])
@@ -265,18 +162,18 @@ describe('send interceptor — Workitem_06 注入通道', () => {
   })
 
   it('部分注入后正文发送拒绝：保留未投递结论和干净草稿，重试只投递剩余项', async () => {
-    harness = makeHarness({ draft: '保留正文', buttonDisabled: false, withAnnotation: false, rejectFirstSend: true, reflowItems: [{ id: 1, text: '已注入结论', sideTitle: '侧边' }, { id: 2, text: '待重试结论', sideTitle: '侧边' }] })
+    harness = makeHarness({ draft: '保留正文', withAnnotation: false, rejectFirstSend: true, reflowItems: [{ id: 1, text: '已注入结论', sideTitle: '侧边' }, { id: 2, text: '待重试结论', sideTitle: '侧边' }] })
     vi.stubGlobal('fetch', vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: false, injectedIndexes: [0] }), { status: 200 }))
       .mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ ok: false, injectedIndexes: [] }), { status: 200 }))))
-    click(document.querySelector('#send')!)
+    harness.send()
     await flushMicrotasks()
     expect(harness.removedReflow).toEqual([1])
     expect(harness.draft()).toBe('保留正文')
     expect(harness.drafts.some(text => text.includes('待重试结论'))).toBe(true)
     expect(harness.drafts.some(text => text.includes('已注入结论'))).toBe(false)
 
-    click(document.querySelector('#send')!)
+    harness.send()
     await flushMicrotasks()
     expect(harness.removedReflow).toEqual([1, 2])
     expect(harness.submitted).toEqual(['queue', 'queue'])

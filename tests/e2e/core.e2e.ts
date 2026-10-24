@@ -24,7 +24,7 @@ test('shared host journey: real fork, inherited history, accepted side message a
   const child = await openSideChat(page)
   await expect(page.getByRole('tab', { name: 'chat', exact: true })).toHaveCount(0)
   const side = sideChatOf(page)
-  const inherited = side.getByRole('button', { name: /Inherited from main|继承自主会话/ })
+  const inherited = side.getByRole('button', { name: /Main conversation context|主线上下文/ })
   await inherited.click()
   await expect(side.locator('[data-turn-tail]')).toHaveCount(0)
   await inherited.click()
@@ -94,7 +94,7 @@ test('shared host journey: multi-turn side context and an explicit conclusion re
   const sideBefore = userMessagesOf(child)
   const parentDraft = 'Use the returned side conclusion in this main conversation.'
   await mainInput.fill(parentDraft)
-  await side.getByRole('button', { name: /^(Send back to main session|回流到主会话)$/ }).last().click()
+  await side.getByRole('button', { name: /^(Bring back to main conversation|带回主对话)$/ }).last().click()
   await expect(page.getByText(/1 side-chat reflow|1 条侧边回流/).first()).toBeVisible()
   await expect.poll(() => mainInput.evaluate(el => el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.value : el.textContent ?? '')).toBe(parentDraft)
   expect(userMessagesOf(parent)).toEqual(parentBefore)
