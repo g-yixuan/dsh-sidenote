@@ -48,6 +48,8 @@ Submissions use the host's native input flow, retaining attachments, references,
 - When the host restores a native tab, it rebinds the original child. If the sidebar is not restored, use **Reopen** in `/side` to recover that child and its annotations.
 - A new fork has its own independent annotation list.
 
+Sent annotations and side-chat references stay inside their right-aligned user bubble, alongside the message body. The bubble remains even when no body text was sent. Click a label to expand the complete quote and note, and click again to collapse it. Main and side conversations use the same presentation.
+
 ## Bring answers back to the main thread
 
 Click **Send back to main session** below a side reply. Both the question and its answer appear above the main composer. Preview or remove entries, then include them in your next main-thread message.

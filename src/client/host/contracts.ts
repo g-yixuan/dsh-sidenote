@@ -195,6 +195,8 @@ export interface SessionReference {
  */
 export interface UiConversationLike {
   binding(source: unknown): { target(name: string): { subscribe(fn: () => void): () => void; getSnapshot(): unknown } | undefined } | undefined
+  /** 0.2.1+: pure original-text rules, rendered by conversation.user.text.node. */
+  userText?: { register(rule: { id: string; order: number; match(text: string, from: number): { id: string; start: number; end: number; data: unknown } | undefined }): () => void }
 }
 
 export interface SessionsService {
@@ -397,6 +399,7 @@ export type KnownSlotKey =
   | 'conversation.view'
   | 'conversation.chat.node'
   | 'conversation.chat.turnTail'
+  | 'conversation.user.text.node'
 
 /** The client slots service face (register returns the disposer). */
 export interface SlotsService {

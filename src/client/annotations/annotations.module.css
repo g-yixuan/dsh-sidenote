@@ -161,3 +161,33 @@
 .sentContext { color: var(--dsw-alias-label-secondary); font-size: 13px; margin: 8px 0; }
 .sentContext summary { cursor: pointer; }
 .sentContext pre, .sentContext blockquote { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+
+.userContextHost { display: contents; }
+.sentChips { display: inline; white-space: normal; }
+.sentChipGroup { display: inline; }
+.sentChip {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  gap: 4px;
+  margin: 0 6px 2px 0;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+}
+button.sentChip { cursor: pointer; }
+button.sentChip:hover { color: var(--dsw-alias-label-primary); }
+button.sentChip:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
+.sentChevron, .sentChevronOpen { flex: none; }
+.sentChevronOpen { transform: rotate(180deg); }
+.sentPreview { display: block; margin: 8px 0; font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sentPreview[hidden] { display: none; }
+.sentItem { display: block; margin: 8px 0; }
+.sentQuote { display: block; padding-left: 10px; border-left: 2px solid var(--dsw-alias-border-l1); }
+.sentNote { display: block; margin-top: 4px; }
+.sentSource { display: block; margin-bottom: 4px; color: var(--dsw-alias-label-secondary); }

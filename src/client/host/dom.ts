@@ -98,3 +98,10 @@ export function composerHasMenu(seat: HTMLElement): boolean {
 export function hasConversationMessages(): boolean {
   return document.querySelector('[data-chat-flow-kind]') !== null
 }
+
+/** 0.2.0 has no UserText extension. Only add our own portal seat; never move
+ * or replace host-owned children. The CSS-module suffix is checked by E2E. */
+export function mountUserBubbleAddon(root: HTMLElement, addon: HTMLElement): () => void {
+  root.querySelector<HTMLElement>('[class$="_bubble"]')?.prepend(addon)
+  return () => { addon.remove() }
+}
