@@ -52,7 +52,7 @@ The script uses a temporary DSH_HOME. The [CI matrix](.github/workflows/ci.yml) 
 Keyless E2E verifies interactions and mounting, not model answers. Changes to opening a side chat while the main session is running, cancellation, queues, or progress snapshots also need a real running-session scenario and explicit validation results. State any limits of your validation.
 
 
-`pnpm test:compat` installs exact 0.6.4 in an isolated profile, then verifies rejection and restoration with a local incompatible fixture. Run the real model separately with `DSH_E2E_REAL_KEY_FILE=/path/to/private-key-file pnpm test:mount --grep "official Flash"`, also setting the exact DSH_CMD / DSH_EXPECTED_VERSION above. Only the server reads the key file; it never enters the profile, browser or artifacts. CI does not call external paid models by default. The lane directly uses official api.deepseek.com / deepseek-flash for main/side tools, multiple turns, images and actual reasoning-level requests, saving request metadata without prompts or authentication.
+`pnpm test:compat` installs exact 0.6.5 in an isolated profile, then verifies rejection and restoration with a local incompatible fixture. Run the real model separately with `DSH_E2E_REAL_KEY_FILE=/path/to/private-key-file pnpm test:mount --grep "official Flash"`, also setting the exact DSH_CMD / DSH_EXPECTED_VERSION above. Only the server reads the key file; it never enters the profile, browser or artifacts. CI does not call external paid models by default. The lane directly uses official api.deepseek.com / deepseek-flash for main/side tools, multiple turns, images and actual reasoning-level requests, saving request metadata without prompts or authentication.
 
 ## Code and tests
 
