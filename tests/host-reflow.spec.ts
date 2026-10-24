@@ -1,7 +1,7 @@
 /**
  * 宿主半包 /sidenote/reflow 路由的单测（WI-06，审查 M-3）：
  * trust fence（Host/Origin/sec-fetch-site）、method 收口、payload 校验、
- * agents 探测降级、inject 调用形态（plugin-source + form:notice + summary）。
+ * agents 探测降级、inject 调用形态（插件自有 source kind + form:notice + summary）。
  */
 import { describe, expect, it, vi } from 'vitest'
 import { makeReflowHandler } from '../src/index.ts'
@@ -73,7 +73,7 @@ describe('POST /sidenote/reflow（宿主 handler）', () => {
     expect(JSON.parse(res.calls.body!)).toEqual({ ok: false, error: 'no-live-agent' })
   })
 
-  it('有 live agent → inject 以 plugin-source + notice 形态调用，ok:true', async () => {
+  it('有 live agent → inject 使用插件自有 source kind 和 notice，ok:true', async () => {
     const agent = { inject: vi.fn() }
     const handler = makeReflowHandler(fakeCtx(agent) as never)
     const res = fakeRes()
@@ -81,9 +81,10 @@ describe('POST /sidenote/reflow（宿主 handler）', () => {
     expect(res.calls.status).toBe(200)
     expect(JSON.parse(res.calls.body!)).toEqual({ ok: true })
     expect(agent.inject).toHaveBeenCalledTimes(1)
-    const message = agent.inject.mock.calls[0]![0] as { content: { text: string }[], source: { kind: string, plugin: string, form: string, summary: string } }
+    const message = agent.inject.mock.calls[0]![0] as { content: { text: string }[], source: { kind: string, form: string, summary: string } }
     expect(message.content[0]!.text).toContain('<reflow>结论</reflow>')
-    expect(message.source).toMatchObject({ kind: 'plugin', plugin: 'dsh-sidenote', form: 'notice' })
+    expect(message.source).toMatchObject({ kind: 'dsh-sidenote', form: 'notice' })
+    expect(message.source).not.toHaveProperty('plugin')
     expect(message.source.summary).toContain('侧边 2')
   })
 })
