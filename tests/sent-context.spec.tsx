@@ -3,7 +3,7 @@ import { act, createElement, type ComponentType } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '../src/client/host/contracts.ts'
-import { registerUserContext, sentContextRule } from '../src/client/annotations/NativeUserContext.tsx'
+import { injectedReflowPrefix, registerUserContext, sentContextRule } from '../src/client/annotations/NativeUserContext.tsx'
 import { buildProtocolBlock } from '../src/client/annotations/format.ts'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -13,7 +13,7 @@ const reflow = '<reflow source="侧边 · 调查">\n<问>问题</问>\n<答>完�
 const cleanup: (() => void)[] = []
 afterEach(() => { for (const dispose of cleanup.splice(0).reverse()) dispose() })
 
-function mount(text: string, modern: boolean, key = 'user') {
+function mount(text: string, modern: boolean, key = 'user', injected = '') {
   type Props = { node: { data: { content: readonly { type: string; text?: string }[] } } }
   const host = document.createElement('div')
   document.body.append(host)
@@ -44,13 +44,25 @@ function mount(text: string, modern: boolean, key = 'user') {
   } as unknown as Context
   registerUserContext(ctx)
   const content = Object.freeze([Object.freeze({ type: 'image' }), Object.freeze({ type: 'text', text })] as const)
-  const props = { node: { data: { content } } }
+  const nodes = [...(injected ? [{ kind: 'context', seq: 9, source: { kind: 'dsh-sidenote' }, content: [{ type: 'text', text: injected }] }] : []), { kind: 'user', seq: 10 }]
+  const props = { node: { data: { seq: 10, content } }, useChat: (select: any) => select({ legacy: { nodes } }) }
   act(() => { root.render(createElement(entry.component, props)) })
   cleanup.push(() => { act(() => { root.unmount() }); host.remove() })
   return { host, content, props, rerender: () => act(() => { root.render(createElement(entry.component, { ...props, node: { ...props.node } })) }) }
 }
 
 describe.each([true, false])('sent context inside the native user bubble (UserText=%s)', modern => {
+  it('shows real injected reflows in their owning bubble without adding them to the durable body', () => {
+    const { host, content, rerender } = mount('这是一个侧边回流测试', modern, 'user', '以下是用户从侧边对话带回的结论（参考上下文）：\n\n' + reflow)
+    const bubble = host.querySelector('[data-native-bubble]')!
+    expect(bubble.querySelector('[data-dsh-sidenote-bubble]')).not.toBeNull()
+    expect(bubble.querySelector('[data-native-body]')?.textContent).toBe('这是一个侧边回流测试')
+    act(() => { bubble.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click() })
+    expect(bubble.textContent).toContain('完整回答')
+    expect(content[1]!.text).toBe('这是一个侧边回流测试')
+    rerender()
+    expect(bubble.querySelectorAll('[data-dsh-sidenote-bubble]')).toHaveLength(1)
+  })
   it.each(['user', 'steering'])('keeps the %s body, annotation and reflow together without changing durable content', key => {
     const wire = reflow + '\n\n' + annotation + '\n\nhi @原生引用'
     const { host, content, rerender } = mount(wire, modern, key)
@@ -87,6 +99,13 @@ describe.each([true, false])('sent context inside the native user bubble (UserTe
     expect(host.querySelector('[data-dsh-sidenote-bubble]')).toBeNull()
     expect(host.querySelector('[data-native-body]')?.textContent).toBe(text)
   })
+})
+
+it('does not attach another producer or cross an intervening response/input', () => {
+  const context = { kind: 'context', seq: 1, source: { kind: 'dsh-sidenote' }, content: [{ type: 'text', text: reflow }] }
+  expect(injectedReflowPrefix([context, { kind: 'user', seq: 2 }, { kind: 'user', seq: 3 }], 3)).toBe('')
+  expect(injectedReflowPrefix([context, { kind: 'assistant', seq: 2 }, { kind: 'user', seq: 3 }], 3)).toBe('')
+  expect(injectedReflowPrefix([{ ...context, source: { kind: 'another-plugin' } }, { kind: 'user', seq: 2 }], 2)).toBe('')
 })
 
 it('matches only the protocol range after a progress snapshot', () => {

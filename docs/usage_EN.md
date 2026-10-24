@@ -27,7 +27,7 @@ On supported hosts, hidden side chats remain runnable. To find older side chats,
 1. Select a passage in a completed assistant reply.
 2. Choose to add it to the main conversation or ask in a side chat, then write a note.
 3. Click outside the editor or press `Enter` to save a new note; press `Esc` to cancel.
-4. Preview notes above the composer, add more, remove individual notes or clear all, then send.
+4. Annotation and side-chat reflow chips sit side by side above the composer. Hover to read complete quotes, notes, or returned questions and answers; move into the card to keep reading. Click a chip to keep it open, then press Escape or click outside to close. Edit notes in place: leaving the field saves, Escape cancels. Remove individual entries or clear the batch.
 
 ![Adding a focused question to a selected passage](assets/selection.jpg)
 
@@ -48,7 +48,7 @@ Submissions use the host's native input flow, retaining attachments, references,
 - When the host restores a native tab, it rebinds the original child. If the sidebar is not restored, use **Reopen** in `/side` to recover that child and its annotations.
 - A new fork has its own independent annotation list.
 
-Sent annotations and side-chat references stay inside their right-aligned user bubble, alongside the message body. The bubble remains even when no body text was sent. Click a label to expand the complete quote and note, and click again to collapse it. Main and side conversations use the same presentation.
+Sent annotations and side-chat references stay inside their right-aligned user bubble, alongside the message body. The bubble remains even when no body text was sent. Click a label to expand the complete quote and note, and click again to collapse it. Main and side conversations use the same presentation. Reflows admitted through the separate injection channel with this input are also projected from durable history into its bubble, remain visible after reload, and are not sent a second time.
 
 ## Bring answers back to the main thread
 

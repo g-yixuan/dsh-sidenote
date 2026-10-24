@@ -66,6 +66,19 @@ test('official Flash UI regressions: live context, empty annotation send and inl
   expect(userMessagesOf(mainId).some(text => text.includes('批注直发验证通过'))).toBe(false)
   await expect(side.locator('[class$="_bubble"] [data-dsh-sidenote-bubble]')).toBeVisible()
 
+  const returnPrompt = '只复述刚才从侧边带回的回答，不调用工具。'
+  await main.locator('[data-composer-input]').fill(returnPrompt)
+  await main.locator('[data-composer-input]').press('Enter')
+  const returnedBubble = main.locator('[data-chat-flow-kind="user"] [class$="_bubble"]').filter({ hasText: returnPrompt })
+  const returnChip = returnedBubble.getByRole('button', { name: /Side-chat context|含侧边回流上下文/ })
+  await expect(returnChip).toBeVisible()
+  await returnChip.click()
+  await expect(returnedBubble).toContainText('批注直发验证通过')
+  await returnChip.click()
+  await expect(main.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: '批注直发验证通过' }).last()).toBeVisible({ timeout: 90_000 })
+  await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
+  expect(userMessagesOf(mainId).at(-1)).toBe(returnPrompt)
+
   await openGeneralSettings(page)
   const settings = page.getByRole('dialog', { name: /^(Settings|设置)$/ })
   await settings.getByRole('button', { name: /^(English|中文)$/ }).click()
@@ -76,7 +89,7 @@ test('official Flash UI regressions: live context, empty annotation send and inl
   await settings.getByRole('button', { name: '中文', exact: true }).click()
   await page.getByRole('menuitem', { name: 'English', exact: true }).click()
   await settings.getByRole('button', { name: /^(Close(?: settings)?|关闭(?:设置)?)$/i }).click()
-  writeFileSync('test-results/official-ui-regressions.json', JSON.stringify({ model: 'deepseek-flash', liveContextBeforeSend: true, bottomComposer: true, annotationOnlySend: true, inlineReflow: true, bubbleContext: true, isolated: true }, null, 2) + '\n')
+  writeFileSync('test-results/official-ui-regressions.json', JSON.stringify({ model: 'deepseek-flash', liveContextBeforeSend: true, bottomComposer: true, annotationOnlySend: true, inlineReflow: true, bubbleContext: true, injectedReflowBubble: true, isolated: true }, null, 2) + '\n')
 })
 
 test('official Flash executes real file tools in main and side, with isolated multi-turn replies', async ({ page }) => {

@@ -1,134 +1,139 @@
-/**
- * The 「N 条注释」 composer chip (Delivery_02 重构): a `conversation.input.dock`
- * list entry (the official composer-attachment seat; todo dock lives at order
- * 0, the queue strip at 20 — we sit between at 10). The chip counts the
- * session's ACTIVE annotations and expands inline to preview/remove each one.
- *
- * chip 只呈现与增删注释对象；NativeComposer 接入原生提交入口，send.ts
- * 在提交时加入协议，并在宿主实际接受后标记 sent，不通过草稿清空判断成功。
- */
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import type { ReactNode } from 'react'
-import { IconCloseOutline16, IconListPenOutline16 } from '../host/icons.ts'
+/** Shared, compact context dock for both native composers. */
+import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
+import { IconCheckOutline16, IconEditOutline16, IconListPenOutline16, IconShareOutline16, IconTrashOutline16 } from '../host/icons.ts'
 import type { Context, InputZone } from '../host/contracts.ts'
 import { resolveInput } from '../host/input.ts'
 import { hostDiagnostics } from '../host/probes.ts'
-import type { AnnotationStore } from './model.ts'
+import type { Annotation, AnnotationStore } from './model.ts'
+import type { ReflowStore } from '../reflow.ts'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
 import { AnnotationBoundary } from './boundary.tsx'
 import css from './annotations.module.css'
 
-/** Props the dock skeleton hands us: the InputZone owner share (point-in-time). */
-interface ChipProps {
-  readonly session: InputZone['session']
-  readonly input: InputZone['input']
-}
+type Kind = 'annotations' | 'reflows'
+interface ChipProps { readonly session: InputZone['session']; readonly input: InputZone['input'] }
 
-function AnnotationChipInner(props: { store: AnnotationStore; targetSessionId: string; side?: boolean }): ReactNode {
-  useLocaleTick()
-  const { store, targetSessionId: sessionId } = props
-  useSyncExternalStore(
-    useCallback((cb: () => void) => store.subscribe(cb), [store]),
-    () => store.getSnapshot(),
-  )
-  const [expanded, setExpanded] = useState(false)
-  const rootRef = useRef<HTMLDivElement | null>(null)
-
-  // 展开态的关闭路径：Esc / 点击面板外部（与浮层编辑器同款心智）。
-  useEffect(() => {
-    if (!expanded) return
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        event.stopPropagation()
-        setExpanded(false)
-      }
-    }
-    const onMouseDown = (event: MouseEvent): void => {
-      const root = rootRef.current
-      if (root === null || !(event.target instanceof Node)) return
-      if (!root.contains(event.target)) setExpanded(false)
-    }
-    document.addEventListener('keydown', onKeyDown, true)
-    document.addEventListener('mousedown', onMouseDown, true)
-    return () => {
-      document.removeEventListener('keydown', onKeyDown, true)
-      document.removeEventListener('mousedown', onMouseDown, true)
-    }
-  }, [expanded])
-
-  // 会话切换时收起展开态（slot 组件实例不随会话切换重建）。
-  useEffect(() => {
-    setExpanded(false)
-  }, [sessionId])
-
-  const active = store.listActive(sessionId)
-  const submission = store.getSubmission(sessionId)
-  if (active.length === 0 && submission.error === undefined) return null
-
-  return (
-    <div ref={rootRef} className={[css.chipWrap, props.side ? css.side : ''].join(' ')} data-sidenote-annotation-ui="">
-      {store.getStorageStatus(sessionId) === 'memory' && <span className={css.storageNotice} role="status">{t('annotationStorageMemory')}</span>}
-      {submission.error !== undefined && <span className={css.storageNotice} role="alert">{submission.error}</span>}
-      {active.length > 0 && <button
-        type="button"
-        className={css.chip}
-        aria-expanded={expanded}
-        onClick={() => { setExpanded(open => !open) }}
-      >
-        <IconListPenOutline16 size={12} />
-        <span>{t(active.length === 1 ? 'chipOne' : 'chipMany', { n: active.length })}</span>
-      </button>}
-      {expanded && active.length > 0 && (
-        <ul className={css.chipPanel}>
-          {active.map(annotation => (
-            <li key={annotation.id} className={css.chipRow}>
-              <span className={css.chipNumber}>{annotation.number}</span>
-              <span className={css.chipText} title={annotation.note === '' ? annotation.text : annotation.text + '\n' + t('chipNote', { note: annotation.note })}>
-                {annotation.text}
-                {annotation.note !== '' && <span className={css.chipNote}>{t('chipNote', { note: annotation.note })}</span>}
-              </span>
-              <button
-                type="button"
-                className={css.chipRemove}
-                title={t('removeTitle')}
-                aria-label={t('removeAria', { n: annotation.number })}
-                disabled={submission.pending}
-                onClick={() => { store.remove(annotation.id) }}
-              >
-                <IconCloseOutline16 size={12} />
-              </button>
-            </li>
-          ))}
-          <li className={css.chipRow}>
-            <button
-              type="button"
-              className={css.chipClearAll}
-              disabled={submission.pending}
-              onClick={() => { for (const a of active) store.remove(a.id) }}
-            >
-              {t('clearAll')}
-            </button>
-          </li>
-        </ul>
-      )}
+function AnnotationDetail({ item, store, pending, onEdit }: { item: Annotation; store: AnnotationStore; pending: boolean; onEdit(): void }) {
+  const [editing, setEditing] = useState(false)
+  const [note, setNote] = useState(item.note)
+  const cancelled = useRef(false)
+  const save = () => { if (!cancelled.current) store.setNote(item.id, note); setEditing(false) }
+  return <li className={css.contextItem}>
+    <span className={css.contextNumber}>{item.number}.</span>
+    <div className={css.contextContent}>
+      <div className={css.contextLabel}>{t('selectedText')}</div>
+      <div className={css.contextText}>{item.text}</div>
+      <div className={css.contextLabel}>{t('userComment')}</div>
+      {editing ? <textarea autoFocus rows={3} className={css.contextEditor} aria-label={t('userComment')} value={note} onChange={event => { setNote(event.target.value) }} onBlur={save} onKeyDown={event => {
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelled.current = true; setEditing(false) }
+        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); save() }
+      }} /> : <div className={css.contextText}>{item.note || <span className={css.contextLabel}>{t('noNote')}</span>}</div>}
     </div>
-  )
+    <div className={css.contextActions}>
+      <button type="button" className={css.contextAction} disabled={pending} aria-label={t(editing ? 'saveNoteAria' : 'editNoteAria')} title={t(editing ? 'saveNoteAria' : 'editNoteAria')} onMouseDown={event => { if (editing) event.preventDefault() }} onClick={() => {
+        if (editing) save()
+        else { cancelled.current = false; setNote(item.note); setEditing(true); onEdit() }
+      }}>{editing ? <IconCheckOutline16 size={16} /> : <IconEditOutline16 size={16} />}</button>
+      <button type="button" className={css.contextAction} disabled={pending} aria-label={t('removeAria', { n: item.number })} title={t('removeTitle')} onClick={() => { store.remove(item.id) }}><IconTrashOutline16 size={16} /></button>
+    </div>
+  </li>
 }
 
-export function AnnotationChip(props: { store: AnnotationStore; targetSessionId: string; side?: boolean }): ReactNode {
-  return <AnnotationBoundary><AnnotationChipInner {...props} /></AnnotationBoundary>
+function ContextChips({ ctx, store, reflow, sessionId }: { ctx: Context; store: AnnotationStore; reflow: ReflowStore; sessionId: string }) {
+  useLocaleTick()
+  useSyncExternalStore(store.subscribe, store.getSnapshot)
+  useSyncExternalStore(reflow.subscribe, reflow.getSnapshot)
+  const diagnostics = hostDiagnostics(ctx)
+  const capabilities = useSyncExternalStore(diagnostics.subscribe, diagnostics.getSnapshot)
+  const [open, setOpen] = useState<{ kind: Kind; pinned: boolean } | null>(null)
+  const [position, setPosition] = useState<CSSProperties>({ visibility: 'hidden' })
+  const root = useRef<HTMLDivElement>(null)
+  const panel = useRef<HTMLDivElement>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const id = useId()
+  const clearTimer = () => { clearTimeout(timer.current); timer.current = undefined }
+  const active = store.listActive(sessionId)
+  const reflows = reflow.list(sessionId)
+  const submission = store.getSubmission(sessionId)
+  const hasItems = open?.kind === 'annotations' ? active.length > 0 : reflows.length > 0
+  const shown = open !== null && hasItems
+  const label = (kind: Kind) => kind === 'annotations' ? t(active.length === 1 ? 'chipOne' : 'chipMany', { n: active.length }) : t(reflows.length === 1 ? 'reflowChipOne' : 'reflowChipMany', { n: reflows.length })
+
+  useEffect(() => { setOpen(null); return clearTimer }, [sessionId])
+  useEffect(() => {
+    if (!submission.pending && submission.error === t('inputUnavailable') && resolveInput(ctx, sessionId)) store.setSubmission(sessionId, { pending: false })
+  }, [capabilities, sessionId])
+  useEffect(() => { if (!hasItems) setOpen(null) }, [hasItems])
+  useLayoutEffect(() => {
+    if (!shown) return
+    const place = () => {
+      const rect = root.current!.getBoundingClientRect()
+      const width = Math.min(480, rect.width, window.innerWidth - 24)
+      setPosition({ width, left: Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)), bottom: window.innerHeight - rect.top + 8, maxHeight: Math.min(440, rect.top - 16) })
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true) }
+  }, [shown, open?.kind])
+  useLayoutEffect(() => {
+    if (shown && open.pinned && root.current?.contains(document.activeElement)) panel.current?.focus()
+  }, [shown, open?.kind, open?.pinned])
+  useEffect(() => {
+    if (!shown) return
+    const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node) && !panel.current?.contains(event.target as Node)) { clearTimer(); setOpen(null) } }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault(); clearTimer(); setOpen(null)
+      root.current?.querySelector<HTMLButtonElement>(`[data-context-kind="${open?.kind}"]`)?.focus()
+    }
+    document.addEventListener('pointerdown', outside)
+    document.addEventListener('keydown', escape)
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape) }
+  }, [shown, open?.kind])
+  const leave = () => {
+    clearTimer()
+    if (!open?.pinned) timer.current = setTimeout(() => { if (!panel.current?.contains(document.activeElement)) setOpen(null) }, 220)
+  }
+  const chip = (kind: Kind) => <button type="button" className={css.chip} data-context-kind={kind} aria-haspopup="dialog" aria-expanded={shown && open.kind === kind} aria-controls={id} onPointerEnter={event => {
+    if (event.pointerType === 'touch') return
+    clearTimer()
+    if (!open?.pinned) timer.current = setTimeout(() => { setOpen({ kind, pinned: false }) }, 160)
+  }} onPointerLeave={leave} onClick={() => {
+    clearTimer(); setOpen(open?.kind === kind && open.pinned ? null : { kind, pinned: true })
+  }}>
+    {kind === 'annotations' ? <IconListPenOutline16 size={14} /> : <IconShareOutline16 size={14} />}<span>{label(kind)}</span>
+  </button>
+  if (!active.length && !reflows.length && !submission.error) return null
+  return <div ref={root} className={css.chipWrap} data-sidenote-context-dock data-sidenote-annotation-ui>
+    {active.length > 0 && chip('annotations')}{reflows.length > 0 && chip('reflows')}
+    {store.getStorageStatus(sessionId) === 'memory' && <span className={css.storageNotice} role="status">{t('annotationStorageMemory')}</span>}
+    {submission.error && <span className={css.storageNotice} role="alert">{submission.error}</span>}
+    {shown && createPortal(<div ref={panel} id={id} role="dialog" tabIndex={-1} aria-label={label(open.kind)} className={css.contextPanel} style={position} data-sidenote-context-preview data-sidenote-no-quote onPointerEnter={clearTimer} onPointerLeave={leave}>
+      <ul className={css.contextList}>
+        {open.kind === 'annotations' ? active.map(item => <AnnotationDetail key={item.id} item={item} store={store} pending={submission.pending} onEdit={() => { setOpen({ kind: 'annotations', pinned: true }) }} />) : reflows.map((item, index) => <li key={item.id} className={css.contextItem}>
+          <span className={css.contextNumber}>{index + 1}.</span>
+          <div className={css.contextContent}>
+            <div className={css.contextSource}>{item.sideTitle}</div>
+            {item.question && <><div className={css.contextLabel}>{t('contextrequest')}</div><div className={css.contextText}>{item.question}</div></>}
+            <div className={css.contextLabel}>{t('contextreply')}</div><div className={css.contextText}>{item.text}</div>
+          </div>
+          <div className={css.contextActions}><button type="button" className={css.contextAction} disabled={submission.pending} aria-label={t('reflowRemoveTitle')} title={t('reflowRemoveTitle')} onClick={() => { reflow.remove(item.id) }}><IconTrashOutline16 size={16} /></button></div>
+        </li>)}
+      </ul>
+      <div className={css.contextFooter}><button type="button" className={css.chipClearAll} disabled={submission.pending} onClick={() => {
+        if (open.kind === 'annotations') for (const item of active) store.remove(item.id)
+        else reflow.clearSession(sessionId)
+        setOpen(null)
+      }}>{t('clearAll')}</button></div>
+    </div>, document.body)}
+  </div>
 }
 
-/** The same native dock entry is rendered in main and embedded conversations. */
-export function createAnnotationChip(ctx: Context, store: AnnotationStore) {
-  return function AnnotationChipEntry(props: ChipProps): ReactNode {
-    const diagnostics = hostDiagnostics(ctx)
-    const capabilities = useSyncExternalStore(diagnostics.subscribe, diagnostics.getSnapshot)
-    useEffect(() => {
-      const state = store.getSubmission(props.session.sessionId)
-      if (!state.pending && state.error === t('inputUnavailable') && resolveInput(ctx, props.session.sessionId)) store.setSubmission(props.session.sessionId, { pending: false })
-    }, [capabilities, props.session.sessionId])
-    return <AnnotationChip store={store} targetSessionId={props.session.sessionId} />
+export function createContextChips(ctx: Context, store: AnnotationStore, reflow: ReflowStore) {
+  return function ContextChipsEntry(props: ChipProps) {
+    return <AnnotationBoundary><ContextChips key={props.session.sessionId} ctx={ctx} store={store} reflow={reflow} sessionId={props.session.sessionId} /></AnnotationBoundary>
   }
 }

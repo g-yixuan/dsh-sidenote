@@ -8,9 +8,30 @@ import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
 import css from './annotations.module.css'
 
-interface UserProps { node: { data: { content: readonly { type: string; text?: string }[] } } }
+interface HistoryNode { kind: string; seq: number; source?: { kind?: string }; content?: readonly { type: string; text?: string }[] }
+interface UserProps {
+  node: { data: { seq: number; content: readonly { type: string; text?: string }[] } }
+  useChat<T>(select: (state: { legacy: { nodes: readonly HistoryNode[] } }) => T): T
+}
 interface Entry { component: ComponentType<UserProps>; options: { key?: string } }
 const CONTEXT_NODE = 'dsh-sidenote-context'
+
+/** Injected notices and their following human input are one admitted batch.
+ * Project its reflows into that bubble without changing or resending history. */
+export function injectedReflowPrefix(nodes: readonly HistoryNode[], seq: number): string {
+  const prefixes: string[] = []
+  for (let i = nodes.findIndex(node => node.seq === seq) - 1; i >= 0; i--) {
+    const node = nodes[i]!
+    if (node.kind !== 'context') break
+    if (node.source?.kind !== 'dsh-sidenote') continue
+    const text = (node.content ?? []).filter(block => block.type === 'text').map(block => block.text ?? '').join('\n')
+    const start = text.indexOf('<reflow ')
+    if (start < 0) continue
+    const prefix = splitProtocolPrefix(text.slice(start))
+    if (prefix?.reflows.length) prefixes.unshift(text.slice(start, start + prefix.length))
+  }
+  return prefixes.join('\n\n')
+}
 
 /** One prefix node leaves the body, @ references and attachments to the host. */
 export const sentContextRule = {
@@ -76,13 +97,15 @@ export function registerUserContext(ctx: Context): void {
           if (!['user', 'steering'].includes(entry.options.key ?? '') || patched.has(entry)) continue
           const Original = entry.component
           function ContextUser(props: UserProps) {
+            const nodes = props.useChat(state => state.legacy.nodes)
+            const injected = injectedReflowPrefix(nodes, props.node.data.seq)
             const blocks = props.node.data.content
             const at = blocks.findIndex(block => block.type === 'text')
             const text = blocks[at]?.text ?? ''
             const snapshot = splitSnapshotPrefix(text)
-            const afterSnapshot = snapshot?.rest ?? text
+            const afterSnapshot = (injected ? injected + '\n\n' : '') + (snapshot?.rest ?? text)
             const protocol = nativeText ? null : splitProtocolPrefix(afterSnapshot)
-            if (!snapshot && !protocol) return createElement(Original, props)
+            if (!snapshot && !protocol && !injected) return createElement(Original, props)
             const body = protocol ? afterSnapshot.slice(protocol.length).trimStart() : afterSnapshot
             // Retain the native bubble for an annotation-only message; this
             // presentation-only word joiner never enters the durable content.

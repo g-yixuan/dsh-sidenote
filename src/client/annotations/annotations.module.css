@@ -1,163 +1,30 @@
-/* ── composer chip (conversation.input.dock) ─────────────────────────────── */
-
-/* dock 槽容器是通栏的（composerStack 全宽），宿主内建 dock（todo/queue）靠
-   同一组令牌公式自我对齐 composer 卡片——照抄该公式，让 chip 贴在输入框
-   卡片正上方（左缘对齐），而不是漂在消息列左边缘。 */
-.chipWrap {
-  box-sizing: border-box;
-  width: calc(100% - var(--dsh-composer-side-clearance, 16px) - var(--dsh-composer-side-clearance, 16px));
-  max-width: var(--dsh-composer-card-max-width, 780px);
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  position: relative;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.1));
-  border-radius: 999px;
-  background: var(--dsw-alias-bg-layer-1, #ffffff);
-  color: var(--dsw-alias-label-primary, #1f2329);
-  font-size: 12px;
-  line-height: 18px;
-  padding: 2px 10px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.chip:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
-}
-
-/* chip 在输入框卡片正上方，展开面板向上打开（向下会盖住输入区）。 */
-.chipPanel {
-  position: absolute;
-  bottom: calc(100% + 4px);
-  left: 0;
-  z-index: 50;
-  margin: 0;
-  padding: 4px;
-  list-style: none;
-  min-width: 220px;
-  max-width: 420px;
-  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
-  border-radius: 12px;
-  background: var(--dsw-alias-bg-layer-1, #ffffff);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
-}
-
-.chipRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 6px;
-  border-radius: 8px;
-}
-
-.chipRow:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.04));
-}
-
-.chipNumber {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  background: #2f88ff;
-  color: #ffffff;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 16px;
-  text-align: center;
-}
-
-.chipText {
-  flex: auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  color: var(--dsw-alias-label-primary, #1f2329);
-}
-
-.chipNote {
-  color: var(--dsw-alias-label-tertiary, #8f959e);
-}
-
-.chipRemove {
-  flex: none;
-  width: 20px;
-  height: 20px;
-  border: none;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--dsw-alias-label-tertiary, #8f959e);
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  padding: 0;
-}
-
-.chipRemove:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.08));
-  color: var(--dsw-alias-state-error-primary, #d53f3f);
-}
-
-/* chip 展开面板的「清空全部」行。 */
-.chipClearAll {
-  border: none;
-  background: transparent;
-  color: var(--dsw-alias-label-tertiary, #8f959e);
-  font-size: 12px;
-  line-height: 18px;
-  padding: 2px 6px;
-  cursor: pointer;
-  border-radius: 6px;
-}
-
-.chipClearAll:hover {
-  color: var(--dsw-alias-state-error-primary, #d53f3f);
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.04));
-}
-
-/* P1-2：chip 行加不透明底带——转录内容滚动经过 composer 渐隐区时不再
-   从药丸背后透出（对齐宿主 composerSeat 的遮挡语义）。 */
-.chipWrap {
-  background: var(--dsw-alias-bg-base, #ffffff);
-  padding: 2px 0;
-}
-
-/* P2-10：chip 展开面板加起源小三角（指向药丸）。 */
-.chipPanel::after {
-  content: "";
-  position: absolute;
-  bottom: -5px;
-  left: 18px;
-  width: 10px;
-  height: 10px;
-  background: var(--dsw-alias-bg-layer-1, #ffffff);
-  border-right: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
-  border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
-  transform: rotate(45deg);
-}
-
-
-.side {
-  width: 100%;
-  max-width: none;
-  margin: 0;
-}
-
-.storageNotice {
-  font-size: 12px;
-  color: var(--dsw-alias-label-secondary, #646a73);
-}
+/* Both context kinds share one aligned native composer dock. */
+.chipWrap { box-sizing: border-box; width: calc(100% - 2 * var(--dsh-composer-side-clearance, 16px)); max-width: var(--dsh-composer-card-max-width, 780px); margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 2px 0; background: var(--dsw-alias-bg-base); }
+.chip { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 10px; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; line-height: 18px; padding: 3px 9px; cursor: pointer; transition: background 120ms, color 120ms; }
+.chip:hover, .chip[aria-expanded=true] { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.contextPanel { box-sizing: border-box; position: fixed; z-index: 1000; padding: 4px; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--dsw-alias-border-l1); border-radius: 14px; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); box-shadow: 0 8px 28px rgba(0,0,0,.12); animation: contextAppear 120ms ease-out; }
+.contextList { list-style: none; margin: 0; padding: 0; }
+.contextItem { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 12px 10px; border-radius: 10px; transition: background 120ms; }
+.contextItem + .contextItem { border-top: 1px solid var(--dsw-alias-border-l1); }
+.contextItem:hover, .contextItem:focus-within { background: var(--dsw-alias-interactive-bg-hover); }
+.contextNumber { flex: none; min-width: 16px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 21px; font-variant-numeric: tabular-nums; }
+.contextContent { flex: 1; min-width: 0; }
+.contextLabel { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 20px; }
+.contextLabel:not(:first-child) { margin-top: 10px; }
+.contextSource { margin-bottom: 8px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.contextText { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; user-select: text; }
+.contextActions { display: flex; flex: none; gap: 2px; }
+.contextAction { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; transition: color 120ms, background 120ms; }
+.contextAction:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
+.contextAction:disabled, .chipClearAll:disabled { opacity: .45; cursor: default; }
+.contextEditor { box-sizing: border-box; display: block; width: 100%; resize: vertical; min-height: 64px; margin-top: 4px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 6px; padding: 6px 8px; background: var(--dsw-alias-bg-base); color: inherit; font: inherit; font-size: 13px; line-height: 1.6; }
+.contextFooter { padding: 4px 10px 6px; }
+.chipClearAll { border: 0; border-radius: 6px; background: transparent; color: var(--dsw-alias-label-tertiary); padding: 4px 6px; cursor: pointer; font: inherit; font-size: 12px; }
+.chipClearAll:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-state-error-primary); }
+.chip:focus-visible, .contextAction:focus-visible, .chipClearAll:focus-visible, .contextEditor:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
+.storageNotice { flex-basis: 100%; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+@keyframes contextAppear { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .contextPanel { animation: none; } .chip, .contextItem, .contextAction { transition: none; } }
 .sentContext { color: var(--dsw-alias-label-secondary); font-size: 13px; margin: 8px 0; }
 .sentContext summary { cursor: pointer; }
 .sentContext pre, .sentContext blockquote { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }

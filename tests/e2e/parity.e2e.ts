@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { openGeneralSettings, openSideChat, prepareSeedPage, registerSeedWorkspace, selectModel, sideChatOf, userMessagesOf, userMessageContentsOf, sessionEventsOf } from './journey'
+import { dragText, openGeneralSettings, openSideChat, prepareSeedPage, registerSeedWorkspace, selectModel, sideChatOf, userMessagesOf, userMessageContentsOf, sessionEventsOf } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
 test.afterEach(async ({ page }, info) => {
@@ -78,7 +78,7 @@ test('reflow: only local final answers enter the shared store and removal re-ena
   await expect(side.getByRole('button', { name: /^(Reflowed ✓|已回流 ✓)$/ })).toBeDisabled()
   const main = page.locator('[data-conversation-session]').first()
   await main.getByRole('button', { name: /1 side-chat reflow|1 条侧边回流/ }).click()
-  await main.getByRole('button', { name: /Remove reflow|移除回流/ }).click()
+  await page.getByRole('dialog').getByRole('button', { name: /Remove reflow|移除回流/ }).click()
   await expect.poll(records).toHaveLength(0)
   await expect(single).toBeEnabled()
   const completedTurns = () => sessionEventsOf(child).filter(event => event.type === 'turn/end' && event.data.reason?.kind === 'completed').length
@@ -91,6 +91,88 @@ test('reflow: only local final answers enter the shared store and removal re-ena
   await expect(single).toHaveCount(2)
   await expect(all).toBeEnabled(); await all.click()
   await expect.poll(records).toHaveLength(2)
+})
+
+test('context-preview: horizontal chips reveal full editable details on hover without clipping', async ({ page }) => {
+  await prepareSeedPage(page)
+  await openSideChat(page)
+  const side = sideChatOf(page)
+  const main = page.locator('[data-conversation-session]').first()
+  await selectModel(page, side, 'Controlled E2E')
+  await side.locator('[data-composer-input]').fill('A complete question for the reflow preview')
+  await side.locator('[data-composer-input]').press('Enter')
+  await side.getByRole('button', { name: /^(Bring back to main conversation|带回主对话)$/ }).last().click()
+  const source = main.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()
+  for (const [quote, note] of [['full history snapshot', '第一条完整批注'], ['complete context', '第二条完整批注']]) {
+    await dragText(page, source, quote!)
+    const overlay = page.locator('[data-dsh-sidenote]')
+    await overlay.getByText(/^(Add to conversation|添加到对话)$/).click()
+    await overlay.locator('input').fill(note!)
+    await overlay.locator('input').press('Enter')
+  }
+  const dock = main.locator('[data-sidenote-context-dock]')
+  const annotations = dock.getByRole('button', { name: /2 annotations|2 条注释/ })
+  const reflow = dock.getByRole('button', { name: /1 side-chat reflow|1 条侧边回流/ })
+  expect(Math.abs((await annotations.boundingBox())!.y - (await reflow.boundingBox())!.y)).toBeLessThan(2)
+  await annotations.hover()
+  const panel = page.locator('[data-sidenote-context-preview]')
+  await expect(panel).toContainText('第一条完整批注')
+  await expect(panel).toContainText('第二条完整批注')
+  await panel.hover()
+  await panel.getByRole('button', { name: /Edit note|编辑批注/ }).first().click()
+  const editor = panel.getByRole('textbox', { name: /Your comment|用户评论/ })
+  await editor.fill('这段修改应当取消')
+  await editor.press('Escape')
+  await expect(panel).toContainText('第一条完整批注')
+  await panel.getByRole('button', { name: /Edit note|编辑批注/ }).first().click()
+  await editor.fill('修改后仍保留完整批注')
+  await editor.press('Control+Enter')
+  await expect(panel).toContainText('修改后仍保留完整批注')
+  await expect.poll(() => page.evaluate(id => JSON.parse(localStorage.getItem('dsh-sidenote:annotations:v1:' + id) ?? '[]').some((item: { note: string }) => item.note === '修改后仍保留完整批注'), process.env.DSH_E2E_SEED_SESSION!)).toBe(true)
+  await page.keyboard.press('Escape')
+  await expect(panel).toHaveCount(0)
+  await reflow.hover()
+  await expect(panel).toContainText('A complete question for the reflow preview')
+  await expect(panel).toContainText('Second paragraph preserves the full selected text.')
+  expect((await panel.boundingBox())!.x + (await panel.boundingBox())!.width).toBeLessThanOrEqual((await main.boundingBox())!.x + (await main.boundingBox())!.width)
+  await side.locator('[data-composer-input]').hover()
+  await expect(panel).toHaveCount(0)
+  await annotations.click()
+  await expect(panel).toBeVisible()
+  await expect(panel).toHaveCSS('opacity', '1')
+  await page.screenshot({ path: 'test-results/context-hover-light.png', animations: 'disabled' })
+  await main.locator('[data-composer-input]').click()
+  await expect(panel).toHaveCount(0)
+  await page.reload()
+  await annotations.hover()
+  await expect(panel).toContainText('修改后仍保留完整批注')
+  const settings = page.getByRole('dialog', { name: /^(Settings|设置)$/ })
+  try {
+    await openGeneralSettings(page)
+    await settings.getByRole('button', { name: /^(Dark|深色)$/ }).click()
+    await settings.getByRole('button', { name: /^(English|中文)$/ }).click()
+    await page.getByRole('menuitem', { name: '中文', exact: true }).click()
+    await settings.getByRole('button', { name: /^(Close(?: settings)?|关闭(?:设置)?)$/i }).click()
+    await page.setViewportSize({ width: 1120, height: 800 })
+    await annotations.hover()
+    await expect(panel).toHaveCSS('opacity', '1')
+    expect(await panel.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+    const bounds = (await panel.boundingBox())!
+    expect(bounds.x).toBeGreaterThanOrEqual(0)
+    expect(bounds.y).toBeGreaterThanOrEqual(0)
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(1120)
+    await page.screenshot({ path: 'test-results/context-hover-dark.png', animations: 'disabled' })
+  } finally {
+    await page.setViewportSize({ width: 1280, height: 720 })
+    if (!await settings.isVisible()) await openGeneralSettings(page)
+    await settings.getByRole('button', { name: /^(English|中文)$/ }).click()
+    await page.getByRole('menuitem', { name: 'English', exact: true }).click()
+    await settings.getByRole('button', { name: /^(Light|浅色)$/ }).click()
+    await settings.getByRole('button', { name: /^(Close(?: settings)?|关闭(?:设置)?)$/i }).click()
+  }
+  await annotations.hover()
+  await panel.getByRole('button', { name: /Remove annotation|移除注释/ }).first().click()
+  await expect(dock.getByRole('button', { name: /1 annotation$|1 条注释/ })).toBeVisible()
 })
 
 test('busy: native queue is visible and saving cannot discard running or queued work', async ({ page }) => {
