@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { writeFileSync } from 'node:fs'
-import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf } from './journey'
+import { openSideChat, prepareSeedPage, registerSeedWorkspace, selectModel, sessionEventsOf, sideChatOf, userMessagesOf } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
 
@@ -12,9 +12,23 @@ test('shared host journey: real fork, inherited history, accepted side message a
   await expect(page.getByRole('tab', { name: 'Chat', exact: true })).toHaveCount(1)
   await expect(page.getByRole('tab', { name: 'chat', exact: true })).toHaveCount(0)
   expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!).some(text => text.includes('I forked the main session'))).toBe(true)
+  // A real completed turn has turn/end after its last legacy message; seeded
+  // historical nodes alone do not reproduce the orphaned footer regression.
+  const parentId = process.env.DSH_E2E_SEED_SESSION!
+  const main = page.locator(`[data-conversation-session="${parentId}"]`)
+  await selectModel(page, main, 'Controlled E2E')
+  const ended = sessionEventsOf(parentId).filter(event => event.type === 'turn/end').length
+  await main.locator('[data-composer-input]').fill('Complete a native turn before testing inherited folding')
+  await main.locator('[data-composer-input]').press('Enter')
+  await expect.poll(() => sessionEventsOf(parentId).filter(event => event.type === 'turn/end').length).toBe(ended + 1)
   const child = await openSideChat(page)
   await expect(page.getByRole('tab', { name: 'chat', exact: true })).toHaveCount(0)
   const side = sideChatOf(page)
+  const inherited = side.getByRole('button', { name: /Inherited from main|继承自主会话/ })
+  await inherited.click()
+  await expect(side.locator('[data-turn-tail]')).toHaveCount(0)
+  await inherited.click()
+  await expect(side.locator('[data-turn-tail]').first()).toBeVisible()
   // Exercise the host TerminalBlock too: opening inherited history alone leaves
   // tool cards collapsed and misses required-label changes in newer hosts.
   for (const button of await side.getByRole('button', { name: /^(Completed|已完成)/ }).all()) {

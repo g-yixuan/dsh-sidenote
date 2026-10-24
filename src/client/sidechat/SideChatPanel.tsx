@@ -131,11 +131,12 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   const promote = async (): Promise<void> => {
     if (!childId || saving) return
     setSaving(true); setSaveError(undefined)
-    try { await saveSideChatSession(ctx, childId, tab.id, scope.sessionId); showToast(t('promoteDone')) }
+    try { await saveSideChatSession(ctx, childId, tab.id, scope.sessionId, props.annotations); showToast(t('promoteDone')) }
     catch (error) { setSaveError(error instanceof Error ? error.message : String(error)) }
     finally { setSaving(false) }
   }
   useSyncExternalStore(props.reflow.subscribe, props.reflow.getSnapshot)
+  useSyncExternalStore(props.annotations.subscribe, props.annotations.getSnapshot)
   if (phase === 'fork-error') return <StateScreen title={t('forkErrorTitle')} detail={forkError ?? undefined} hint={t('forkErrorHint')} />
   if (phase === 'missing') return <StateScreen title={t('missingTitle')} detail={t('missingDetail')} hint={t('missingHint')} />
   if (phase !== 'chat' || !reference || !childId) return <StateScreen title={t('preparing')} />
@@ -144,12 +145,13 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   const questions = pairQuestions(messages)
   const allAdded = replies.length > 0 && replies.every(reply => isReplyAdded(side, reply, questions.get(reply.key)))
   const running = snapshot?.running === true
+  const hasDraft = composer.hasDraft || props.annotations.countActive(childId) > 0
   return <div ref={rootRef} className={css.root} data-sidenote-chat-session={childId} data-sidenote-view-title={tab.title}>
     <div className={css.nativeToolbar}>
       <button type="button" className={css.nativeAction} onClick={() => { openSession(ctx, side.parentSessionId) }}>{t(parentPending ? 'parentPending' : parentSnapshot?.running ? 'parentRunning' : 'parentIdle')}</button>
       <span className={css.nativeToolbarActions}>
         <button type="button" className={css.nativeAction} disabled={running || replies.length === 0 || allAdded} aria-pressed={allAdded} onClick={() => { for (const reply of replies) addReply(side, reply, questions.get(reply.key)) }}>{t(allAdded ? 'reflowAllDone' : 'reflowAll')}</button>
-        <button type="button" className={css.nativeAction} disabled={running || composer.pending || saving} title={t(running || composer.pending ? 'promoteBusy' : 'promoteTitle')} onClick={() => { void promote() }}>{t('promote')}</button>
+        <button type="button" className={css.nativeAction} disabled={running || composer.pending || hasDraft || saving} title={t(running || composer.pending ? 'promoteBusy' : hasDraft ? 'promoteDraftBusy' : 'promoteTitle')} onClick={() => { void promote() }}>{t('promote')}</button>
       </span>
     </div>
     {saveError && <div className={css.errorRow} role="alert">{saveError}</div>}

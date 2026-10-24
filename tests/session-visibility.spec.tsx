@@ -208,15 +208,15 @@ it('uses the available host navigator and closes the source tab before opening t
   expect(() => openSession({ get: () => undefined, sessions: {} } as unknown as Context, 'parent')).toThrow('navigation is unavailable')
 })
 
-it.each(['running', 'queued', 'submitting'])('keeps the source open instead of saving an incomplete %s session', async state => {
+it.each(['running', 'queued', 'submitting', 'draft', 'attachment', 'annotation'])('keeps the source open instead of saving an incomplete %s session', async state => {
   const fork = vi.fn()
   const close = vi.fn()
-  const input = { setDraft() {}, submit() {}, state: { subscribe: () => () => {}, getSnapshot: () => ({ draft: '', phase: state === 'submitting' ? 'submitting' : 'plain', queue: state === 'queued' ? [{}] : [] }) } }
+  const input = { setDraft() {}, submit() {}, state: { subscribe: () => () => {}, getSnapshot: () => ({ draft: state === 'draft' ? 'unsent work' : '', attachmentIds: state === 'attachment' ? ['file'] : [], phase: state === 'submitting' ? 'submitting' : 'plain', queue: state === 'queued' ? [{}] : [] }) } }
   const ctx = {
     get: (name: string) => name === 'conversation' ? { input: { for: () => input } } : name === 'sidebarRight' ? { openTab() {}, close } : undefined,
     sessions: { fork, scope: () => ({}), binding: () => ({ session: { getSnapshot: () => ({ running: state === 'running' }) } }) },
   } as unknown as Context
-  await expect(saveSideChatSession(ctx, 'child', 'tab', 'parent')).rejects.toThrow()
+  await expect(saveSideChatSession(ctx, 'child', 'tab', 'parent', { countActive: () => state === 'annotation' ? 1 : 0 })).rejects.toThrow()
   expect(fork).not.toHaveBeenCalled()
   expect(close).not.toHaveBeenCalled()
 })

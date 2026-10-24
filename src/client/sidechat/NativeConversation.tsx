@@ -75,7 +75,7 @@ function ReplyAction({ side, messages, seq }: { side: SideConversation; messages
 }
 
 interface Entry { kind: 'node' | 'group'; key: string }
-interface NodeSnapshot { anchorSeq: number }
+interface NodeSnapshot { anchorSeq: number; kind: string; location?: { turn?: { start?: { seq: number } } } }
 interface GroupedView { entries: readonly Entry[]; groupSource(key: string): { getSnapshot(): { members: readonly Entry[] } | undefined } }
 interface ViewSnapshot { views: { grouped(name: string): GroupedView | undefined } }
 interface ViewProps {
@@ -92,7 +92,10 @@ function HistoryView({ Original, props, side }: { Original: ComponentType<ViewPr
   const isInherited = (entry: Entry): boolean => {
     if (entry.kind === 'node') {
       const node = nodes.get(entry.key)
-      return node !== undefined && node.anchorSeq <= (side.boundarySeq ?? -1)
+      // A footer is anchored after turn/end, beyond the last legacy message.
+      // Classify it by its owning turn, including stopped or failed turns.
+      const seq = node?.kind === 'turn-tail' ? node.location?.turn?.start?.seq ?? node.anchorSeq : node?.anchorSeq
+      return seq !== undefined && seq <= (side.boundarySeq ?? -1)
     }
     const members = groups?.groupSource(entry.key).getSnapshot()?.members ?? []
     return members.length > 0 && members.every(isInherited)

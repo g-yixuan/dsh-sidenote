@@ -52,7 +52,7 @@ export async function openSeedSession(page: Page): Promise<void> {
   // Native workspace lists show a limited recent subset. Previous real forks
   // can push the seed behind Show more; expand instead of choosing a child
   // with the same inherited title.
-  const overflow = page.locator('button[data-row-key^="overflow:"]').filter({ hasText: /Show \d+ more sessions|更多.*会话|显示.*会话/ })
+  const overflow = page.locator('button[data-row-key^="overflow:"]')
   for (let round = 0; round < 20 && await byId.count() === 0 && await overflow.count() > 0; round++) {
     const label = await overflow.first().textContent()
     const count = await page.getByRole('treeitem').count()

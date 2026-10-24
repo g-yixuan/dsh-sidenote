@@ -16,7 +16,8 @@ import { contentTextOf } from '../chat/transcript.ts'
 import { SNAPSHOT_BLOCK_MARK } from './snapshot.ts'
 import { sessionVisibilityOf } from '../host/sessionVisibility.ts'
 import { openSession } from '../host/navigation.ts'
-import { resolveInput } from '../host/input.ts'
+import { resolveInput, inputAttachmentIds } from '../host/input.ts'
+import type { AnnotationStore } from '../annotations/model.ts'
 import { t } from '../locales.ts'
 export { openSession } from '../host/navigation.ts'
 
@@ -550,10 +551,12 @@ export function closeSideTab(ctx: Context, tabId: string, sessionId: string): vo
 }
 
 /** A saved copy is a regular session; close the source tab before changing views. */
-export async function saveSideChatSession(ctx: Context, childId: string, tabId: string, parentSessionId: string): Promise<void> {
+export async function saveSideChatSession(ctx: Context, childId: string, tabId: string, parentSessionId: string, annotations?: Pick<AnnotationStore, 'countActive'>): Promise<void> {
   const session = rootContext(ctx).sessions.binding(childId)?.session
-  const input = resolveInput(rootContext(ctx), childId)?.state.getSnapshot()
+  const machine = resolveInput(rootContext(ctx), childId)
+  const input = machine?.state.getSnapshot()
   if (session?.getSnapshot().running === true || (input?.queue?.length ?? 0) > 0 || (input !== undefined && input.phase !== 'plain')) throw new Error(t('promoteBusy'))
+  if (input?.draft.trim() || (machine !== undefined && inputAttachmentIds(machine).length > 0) || (annotations?.countActive(childId) ?? 0) > 0) throw new Error(t('promoteDraftBusy'))
   const promoted = await rootContext(ctx).sessions.fork({ sessionId: childId, increaseTitle: true })
   closeSideTab(ctx, tabId, parentSessionId)
   openSession(ctx, promoted)

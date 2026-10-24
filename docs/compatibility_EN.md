@@ -40,7 +40,7 @@ Main and side share the host's Conversation, SessionProvider, composer, message 
 
 Integration seams live in `src/client/host/`. Decorating the shared chat View and keyed message registry entries preserves the native renderer. History filtering, quote anchors, progress snapshots and workspace-list hiding rely on runtime slot seams covered by the fixed matrix, rather than a promised permanent hiding API. Unknown shapes retain the native interface without guessing message sources or recipients.
 
-Side chats stay hidden by default. Their browser/address-local identity outlives tabs and the five-entry recently closed menu; active native sessions are not archived. Saving produces a visible copy of completed history and is blocked while running, submitting or queued. “Show side chats in the session list” reveals registered children without restoring deleted sessions or unarchiving historical ones.
+Side chats stay hidden by default. Their browser/address-local identity outlives tabs and the five-entry recently closed menu; active native sessions are not archived. Saving produces a visible copy of completed history and is blocked while running, submitting, queued, or holding unsent text, attachments or annotations. Send or clear unsent content first so saving cannot close the source while leaving that content out of the copy. “Show side chats in the session list” reveals registered children without restoring deleted sessions or unarchiving historical ones.
 
 ## Diagnostics
 
