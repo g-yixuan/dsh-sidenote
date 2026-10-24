@@ -84,6 +84,11 @@ export function composerSessionId(seat: HTMLElement, fallback: string): string {
     ?? fallback
 }
 
+/** Bound message hover details to their native conversation pane. */
+export function conversationViewOf(node: Element): HTMLElement {
+  return node.closest<HTMLElement>('[data-conversation-session], [data-sidenote-chat-session]') ?? document.body
+}
+
 
 export function isMainComposerInput(target: EventTarget | null): boolean {
   return target instanceof HTMLElement

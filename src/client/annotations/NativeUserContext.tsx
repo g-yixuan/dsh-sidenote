@@ -1,7 +1,7 @@
-import { createElement, useId, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { createElement, useEffect, useId, useLayoutEffect, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { Context, UiConversationLike } from '../host/contracts.ts'
-import { mountUserBubbleAddon } from '../host/dom.ts'
+import { conversationViewOf, mountUserBubbleAddon } from '../host/dom.ts'
 import { IconChevronDownOutline14, IconListPenOutline16, IconShareOutline16 } from '../host/icons.ts'
 import { flattenReflowContent, splitProtocolPrefix, splitSnapshotPrefix, type ProtocolPrefix } from './format.ts'
 import { t } from '../locales.ts'
@@ -47,13 +47,55 @@ export const sentContextRule = {
 }
 
 function ContextChip({ label, icon, children, interactive }: { label: string; icon: ReactNode; children: ReactNode; interactive: boolean }) {
-  const [expanded, setExpanded] = useState(false)
+  const [open, setOpen] = useState<{ pinned: boolean } | null>(null)
+  const [position, setPosition] = useState<CSSProperties>({ visibility: 'hidden' })
+  const anchor = useRef<HTMLButtonElement>(null)
+  const panel = useRef<HTMLDivElement>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const clearTimer = () => { clearTimeout(timer.current); timer.current = undefined }
+  const leave = () => {
+    clearTimer()
+    if (!open?.pinned) timer.current = setTimeout(() => { if (!panel.current?.contains(document.activeElement)) setOpen(null) }, 160)
+  }
   const id = useId()
+  const expanded = open !== null
+  useEffect(() => clearTimer, [])
+  useLayoutEffect(() => {
+    if (!expanded) return
+    const place = () => {
+      const rect = anchor.current!.getBoundingClientRect()
+      const view = conversationViewOf(anchor.current!).getBoundingClientRect()
+      const left = Math.max(12, view.left + 12), right = Math.min(window.innerWidth - 12, view.right - 12)
+      const top = Math.max(12, view.top + 12), bottom = Math.min(window.innerHeight - 12, view.bottom - 12)
+      if (rect.bottom < top || rect.top > bottom) { setOpen(null); return }
+      const width = Math.min(420, right - left)
+      const above = rect.top - top - 8, below = bottom - rect.bottom - 8
+      const preferAbove = above >= Math.min(280, window.innerHeight / 3) || above >= below
+      setPosition({ width, left: Math.max(left, Math.min(rect.left, right - width)), maxHeight: Math.min(280, window.innerHeight / 3, preferAbove ? above : below), ...(preferAbove ? { bottom: window.innerHeight - rect.top + 8 } : { top: rect.bottom + 8 }) })
+    }
+    place()
+    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', place)
+    return () => { window.removeEventListener('scroll', place, true); window.removeEventListener('resize', place) }
+  }, [expanded])
+  useEffect(() => {
+    if (!expanded) return
+    const outside = (event: PointerEvent) => { if (!anchor.current?.contains(event.target as Node) && !panel.current?.contains(event.target as Node)) { clearTimer(); setOpen(null) } }
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); clearTimer(); setOpen(null); anchor.current?.focus() } }
+    document.addEventListener('pointerdown', outside)
+    document.addEventListener('keydown', escape)
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape) }
+  }, [expanded])
+  useLayoutEffect(() => { if (open?.pinned && document.activeElement === anchor.current) panel.current?.focus() }, [open?.pinned])
   return <span className={css.sentChipGroup}>
-    {interactive ? <button type="button" className={css.sentChip} aria-expanded={expanded} aria-controls={id} onClick={() => { setExpanded(open => !open) }}>
+    {interactive ? <button ref={anchor} type="button" className={css.sentChip} aria-haspopup="dialog" aria-expanded={expanded} aria-controls={id} onPointerEnter={event => {
+      if (event.pointerType === 'touch') return
+      clearTimer()
+      if (!open && !document.querySelector('[data-sidenote-sent-preview][data-pinned]')) timer.current = setTimeout(() => { setOpen({ pinned: false }) }, 180)
+    }} onPointerLeave={leave} onClick={() => { clearTimer(); setOpen(open?.pinned ? null : { pinned: true }) }}>
       {icon}<span>{label}</span><IconChevronDownOutline14 size={12} className={expanded ? css.sentChevronOpen : css.sentChevron} />
     </button> : <span className={css.sentChip}>{icon}<span>{label}</span></span>}
-    {interactive && <span id={id} className={css.sentPreview} hidden={!expanded}>{children}</span>}
+    {interactive && expanded && createPortal(<div ref={panel} id={id} role="dialog" tabIndex={-1} aria-label={label} className={`${css.contextPanel} ${css.sentPreview}`} style={position} data-sidenote-sent-preview data-pinned={open.pinned || undefined} data-sidenote-no-quote onPointerEnter={clearTimer} onPointerLeave={leave}>{children}</div>, document.body)}
   </span>
 }
 
@@ -61,10 +103,17 @@ export function SentContext({ protocol, interactive = true }: { protocol: Protoc
   useLocaleTick()
   return <span className={css.sentChips} data-dsh-sidenote-bubble data-sidenote-no-quote>
     {protocol.annotations.length > 0 && <ContextChip label={t('sentChipLabel', { n: protocol.annotations.length })} icon={<IconListPenOutline16 size={12} />} interactive={interactive}>
-      {protocol.annotations.map(annotation => <span className={css.sentItem} key={annotation.id}><span className={css.sentQuote}>{annotation.quote}</span>{annotation.note && <span className={css.sentNote}>{annotation.note}</span>}</span>)}
+      <ul className={css.contextList}>{protocol.annotations.map(annotation => <li className={css.contextItem} key={annotation.id}>
+        <span className={css.contextNumber}>{annotation.id}.</span><div className={css.contextContent}>
+          <div className={css.contextLabel}>{t('selectedText')}</div><div className={css.contextText}>{annotation.quote}</div>
+          {annotation.note && <><div className={css.contextLabel}>{t('userComment')}</div><div className={css.contextText}>{annotation.note}</div></>}
+        </div>
+      </li>)}</ul>
     </ContextChip>}
     {protocol.reflows.length > 0 && <ContextChip label={t('reflowBubbleLabel')} icon={<IconShareOutline16 size={12} />} interactive={interactive}>
-      {protocol.reflows.map((reflow, index) => <span className={css.sentItem} key={index}><span className={css.sentSource}>{reflow.source}</span><span>{flattenReflowContent(reflow.content)}</span></span>)}
+      <ul className={css.contextList}>{protocol.reflows.map((reflow, index) => <li className={css.contextItem} key={index}>
+        <span className={css.contextNumber}>{index + 1}.</span><div className={css.contextContent}><div className={css.contextSource}>{reflow.source}</div><div className={css.contextText}>{flattenReflowContent(reflow.content)}</div></div>
+      </li>)}</ul>
     </ContextChip>}
   </span>
 }

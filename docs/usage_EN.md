@@ -48,7 +48,7 @@ Submissions use the host's native input flow, retaining attachments, references,
 - When the host restores a native tab, it rebinds the original child. If the sidebar is not restored, use **Reopen** in `/side` to recover that child and its annotations.
 - A new fork has its own independent annotation list.
 
-Sent annotations and side-chat references stay inside their right-aligned user bubble, alongside the message body. The bubble remains even when no body text was sent. Click a label to expand the complete quote and note, and click again to collapse it. Main and side conversations use the same presentation. Reflows admitted through the separate injection channel with this input are also projected from durable history into its bubble, remain visible after reload, and are not sent a second time.
+Sent annotations and side-chat references stay inside their right-aligned user bubble, alongside the message body. The bubble remains even when no body text was sent. Hover a label to read the complete quote and note in a compact, read-only floating card without expanding the message bubble. Move into the card to keep reading, click to keep it open, and press Escape or click outside to close. The card opens above or below as space permits, and long content scrolls internally. Main and side conversations use the same presentation. Reflows admitted through the separate injection channel with this input are also projected from durable history into its bubble, remain visible after reload, and are not sent a second time.
 
 ## Bring answers back to the main thread
 

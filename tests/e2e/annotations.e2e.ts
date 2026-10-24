@@ -326,14 +326,27 @@ for (const surface of ['main', 'side'] as const) {
         const chip = bubble.getByRole('button', { name: /^(1 annotated|批注 ×1)$/ })
         await expect(chip).toHaveAttribute('aria-expanded', 'false')
         await expect(bubble.getByText('用户的完整注解', { exact: true })).not.toBeVisible()
+        const height = (await bubble.boundingBox())!.height
+        const preview = page.locator('[data-sidenote-sent-preview]')
+        await chip.hover()
+        await expect(preview).toContainText('用户的完整注解')
+        await preview.hover()
+        await expect(preview).toBeVisible()
+        expect((await bubble.boundingBox())!.height).toBe(height)
+        expect((await preview.boundingBox())!.height).toBeLessThanOrEqual(280)
+        await input.hover()
+        await expect(preview).toHaveCount(0)
         await chip.click()
-        await expect(bubble.getByText('用户的完整注解', { exact: true })).toBeVisible()
-        await chip.click()
+        await expect(preview.getByText('用户的完整注解', { exact: true })).toBeVisible()
+        await page.keyboard.press('Escape')
+        await expect(preview).toHaveCount(0)
+        await expect(chip).toBeFocused()
       }
       if (index > 0) {
         const chip = bubble.getByRole('button', { name: /Side-chat context|含侧边回流上下文/ })
         await chip.click()
-        await expect(bubble.getByText(/完整侧聊回答/)).toBeVisible()
+        await expect(page.locator('[data-sidenote-sent-preview]').getByText(/完整侧聊回答/)).toBeVisible()
+        await page.screenshot({ path: `test-results/sent-hover-${surface}-${index}.png`, animations: 'disabled' })
         await chip.click()
       }
       if (index === 2) {

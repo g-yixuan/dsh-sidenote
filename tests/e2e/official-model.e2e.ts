@@ -73,7 +73,7 @@ test('official Flash UI regressions: live context, empty annotation send and inl
   const returnChip = returnedBubble.getByRole('button', { name: /Side-chat context|含侧边回流上下文/ })
   await expect(returnChip).toBeVisible()
   await returnChip.click()
-  await expect(returnedBubble).toContainText('批注直发验证通过')
+  await expect(page.locator('[data-sidenote-sent-preview]')).toContainText('批注直发验证通过')
   await returnChip.click()
   await expect(main.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: '批注直发验证通过' }).last()).toBeVisible({ timeout: 90_000 })
   await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)

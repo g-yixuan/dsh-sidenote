@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { act, createElement, type ComponentType } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '../src/client/host/contracts.ts'
 import { injectedReflowPrefix, registerUserContext, sentContextRule } from '../src/client/annotations/NativeUserContext.tsx'
 import { buildProtocolBlock } from '../src/client/annotations/format.ts'
@@ -11,7 +11,10 @@ import { buildProtocolBlock } from '../src/client/annotations/format.ts'
 const annotation = buildProtocolBlock([{ text: '引用原文\n第二行', note: '用户注解' }])
 const reflow = '<reflow source="侧边 · 调查">\n<问>问题</问>\n<答>完整回答</答>\n</reflow>'
 const cleanup: (() => void)[] = []
-afterEach(() => { for (const dispose of cleanup.splice(0).reverse()) dispose() })
+beforeEach(() => { vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+  return (this === document.body ? { left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600 } : { left: 100, top: 250, right: 300, bottom: 280, width: 200, height: 30 }) as DOMRect
+}) })
+afterEach(() => { for (const dispose of cleanup.splice(0).reverse()) dispose(); vi.restoreAllMocks() })
 
 function mount(text: string, modern: boolean, key = 'user', injected = '', imageOnly = false) {
   type Props = { node: { data: { content: readonly { type: string; text?: string }[] } } }
@@ -64,7 +67,8 @@ describe.each([true, false])('sent context inside the native user bubble (UserTe
     expect(bubble.querySelector('[data-dsh-sidenote-bubble]')).not.toBeNull()
     expect(bubble.querySelector('[data-native-body]')?.textContent).toBe('这是一个侧边回流测试')
     act(() => { bubble.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click() })
-    expect(bubble.textContent).toContain('完整回答')
+    expect(document.querySelector('[data-sidenote-sent-preview]')?.textContent).toContain('完整回答')
+    expect(bubble.textContent).not.toContain('完整回答')
     expect(content[1]!.text).toBe('这是一个侧边回流测试')
     rerender()
     expect(bubble.querySelectorAll('[data-dsh-sidenote-bubble]')).toHaveLength(1)
@@ -80,10 +84,11 @@ describe.each([true, false])('sent context inside the native user bubble (UserTe
     expect(content[1]!.text).toBe(wire)
     const chips = bubble.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')
     expect(chips).toHaveLength(2)
-    const panel = document.getElementById(chips[0]!.getAttribute('aria-controls')!)!
-    expect(panel.hidden).toBe(true)
+    expect(document.getElementById(chips[0]!.getAttribute('aria-controls')!)).toBeNull()
     act(() => { chips[0]!.click() })
-    expect(panel.hidden).toBe(false)
+    const panel = document.getElementById(chips[0]!.getAttribute('aria-controls')!)!
+    expect(panel).not.toBeNull()
+    expect(bubble.contains(panel)).toBe(false)
     expect(panel.textContent).toContain('引用原文\n第二行')
     expect(panel.textContent).toContain('用户注解')
     rerender()
