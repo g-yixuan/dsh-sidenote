@@ -42,29 +42,22 @@ export async function openSeedSession(page: Page): Promise<void> {
   if (!seed) throw new Error('Missing DSH_E2E_SEED_SESSION')
   const open = page.getByRole('button', { name: /^(Open sidebar|打开侧(?:边)?栏)$/ }).first()
   if (await open.isVisible()) await open.click()
-  // Wait for the session list before deciding which row identity exists. A
-  // zero count on the first frame must not choose the legacy title fallback.
-  // A saved regular copy has a numbered title; legacy fallback must target
-  // the exact seed title rather than also selecting those valid copies.
-  const titled = page.getByRole('treeitem').filter({ has: page.getByText('Side chat plugin review', { exact: true }) })
-  await expect(titled.first()).toBeAttached({ timeout: 30_000 })
   const byId = page.locator(`[role="treeitem"][data-row-key="session:${seed}"]`)
-  // Native workspace lists show a limited recent subset. Previous real forks
-  // can push the seed behind Show more; expand instead of choosing a child
-  // with the same inherited title.
-  const overflow = page.locator('button[data-row-key^="overflow:"]')
-  for (let round = 0; round < 20 && await byId.count() === 0 && await overflow.count() > 0; round++) {
+  // Both maintained hosts expose stable row identities. Native pagination
+  // controls can disappear while the list updates; wait for the target or an
+  // expansion control instead of falling back to identically titled children.
+  const overflow = page.locator('button[data-row-key^="overflow:"][aria-expanded="false"]')
+  for (let round = 0; round < 20; round++) {
+    await expect.poll(async () => await byId.count() > 0 || await overflow.count() > 0, { timeout: 30_000 }).toBe(true)
+    if (await byId.count() > 0) break
     const label = await overflow.first().textContent()
-    const count = await page.getByRole('treeitem').count()
     await overflow.first().click()
-    await expect.poll(async () => await byId.count() > 0 || await page.getByRole('treeitem').count() > count || await overflow.first().textContent() !== label).toBe(true)
+    await expect.poll(async () => await byId.count() > 0 || await overflow.count() > 0 && await overflow.first().textContent() !== label).toBe(true)
   }
-  const rows = await byId.count() > 0 ? byId : titled
-  // Legacy children are archived; an ambiguous legacy title must fail loudly.
-  await expect(rows).toHaveCount(1)
-  await rows.getByText('Side chat plugin review', { exact: true }).click()
+  await expect(byId).toHaveCount(1)
+  await byId.getByText('Side chat plugin review', { exact: true }).click()
   const conversation = page.locator('[data-conversation-session]').first()
-  if (await conversation.count() > 0) await expect(conversation).toHaveAttribute('data-conversation-session', seed)
+  await expect(conversation).toHaveAttribute('data-conversation-session', seed)
   await expect(page.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()).toBeAttached({ timeout: 30_000 })
 }
 
