@@ -1,23 +1,38 @@
-# README media / 首页素材
+# README and storefront media / 首页与商店素材
 
-The screenshots and recording used by the README were captured on **2026-10-18** with **dsh-sidenote 0.6.0** (source: `7ed85e4`) and **DSH 0.2.0-rc.2**, using the native right sidebar without better-sidebar. The host's active bundle inventory and the mounted plugin's build hash were checked before capture.
+Captured on **2026-10-25** with the published **dsh-sidenote 0.7.2** package (source: `0d55fcd`) and **DSH 0.2.1-rc.2**, using native Conversation and the native right sidebar. The mounted plugin's version and bundle digest, plus the host's active conversation, composer, and sidebar packages, were checked before capture.
 
-首页截图与录屏于 **2026-10-18** 重新采集，使用 **dsh-sidenote 0.6.0**（源码 `7ed85e4`）与 **DSH 0.2.0-rc.2** 原生右侧栏，不安装 better-sidebar。采集前核对了宿主实际激活的组件版本与插件构建摘要。
+素材于 **2026-10-25** 重新录制，使用已发布的 **dsh-sidenote 0.7.2**（源码 `0d55fcd`）与 **DSH 0.2.1-rc.2** 原生对话和右侧栏。录制前核对了实际挂载的插件版本与构建摘要，以及宿主正在运行的对话、输入框和侧栏组件版本。
 
-- `workflow.jpg`: the main and side conversations with a returned answer / 主、侧对话与回流结论。
-- `selection.jpg`: a selected passage and its note editor / 划选与注释编辑器。
-- `sidechat.jpg`: a completed side-chat response / 侧聊问答。
-- `demo.gif`, `demo.mp4`: the same continuous selection → annotation → side reply → reflow sequence / 同一段连续操作的 GIF 与 MP4。
-- `hero.svg`, `hero-en.svg` and their `-compact.svg` variants: original vector covers; regenerate with `python3 scripts/build-brand-assets.py` / 原创矢量封面，可用该命令重新生成。
+## Real model responses / 真实模型回答
 
-The host uses its **light theme** and a 16 px conversation font. Screenshots show the real interface; they are not UI mockups. The recording preserves browser frame timing. A browser translation extension's floating control was temporarily hidden during capture and restored afterwards. No DSH controls were altered.
+The example task is designing a note app's search experience. All assistant replies were generated through the official **DeepSeek V4.1 Flash** API at `api.deepseek.com`, using model ID `deepseek-flash` with thinking off. This ID's mapping is documented in the [official model updates](https://api-docs.deepseek.com/updates/). Request metadata confirmed successful, completed responses. No fixed-answer adapter or prewritten assistant messages were used.
 
-宿主使用**浅色主题**与 16 px 会话字号。截图来自真实界面，录屏保留浏览器帧的时间间隔。录制期间临时隐藏了浏览器翻译扩展的浮动控件，随后恢复；没有修改 DSH 控件。
+演示任务是设计笔记应用的搜索体验。全部助手回复都实际调用 `api.deepseek.com` 的 **DeepSeek V4.1 Flash** 生成，模型 ID 为 `deepseek-flash`，关闭思考模式；该 ID 的对应关系见[官方更新说明](https://api-docs.deepseek.com/updates/)。请求元数据确认调用成功并完成，没有使用固定回答的适配器或预先写入的助手消息。
 
-Conversation content is a synthetic note-search design example. A local demo adapter supplies fixed answers through the host's LLM interface; the fork, annotation, submission, and reflow paths are real. This illustrates the workflow, not model answer quality or latency. No private sessions or external model credentials are used.
+The recording starts with the real main-chat answer already visible. It then shows selection and annotation, a real side-chat response, hover previews, editing a pending note, the clear button's reveal, the reply-toolbar handback action, sending the main draft with both kinds of context, and inspecting the sent message. The main model's final answer incorporates the returned empty-state copy and the edited annotation.
 
-对话内容是合成的笔记搜索设计示例。本地演示模型通过宿主 LLM 接口提供固定回答；fork、注释、发送与回流均执行真实流程。素材用于说明操作，不代表模型回答质量或响应速度，也不使用私人会话或外部模型凭证。
+录屏从已经生成的主线回答开始，随后展示划选与批注、真实侧聊回答、悬浮预览、原位编辑、清除按钮显现、回复操作栏回流、携带两类上下文发送，以及发送后的气泡详情。主线最后的真实回答同时采纳了带回的空状态文案与修改后的批注。
 
-For future captures, use a fresh isolated DSH home and a verified host version, confirm the mounted bundle, select the light theme, and repeat the complete workflow. The older `capture-demo.mjs` and `capture-video.mjs` scripts target historical BS layouts and do not reproduce these native-sidebar assets unchanged.
+## Assets / 文件
 
-以后重录时，使用全新隔离的 DSH home 和已验证宿主版本，核对实际挂载构建，选择浅色主题，并走完完整流程。旧 `capture-demo.mjs`、`capture-video.mjs` 面向历史 BS 布局，不能原样用于复现这组原生侧栏素材。
+- `workflow.jpg`: both conversations and a main draft with pending annotation and handback chips / 主侧对话与同时携带批注、回流的待发送草稿。
+- `context-preview.jpg`: a compact preview with the selected passage, editable note, and horizontal context chips / 紧凑悬浮层中的原文、可编辑注解与横向标签。
+- `selection.jpg`: selected text and the two annotation destinations, taken from the recording / 从录屏提取的划选画面与两种批注去向。
+- `sidechat.jpg`: a real side-chat answer and the hovered reply-toolbar handback icon / 真实侧聊回答与悬停中的回流图标。
+- `demo.gif`, `demo.mp4`: the same approximately **43-second** continuous workflow / 同一段约 **43 秒**的连续操作。
+- `hero.svg`, `hero-en.svg` and their `-compact.svg` variants: vector brand covers; regenerate with `python3 scripts/build-brand-assets.py` / 品牌矢量封面，可用该命令重新生成。
+
+## Capture and distribution / 录制与展示
+
+The real interface uses the host's **light theme**, **18 px** conversation font, and a **1440 × 900** viewport. Stills are captured at 2× pixel density and exported at 2160 × 1350; the selection still is a native 1440 × 900 recording frame. MP4 is 1440 × 900 at 30 fps; GIF is 1120 × 700 at 12 fps. Encoding preserves the browser's frame timing without speeding up responses. A small pointer overlay follows actual mouse events; product controls and model replies are not redrawn or substituted.
+
+真实界面使用宿主的**浅色主题**、**18 px** 会话字号和 **1440 × 900** 视口。静态截图按 2 倍像素密度采集后导出为 2160 × 1350；划选截图直接取自 1440 × 900 的录屏帧。MP4 为 1440 × 900 / 30 fps，GIF 为 1120 × 700 / 12 fps，均按浏览器帧时间编码，没有加速模型响应。仅添加跟随真实鼠标事件的小光标辅助层，没有重绘产品控件或替换模型回答。
+
+[`screenshots.json`](../../screenshots.json) declares the storefront gallery. The [catalog's screenshot convention](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/blob/main/contributing.md#screenshots--截图optional-recommended--可选推荐) resolves those paths from this repository, and the next catalog build refreshes the gallery. Existing screenshot paths remain available for cached catalogs.
+
+[`screenshots.json`](../../screenshots.json) 声明商店展示顺序。[商店截图约定](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/blob/main/contributing.md#screenshots--截图optional-recommended--可选推荐) 会从本仓库读取这些路径，下一次索引构建时更新图集；原有图片路径继续提供新版内容，供已缓存的索引读取。
+
+For future captures, use a fresh isolated DSH home, install the published plugin with the official CLI, verify the active bundles, and run the complete workflow against the official model API. Keep credentials, launch tokens, private conversations, raw frames, and recording logs out of public assets. The older `capture-demo.mjs` and `capture-video.mjs` scripts target historical layouts and synthetic sessions; they do not reproduce this recording unchanged.
+
+后续重录应使用全新隔离的 DSH home，通过官方 CLI 安装已发布插件，核对实际加载的构建，并调用官方模型走完完整流程。凭证、启动 token、私人会话、原始帧和录制日志不进入公开素材。旧 `capture-demo.mjs`、`capture-video.mjs` 面向历史布局与合成会话，不能原样用于复现本次录制。

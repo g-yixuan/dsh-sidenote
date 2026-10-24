@@ -25,7 +25,7 @@
 
 ![新版浅色界面：左侧保留主对话，右侧深入讨论，结论回到主输入框](docs/assets/workflow.jpg)
 
-<p align="center"><sub>dsh-sidenote 0.6.0 · DSH 0.2.0-rc.2 · 原生侧栏 · 浅色主题</sub></p>
+<p align="center"><sub>dsh-sidenote 0.7.2 · DSH 0.2.1-rc.2 · DeepSeek V4.1 Flash · 真实交互录制</sub></p>
 
 ## 安装
 
@@ -51,7 +51,7 @@ dsh plugin --profile web add dsh-sidenote
 
 划选主对话或侧聊中的一段回复，写下问题或修改意见。**原文和注释一起保留**，可累积多条，发送前预览、移除，正文草稿照常编辑。
 
-读到「没有结果时，引导用户调整搜索词」，就选中这一句，追问「这里如何设计才不会让用户卡住？」。
+读到「提示“未找到”，并给出放宽条件建议」，就选中这一句，追问「给一版可直接使用的空状态」。
 
 ### 有结论，带回正在做的事
 
@@ -61,11 +61,11 @@ dsh plugin --profile web add dsh-sidenote
 
 **划选一句 → 带着上下文追问 → 把结论带回主线。**
 
-![浅色主题操作录屏：划选原文、添加问题、发送到侧边聊天、回流结论](docs/assets/demo.gif)
+![真实 Flash 演示：划选批注、悬浮查看与编辑、侧聊追问、图标回流，以及发送后的气泡内引用](docs/assets/demo.gif)
 
 [观看清晰版 MP4](docs/assets/demo.mp4) · [查看静态截图](docs/assets/workflow.jpg)
 
-<sub>以上素材重新录制于 dsh-sidenote 0.6.0 / DSH 0.2.0-rc.2。使用隔离环境中的示例对话与本地演示模型，展示真实界面操作；内容与回答为合成示例。</sub>
+<sub>2026-10-25 录制于 dsh-sidenote 0.7.2 / DSH 0.2.1-rc.2。以笔记搜索设计为例，真实调用官方 DeepSeek V4.1 Flash 生成回答；约 43 秒的录屏展示实际操作与完整回复过程。<a href="docs/assets/README.md">素材说明</a></sub>
 
 ## 用起来顺手的细节
 

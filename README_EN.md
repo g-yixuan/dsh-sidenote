@@ -25,7 +25,7 @@
 
 ![Current light interface: main conversation on the left, focused exploration on the right, and a finding returned to the main composer](docs/assets/workflow.jpg)
 
-<p align="center"><sub>dsh-sidenote 0.6.0 · DSH 0.2.0-rc.2 · Native sidebar · Light theme</sub></p>
+<p align="center"><sub>dsh-sidenote 0.7.2 · DSH 0.2.1-rc.2 · DeepSeek V4.1 Flash · Recorded live</sub></p>
 
 ## Install
 
@@ -51,7 +51,7 @@ Side chats support multiple turns, tool cards, model and permission switching, i
 
 Select part of a reply in the main conversation or a side chat, then add a question or comment. **The original passage and your note stay together.** Collect several notes, preview or remove them before sending, and keep writing in the composer.
 
-For example, select “When no results are found, help the user adjust their search” and ask how to keep that user from getting stuck.
+For example, select the suggestion to show “Not found” and recommend broader filters, then ask for an empty state ready to use.
 
 ### Bring useful answers back
 
@@ -61,11 +61,11 @@ Click the **Bring back to main conversation** icon on the right of a side reply�
 
 **Select a passage → explore it with context → bring the answer back.**
 
-![Light-theme recording: select a passage, add a question, send it to a side chat, and return the answer to the main conversation](docs/assets/demo.gif)
+![Live Flash demo: select and annotate, preview and edit on hover, ask in a side chat, return the answer, and inspect context in the sent message](docs/assets/demo.gif)
 
 [Watch the full-resolution MP4](docs/assets/demo.mp4) · [View the still screenshot](docs/assets/workflow.jpg)
 
-<sub>Newly recorded on dsh-sidenote 0.6.0 / DSH 0.2.0-rc.2. These Chinese-language screenshots and recording show real interface interactions in an isolated environment. Conversations and replies are synthetic examples supplied by a local demo model.</sub>
+<sub>Recorded on 2026-10-25 with dsh-sidenote 0.7.2 / DSH 0.2.1-rc.2. This Chinese-language note-search design example uses real responses from the official DeepSeek V4.1 Flash API. The approximately 43-second recording shows the real interactions and complete model responses. <a href="docs/assets/README.md">About the media</a></sub>
 
 ## Details that keep work moving
 
