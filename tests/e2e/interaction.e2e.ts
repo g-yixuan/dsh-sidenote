@@ -52,7 +52,9 @@ test('tool-output: the native read card preserves content after the old 4000-cha
   await expect.poll(() => sessionEventsOf(child).filter(event => event.type === 'tool/result').some(event => JSON.stringify(event.data).includes('NATIVE-LONG-TOOL-END'))).toBe(true)
   const result = sessionEventsOf(child).find(event => event.type === 'tool/result' && JSON.stringify(event.data).includes('NATIVE-LONG-TOOL-END'))!
   expect(JSON.stringify(result.data).indexOf('NATIVE-LONG-TOOL-END')).toBeGreaterThan(4000)
-  const completed = side.getByRole('button', { name: /^(Completed|已完成)/ }).last()
+  const completed = side.locator(`button[data-turn-process="${result.data.turn}"]`)
+  await expect(completed).toHaveAttribute('data-turn-process-tool-calls', /^[1-9]\d*$/)
+  await expect(completed).toBeEnabled()
   await completed.click()
   await side.getByRole('button', { name: /^(Read files|读取了文件)$/ }).click()
   await side.getByRole('button', { name: /Read.*long-tool\.txt/ }).click()
