@@ -7,6 +7,7 @@ import type { AnnotationStore } from './model.ts'
 import type { ReflowStore } from '../reflow.ts'
 import { submissionExtrasOf } from './submissionExtras.ts'
 import { submitControlledInput } from './send.ts'
+import { t } from '../locales.ts'
 import css from './annotations.module.css'
 
 type Submit = (mode?: 'queue' | 'steer', source?: 'click' | 'enter') => void
@@ -28,11 +29,16 @@ interface ComposerProps {
 /** The host has already resolved Enter/click, menus, IME and busy delivery mode. */
 export function submitNativeWithContext(ctx: Context, annotations: AnnotationStore, reflow: ReflowStore, sessionId: string, native: Submit, mode?: 'queue' | 'steer', source?: 'click' | 'enter'): void {
   if (annotations.getSubmission(sessionId).pending) return
-  const input = resolveInput(ctx, sessionId)
-  const draft = input?.state.getSnapshot()
-  if (!draft || draft.phase !== 'plain' || draft.draft.trimStart().startsWith('/')) { native(mode, source); return }
   const hasContext = annotations.countActive(sessionId) > 0 || reflow.list(sessionId).length > 0
-  const hasMessage = draft.draft.trim() !== '' || inputAttachmentIds(input!).length > 0
+  const input = resolveInput(ctx, sessionId)
+  if (!input) {
+    if (hasContext || submissionExtrasOf(sessionId)?.firstSendPrefix()) annotations.setSubmission(sessionId, { pending: false, error: t('inputUnavailable') })
+    else native(mode, source)
+    return
+  }
+  const draft = input.state.getSnapshot()
+  if (draft.phase !== 'plain' || draft.draft.trimStart().startsWith('/')) { native(mode, source); return }
+  const hasMessage = draft.draft.trim() !== '' || inputAttachmentIds(input).length > 0
   if (hasContext || hasMessage && submissionExtrasOf(sessionId)?.firstSendPrefix()) {
     void submitControlledInput(ctx, annotations, reflow, sessionId, mode)
   } else native(mode, source)

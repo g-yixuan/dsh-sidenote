@@ -4,9 +4,8 @@
  * 0, the queue strip at 20 — we sit between at 10). The chip counts the
  * session's ACTIVE annotations and expands inline to preview/remove each one.
  *
- * 架构分工：chip 只呈现与增删注释对象；发送携带由 send.ts 拦截器负责
- * （协议块在提交瞬间拼入，草稿不再被污染），sent 迁移也由拦截器显式触发
- * ——chip 不再监听草稿发送沿。
+ * chip 只呈现与增删注释对象；NativeComposer 接入原生提交入口，send.ts
+ * 在提交时加入协议，并在宿主实际接受后标记 sent，不通过草稿清空判断成功。
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'

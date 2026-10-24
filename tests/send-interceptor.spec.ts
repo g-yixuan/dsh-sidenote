@@ -16,9 +16,10 @@ interface Harness {
   type: (text: string) => void
   draft: () => string
   removedReflow: number[]
+  error: () => string | undefined
 }
 
-function makeHarness(options: { draft?: string; withAnnotation?: boolean; rejectFirstSend?: boolean; reflowItems?: { id: number; text: string; sideTitle: string }[] } = {}): Harness {
+function makeHarness(options: { draft?: string; missingInput?: boolean; withAnnotation?: boolean; rejectFirstSend?: boolean; reflowItems?: { id: number; text: string; sideTitle: string }[] } = {}): Harness {
 
   const state = { draft: options.draft ?? '', phase: 'plain' as const }
   const submitted: string[] = []
@@ -59,7 +60,7 @@ function makeHarness(options: { draft?: string; withAnnotation?: boolean; reject
       binding: () => ({ session }),
       list: { getSnapshot: () => ({ current: SESSION }) },
     },
-    get: (name: string) => (name === 'conversation' ? { input: { for: () => input } } : undefined),
+    get: (name: string) => (name === 'conversation' ? { input: { for: () => options.missingInput ? undefined : input } } : undefined),
   } as unknown as Context
 
   const reflowItems = options.reflowItems ?? []
@@ -92,6 +93,7 @@ function makeHarness(options: { draft?: string; withAnnotation?: boolean; reject
     type: (text: string) => { state.draft += text },
     draft: () => state.draft,
     removedReflow: removed,
+    error: () => store.getSubmission(SESSION).error,
   }
 }
 
@@ -119,6 +121,25 @@ describe('native composer context submission', () => {
     harness.send()
     expect(harness.drafts).toEqual([])
     expect(harness.submitted).toEqual(['queue'])
+  })
+
+  it.each([
+    { withAnnotation: true },
+    { withAnnotation: false, reflowItems: [{ id: 1, text: '结论', sideTitle: '侧边' }] },
+  ])('keeps context and body together when the input facade disappears: %j', options => {
+    harness = makeHarness({ ...options, draft: '保留正文', missingInput: true })
+    harness.send()
+    expect(harness.submitted).toEqual([])
+    expect(harness.removedReflow).toEqual([])
+    expect(harness.draft()).toBe('保留正文')
+    expect(harness.error()).toBeTruthy()
+  })
+
+  it('leaves context-free messages with the native input even when the facade disappears', () => {
+    harness = makeHarness({ draft: '普通消息', withAnnotation: false, missingInput: true })
+    harness.send()
+    expect(harness.submitted).toEqual(['queue'])
+    expect(harness.error()).toBeUndefined()
   })
 
   it('纯回流+空草稿+注入成功：不发消息、不吞后续输入（B-1 回归）', async () => {
