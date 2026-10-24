@@ -2,7 +2,7 @@
  * dsh-sidenote host half（Workitem_06：reflow 注入通道对齐官方侧会话提案）。
  *
  * 职责：POST /sidenote/reflow——把回流内容以 `agent.inject(UserMessage,
- * {source:{kind:'plugin', plugin:'dsh-sidenote', form:'notice', summary}})`
+ * {source:{kind:'dsh-sidenote', form:'notice', summary}})`
  * 注入父会话日志（下轮领取、不唤醒；对齐 2026-07-08 官方侧会话提案的
  * handback 语义——其 `context/message` 形态在 07-20 去封套时移除，inject
  * 是现行等价物，见 Workitem_01 spike 的 design.md）。
@@ -19,8 +19,18 @@
  * dsh-better-sidebar src/trust-fence.ts，BSD-3-Clause 同源复制）。
  */
 import type { IncomingHttpHeaders } from 'node:http'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createUserMessage } from '@deepseek-ai/dsh-llm/message'
 import { isTrustedApiRequest } from './trust-fence.ts'
+
+declare module '@deepseek-ai/dsh-llm/message' {
+  interface MessageSourceMap {
+    'dsh-sidenote': {
+      readonly kind: 'dsh-sidenote'
+      readonly form: 'notice'
+      readonly summary: string
+    }
+  }
+}
 
 /** Plugin identity for cordis.yml rows. */
 export const name = 'dsh-sidenote'
@@ -139,8 +149,9 @@ export function makeReflowHandler(ctx: HostContext) {
         agent.inject(createUserMessage({
           content: [{ type: 'text', text: item.text as string }],
           source: {
-            kind: 'plugin',
-            plugin: 'dsh-sidenote',
+            // V4 rejects the retired { kind:'plugin', plugin:... } wrapper.
+            // A producer-owned kind is also accepted by earlier extensible sources.
+            kind: 'dsh-sidenote',
             // form:'notice' + summary：折叠行直接显示回流摘要（不声明则 opaque
             // 渲染、折叠行只显示原始 plugin 串——审查 M2）。
             form: 'notice',

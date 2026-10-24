@@ -19,7 +19,14 @@ export function apply(ctx) {
       const users = options.messages.filter(message => message.role === 'user' && message.source.kind === 'user')
       const last = users.at(-1)?.content ?? []
       const text = last.filter(block => block.type === 'text').map(block => block.text).join('\n')
-      const reply = 'Controlled E2E reply. This complete assistant response supports quote selection.\n\nSecond paragraph preserves the full selected text.'
+      let reply = 'Controlled E2E reply. This complete assistant response supports quote selection.\n\nSecond paragraph preserves the full selected text.'
+      if (text === '[e2e:reflow] Remember the conclusion code SIDENOTE_SIDE_BLUE.') {
+        reply = 'Remembered SIDENOTE_SIDE_BLUE in this side conversation.'
+      } else if (text === '[e2e:reflow] Return the remembered code as the final conclusion.') {
+        const remembered = users.some(message => message.content.some(block => block.type === 'text' && block.text === '[e2e:reflow] Remember the conclusion code SIDENOTE_SIDE_BLUE.'))
+        const priorReply = options.messages.some(message => message.role === 'assistant' && message.content.some(block => block.type === 'text' && block.text === 'Remembered SIDENOTE_SIDE_BLUE in this side conversation.'))
+        reply = remembered && priorReply ? 'Conclusion: SIDENOTE_SIDE_BLUE.' : 'The prior side-conversation context is missing.'
+      }
       yield { type: 'block-start', index: 0, blockType: 'text' }
       yield { type: 'text-delta', index: 0, text: reply }
       if (text.trimEnd().endsWith('[e2e:hold]')) {
