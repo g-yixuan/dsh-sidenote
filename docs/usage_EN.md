@@ -29,7 +29,9 @@ On supported hosts, hidden side chats remain runnable. To find older side chats,
 3. Click outside the editor or press `Enter` to save a new note; press `Esc` to cancel.
 4. Annotation and side-chat reflow chips sit side by side above the composer. Hover to read complete quotes, notes, or returned questions and answers; move into the card to keep reading. Click a chip to keep it open, then press Escape or click outside to close. The compact card scrolls internally for long content. Hovering a chip gently reveals an × button that clears that category of annotations or reflows without affecting the other category or the message body. Edit notes in place: leaving the field saves, Escape cancels. Remove individual entries or clear the batch.
 
-![Adding a focused question to a selected passage](assets/selection.jpg)
+![Select a passage, then add it to the conversation or ask in a side chat](assets/selection.jpg)
+
+![Annotation and handback chips in one row, with a compact preview for reading the original text and editing the note](assets/context-preview.jpg)
 
 Quotes and notes stay complete without being inserted into the body draft. Send a quote on its own, or together with text, images, and `@` references. Repeated selections accumulate annotations; numbered badges at the source help you find each passage.
 
