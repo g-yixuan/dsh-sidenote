@@ -10,6 +10,7 @@
  * L0 纯函数，react-free。
  */
 import { t } from '../locales.ts'
+import { splitProtocolPrefix, splitSnapshotPrefix } from '../annotations/format.ts'
 
 /** 标题里 topic 段的最大码点数（CJK 安全截断）。 */
 const TOPIC_MAX = 20
@@ -17,12 +18,15 @@ const TOPIC_MAX = 20
 /**
  * 首条用户消息 → topic。折叠全部空白（含换行）为单空格，截 20 码点，
  * 超长加省略号；清洗后为空返回 undefined（调用方回退编号标题）。
- * 快照前缀（Delivery_04）在 composer 层就不进 body，这里无需剥离。
+ * 已落盘消息也会用于恢复主题；先剥离快照及批注/回流协议。
  * 划选提问的种子草稿是「> 引用行 + note 行」（buildSideChatQuote）：
  * 引用行剥除（用户自己的话才是主题），机械占位行（noNote）丢弃；
  * 剥完为空（未补充直接发送）时退回引用内容——引用即主题。
  */
 export function topicOf(text: string): string | undefined {
+  text = splitSnapshotPrefix(text)?.rest ?? text
+  const protocol = splitProtocolPrefix(text)
+  if (protocol) text = text.slice(protocol.length).trim() || protocol.annotations.map(item => item.note || item.quote).join(' ') || protocol.reflows.map(item => item.source).join(' ')
   const lines = text.split('\n')
   const own = lines
     .filter(l => !l.startsWith('>'))

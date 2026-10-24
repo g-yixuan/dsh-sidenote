@@ -73,7 +73,7 @@ export function composerSeat(): HTMLElement | null {
 export function findSendButtonInCard(root: ParentNode = document): HTMLButtonElement | null {
   const card = root.querySelector<HTMLElement>('[data-composer-card]')
   if (card === null) return null
-  const buttons = card.querySelectorAll('button')
+  const buttons = card.querySelectorAll('button:not([data-sidenote-submit])')
   const last = buttons[buttons.length - 1]
   return last instanceof HTMLButtonElement ? last : null
 }
@@ -82,6 +82,11 @@ export function composerSessionId(seat: HTMLElement, fallback: string): string {
   return seat.closest<HTMLElement>('[data-sidenote-chat-session]')?.dataset.sidenoteChatSession
     ?? seat.closest<HTMLElement>('[data-conversation-session]')?.dataset.conversationSession
     ?? fallback
+}
+
+/** Bound message hover details to their native conversation pane. */
+export function conversationViewOf(node: Element): HTMLElement {
+  return node.closest<HTMLElement>('[data-conversation-session], [data-sidenote-chat-session]') ?? document.body
 }
 
 
@@ -97,4 +102,11 @@ export function composerHasMenu(seat: HTMLElement): boolean {
 
 export function hasConversationMessages(): boolean {
   return document.querySelector('[data-chat-flow-kind]') !== null
+}
+
+/** 0.2.0 has no UserText extension. Only add our own portal seat; never move
+ * or replace host-owned children. The CSS-module suffix is checked by E2E. */
+export function mountUserBubbleAddon(root: HTMLElement, addon: HTMLElement): () => void {
+  root.querySelector<HTMLElement>('[class$="_bubble"]')?.prepend(addon)
+  return () => { addon.remove() }
 }

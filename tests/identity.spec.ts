@@ -13,6 +13,13 @@ import { listClosedSideChats, recordClosedSideChat } from '../src/client/sidecha
 import { dedupeName } from '../src/client/sidechat/referenceSource.ts'
 import { xmlAttr } from '../src/client/protocol.ts'
 
+it('derives a context-only topic from the note instead of protocol markup', () => {
+  const prefix = '<mainline-progress-snapshot taken-at="now">progress</mainline-progress-snapshot>\n\n'
+  const annotation = '我批注了以下 1 处内容：\n<annotation id="1"><quote>引用</quote><note>检查归档</note></annotation>'
+  expect(topicOf(prefix + annotation)).toBe('检查归档')
+  expect(topicOf(prefix + annotation + '\n\n实际问题')).toBe('实际问题')
+})
+
 describe('topicOf（首条消息 → 内容身份）', () => {
   it('折叠多行与连续空白为单空格', () => {
     expect(topicOf('部署泳道\n为啥   又挂了？\n\n查一下')).toBe('部署泳道 为啥 又挂了？ 查一下')

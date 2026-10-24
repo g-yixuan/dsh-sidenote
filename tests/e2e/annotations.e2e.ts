@@ -91,7 +91,7 @@ test.describe('annotation editor lifecycle', () => {
     await expect(sideInput).toHaveText('')
 
     const parentBefore = userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)
-    await side.getByRole('button', { name: /^(Send annotations|发送注释)$/ }).click()
+    await side.getByRole('button', { name: /^(Send|Send message|发送|发送消息|Queue message|加入队列|排队发送)$/ }).click()
     await expect.poll(() => userMessagesOf(childId!).filter(text => text.includes('<note>侧边外点保存的完整注解</note>'))).toHaveLength(1)
     const sent = userMessagesOf(childId!).find(text => text.includes('<note>侧边外点保存的完整注解</note>'))!
     expect(sent.match(/<quote>full history snapshot<\/quote>/g)).toHaveLength(2)
@@ -133,7 +133,7 @@ test.describe('annotation editor lifecycle', () => {
     await composer.press('Enter')
     const bubble = page.locator('[data-chat-flow-kind="user"]').filter({ hasText: 'review annotation note' }).last()
     await expect.poll(() => userMessagesOf(process.env.DSH_E2E_SEED_SESSION!).find(text => text.includes('review annotation note'))).toContain('<note>刚输入的中文注解</note>')
-    await expect(bubble.locator('[data-dsh-sidenote-bubble] summary')).toBeVisible()
+    await expect(bubble.locator('[class$="_bubble"] [data-dsh-sidenote-bubble] button')).toBeVisible()
     await expect(bubble.getByText('刚输入的中文注解', { exact: true })).not.toBeVisible()
     await expect.poll(() => items(page)).toMatchObject([{ note: '刚输入的中文注解', state: 'sent' }])
     await expect(chipOf(page)).toHaveCount(0)
@@ -222,7 +222,7 @@ test.describe('annotation editor lifecycle', () => {
     await side.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
     await expect(side.locator('[data-composer-seat] img[src^="blob:"]')).toHaveCount(1)
     const parentBefore = userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)
-    await side.getByRole('button', { name: /^(Send annotations|发送注释)$/ }).click()
+    await side.getByRole('button', { name: /^(Send|Send message|发送|发送消息|Queue message|加入队列|排队发送)$/ }).click()
     await expect.poll(() => userMessagesOf(child).filter(text => text.includes('attachment quote admission'))).toHaveLength(1)
     const content = userMessageContentsOf(child).find(blocks => blocks.some(block => block.text?.includes('attachment quote admission')))!
     expect(content.some(block => block.type === 'image')).toBe(true)
@@ -286,7 +286,7 @@ test('real malformed-image rejection keeps quote and clean body, then retries on
   const body = 'retry after actual host rejection'
   await input.fill(body)
   await side.locator('input[type=file]').setInputFiles({ name: 'invalid.png', mimeType: 'image/png', buffer: Buffer.from('not a valid PNG image') })
-  await side.getByRole('button', { name: /^(Send annotations|发送注释)$/ }).click()
+  await side.getByRole('button', { name: /^(Send|Send message|发送|发送消息|Queue message|加入队列|排队发送)$/ }).click()
   await expect(side.getByRole('alert')).toBeVisible()
   await expect(input).toHaveText(body)
   expect(userMessagesOf(child).filter(text => text.includes(body))).toHaveLength(0)
@@ -294,9 +294,70 @@ test('real malformed-image rejection keeps quote and clean body, then retries on
   expect(await childItems()).toMatchObject([{ state: 'active', note: '失败后需要保留的注解' }])
   await side.getByRole('button', { name: /^(Remove image|移除图片)/ }).click()
   await side.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
-  await side.getByRole('button', { name: /^(Send annotations|发送注释)$/ }).click()
+  await side.getByRole('button', { name: /^(Send|Send message|发送|发送消息|Queue message|加入队列|排队发送)$/ }).click()
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes(body))).toHaveLength(1)
   expect(userMessagesOf(child).find(text => text.includes(body))!.match(/<annotation id=/g)).toHaveLength(1)
   await expect.poll(childItems).toMatchObject([{ state: 'sent' }])
   await expect(input).toHaveText('')
 })
+
+const annotation = '我批注了以下 1 处内容：\n<annotation id="1">\n<quote>完整引用原文\n第二行</quote>\n<note>用户的完整注解</note>\n</annotation>'
+const reflow = '<reflow source="侧边 · 调查">\n<问>引用的问题</问>\n<答>完整侧聊回答</答>\n</reflow>'
+
+for (const surface of ['main', 'side'] as const) {
+  test(`sent-context: ${surface} keeps annotations and reflows inside their native user bubbles`, async ({ page }) => {
+    await prepareSeedPage(page)
+    const sessionId = surface === 'side' ? await openSideChat(page) : process.env.DSH_E2E_SEED_SESSION!
+    const conversation = surface === 'side' ? sideChatOf(page) : page.locator('[data-conversation-session]').first()
+    await selectModel(page, conversation, 'Controlled E2E')
+    const input = conversation.locator('[data-composer-input]')
+    for (const [index, wire] of [annotation, reflow + '\n\n引用正文', reflow + '\n\n' + annotation + '\n\nhi'].entries()) {
+      if (index === 2) await conversation.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
+      await input.fill(wire)
+      await input.press('Enter')
+      await expect.poll(() => userMessagesOf(sessionId).some(text => text === wire)).toBe(true)
+      const row = conversation.locator('[data-chat-flow-kind="user"]').filter({ has: page.locator('[data-dsh-sidenote-bubble]') }).last()
+      const bubble = row.locator('[class$="_bubble"]')
+      await expect(bubble.locator('[data-dsh-sidenote-bubble]')).toHaveCount(1)
+      await expect(bubble).toBeVisible()
+      await expect(bubble).not.toContainText('<annotation')
+      await expect(bubble).not.toContainText('<reflow')
+      if (index !== 1) {
+        const chip = bubble.getByRole('button', { name: /^(1 annotated|批注 ×1)$/ })
+        await expect(chip).toHaveAttribute('aria-expanded', 'false')
+        await expect(bubble.getByText('用户的完整注解', { exact: true })).not.toBeVisible()
+        const height = (await bubble.boundingBox())!.height
+        const preview = page.locator('[data-sidenote-sent-preview]')
+        await chip.hover()
+        await expect(preview).toContainText('用户的完整注解')
+        await preview.hover()
+        await expect(preview).toBeVisible()
+        expect((await bubble.boundingBox())!.height).toBe(height)
+        expect((await preview.boundingBox())!.height).toBeLessThanOrEqual(280)
+        await input.hover()
+        await expect(preview).toHaveCount(0)
+        await chip.click()
+        await expect(preview.getByText('用户的完整注解', { exact: true })).toBeVisible()
+        await page.keyboard.press('Escape')
+        await expect(preview).toHaveCount(0)
+        await expect(chip).toBeFocused()
+      }
+      if (index > 0) {
+        const chip = bubble.getByRole('button', { name: /Side-chat context|含侧边回流上下文/ })
+        await chip.click()
+        await expect(page.locator('[data-sidenote-sent-preview]').getByText(/完整侧聊回答/)).toBeVisible()
+        await page.screenshot({ path: `test-results/sent-hover-${surface}-${index}.png`, animations: 'disabled' })
+        await chip.click()
+      }
+      if (index === 2) {
+        await expect(bubble).toContainText('hi')
+        await expect(row.locator('[data-message-attachments]')).toBeVisible()
+      }
+      await expect(conversation.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
+      await page.screenshot({ path: `test-results/sent-context-${surface}-${index}.png` })
+    }
+    const countBeforeReload = await conversation.locator('[class$="_bubble"] [data-dsh-sidenote-bubble]').count()
+    await page.reload()
+    await expect(conversation.locator('[class$="_bubble"] [data-dsh-sidenote-bubble]')).toHaveCount(countBeforeReload)
+  })
+}

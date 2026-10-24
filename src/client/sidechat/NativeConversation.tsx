@@ -2,6 +2,10 @@ import { createContext, createElement, useCallback, useContext, useMemo, useSync
 import type { Context, SessionReference } from '../host/contracts.ts'
 import { transcriptOf, type ChatMessage } from '../chat/transcript.ts'
 import { createFoldStore } from '../chat/viewState.ts'
+import { completedReplySeqsOf, type ChatReplySnapshot } from '../host/chat.ts'
+import { IconCheckOutline16, IconChevronDownOutline14 } from '../host/icons.ts'
+import type { SnapshotEntry } from './snapshot.ts'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { pairQuestions } from './model.ts'
 import type { ReflowStore } from '../reflow.ts'
 import { t } from '../locales.ts'
@@ -13,6 +17,9 @@ export interface SideConversation {
   title: string
   boundarySeq?: number
   reflow: ReflowStore
+  contextExpanded?: boolean
+  contextPending?: boolean
+  progress?: { entries: SnapshotEntry[]; takenAt?: string | null }
 }
 export interface ConversationRendererProps {
   SessionProvider: ComponentType<{ session: SessionReference; children?: ReactNode }>
@@ -28,7 +35,20 @@ interface ContentProps {
   renderFactorySlot(name: 'conversation.content', owner: { variant: 'embedded'; phase: 'active'; hero: false }, options: { slots: { views: typeof ChatView } }): ReactNode
 }
 function ChatView(props: { renderSlot(name: 'conversation.session', owner: { view: 'chat' }): ReactNode }) {
-  return props.renderSlot('conversation.session', { view: 'chat' })
+  const side = useContext(SideContext)!
+  const fold = useMemo(() => createFoldStore(`dsh-sidenote:fold:v1:${side.sessionId}`), [side.sessionId])
+  useSyncExternalStore(fold.subscribe, fold.getSnapshot)
+  const expanded = fold.isOpen('inherited')
+  return <div className={css.chatView}>
+    <div className={css.mainContext} data-sidenote-main-context>
+      <button type="button" className={css.historyToggle} aria-expanded={expanded} onClick={() => { fold.toggle('inherited') }}>
+        <IconChevronDownOutline14 size={12} className={expanded ? css.contextChevronOpen : css.contextChevron} />
+        <span>{t('mainContext')}</span><span className={css.contextHint}>{side.contextPending ? t('contextAtSend') : side.progress?.takenAt ? t('contextAsOf', { time: side.progress.takenAt }) : t('contextInherited')}</span>
+      </button>
+      {expanded && side.progress && <div className={css.progressEntries}>{side.progress.entries.map((entry, index) => <div key={index} className={css.progressEntry}><span className={css.contextHint}>{entry.kind === 'tool' ? entry.toolName : t(`context${entry.kind}`)}</span><div>{entry.text}</div></div>)}</div>}
+    </div>
+    <SideContext.Provider value={{ ...side, contextExpanded: expanded }}>{props.renderSlot('conversation.session', { view: 'chat' })}</SideContext.Provider>
+  </div>
 }
 function Content(props: ContentProps) {
   return props.renderFactorySlot('conversation.content', { variant: 'embedded', phase: 'active', hero: false }, { slots: { views: ChatView } })
@@ -58,12 +78,13 @@ export function addReply(side: SideConversation, message: ChatMessage, question?
   }
 }
 
-interface ActionProps { seq: number; turn: { end?: { data: { reason: { kind: string } } } }; useChat<T>(select: (state: { legacy?: Parameters<typeof transcriptOf>[0] }) => T): T }
+interface ActionProps { messageId: string; useChat<T>(select: (state: ChatReplySnapshot) => T): T }
 function ReflowAction(props: ActionProps) {
   const side = useContext(SideContext)
-  const legacy = props.useChat(state => state.legacy)
-  if (side === null || props.turn.end?.data.reason.kind !== 'completed') return null
-  return <ReplyAction side={side} messages={transcriptOf(legacy ?? null)} seq={props.seq} />
+  const state = props.useChat(state => state)
+  const node = state.legacy?.nodes.find(node => (node as { messageId?: string }).messageId === props.messageId) as { seq: number } | undefined
+  if (side === null || !node || !completedReplySeqsOf(state).includes(node.seq)) return null
+  return <ReplyAction side={side} messages={transcriptOf(state.legacy ?? null)} seq={node.seq} />
 }
 function ReplyAction({ side, messages, seq }: { side: SideConversation; messages: ChatMessage[]; seq: number }) {
   useSyncExternalStore(side.reflow.subscribe, side.reflow.getSnapshot)
@@ -71,7 +92,10 @@ function ReplyAction({ side, messages, seq }: { side: SideConversation; messages
   if (!reply) return null
   const question = pairQuestions(messages).get(reply.key)
   const added = isReplyAdded(side, reply, question)
-  return <button type="button" className={css.nativeAction} aria-pressed={added} disabled={added} onClick={() => { addReply(side, reply, question) }}>{t(added ? 'reflowDone' : 'reflowToMain')}</button>
+  const label = t(added ? 'reflowDone' : 'reflowToMain')
+  return <Tooltip label={label} side="top"><button type="button" className={css.reflowAction} aria-label={label} aria-pressed={added} disabled={added} onClick={() => { addReply(side, reply, question) }}>
+    {added ? <IconCheckOutline16 size={18} /> : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 4v16M20 12H8m5-5-5 5 5 5" /></svg>}
+  </button></Tooltip>
 }
 
 interface Entry { kind: 'node' | 'group'; key: string }
@@ -83,8 +107,6 @@ interface ViewProps {
   useConversation<T>(select: (state: ViewSnapshot) => T): T
 }
 function HistoryView({ Original, props, side }: { Original: ComponentType<ViewProps>; props: ViewProps; side: SideConversation }) {
-  const fold = useMemo(() => createFoldStore(`dsh-sidenote:fold:v1:${side.sessionId}`), [side.sessionId])
-  useSyncExternalStore(fold.subscribe, fold.getSnapshot)
   const nodes = props.useChat(state => state.nodes)
   const snapshot = props.useConversation(state => state)
   const groups = snapshot.views.grouped('chat')
@@ -100,15 +122,10 @@ function HistoryView({ Original, props, side }: { Original: ComponentType<ViewPr
     const members = groups?.groupSource(entry.key).getSnapshot()?.members ?? []
     return members.length > 0 && members.every(isInherited)
   }
-  const inherited = entries.filter(isInherited)
-  const expanded = fold.isOpen('inherited')
-  const visible = expanded ? entries : entries.filter(entry => !isInherited(entry))
+  const visible = side.contextExpanded ? entries : entries.filter(entry => !isInherited(entry))
   const projected = { ...snapshot, views: { ...snapshot.views, grouped: (name: string) => name === 'chat' && groups ? { ...groups, entries: visible } : snapshot.views.grouped(name) } }
   const useProjected = useCallback(<T,>(selector: (state: ViewSnapshot) => T): T => selector(projected), [projected])
-  return <>
-    {inherited.length > 0 && <button type="button" className={css.historyToggle} aria-expanded={expanded} onClick={() => { fold.toggle('inherited') }}>{t('inheritedLabel', { n: inherited.length })}</button>}
-    {createElement(Original, { ...props, useConversation: useProjected })}
-  </>
+  return createElement(Original, { ...props, useConversation: useProjected })
 }
 
 /** Both admitted hosts publish the native chat View; only 0.2.1 adds a Flow slot. */
@@ -169,7 +186,7 @@ function registerAssistantAnchors(ctx: Context): void {
 }
 export function registerNativeConversation(ctx: Context): void {
   ctx.slots.inject('sidenote.conversation', () => ctx.slots.register({ name: 'sidenote.conversation' }, Content))
-  ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({ name: 'conversation.chat.turnTail', id: 'dsh-sidenote-reflow', order: 20 }, ReflowAction))
+  ctx.slots.inject('conversation.chat.assistant-actions', () => ctx.slots.register({ name: 'conversation.chat.assistant-actions', id: 'dsh-sidenote-reflow', order: 100 }, ReflowAction))
   registerInheritedHistory(ctx)
   registerAssistantAnchors(ctx)
 }

@@ -67,7 +67,7 @@ test('side local selection saves outside, reanchors after reload, and sends full
 
   await restoreSameSide(page, child)
   await expect(side.getByText(/^(2 annotations|2 条注释)$/)).toBeVisible()
-  const inherited = side.getByRole('button', { name: /Inherited from main|继承自主会话/ })
+  const inherited = side.getByRole('button', { name: /Main conversation context|主线上下文/ })
   if (!await quoteBody.isVisible()) await inherited.click()
   await quoteBody.scrollIntoViewIfNeeded()
   await expect(badge).toBeVisible()
@@ -78,7 +78,7 @@ test('side local selection saves outside, reanchors after reload, and sends full
   await quoteBody.scrollIntoViewIfNeeded()
   await expect(badge).toBeVisible()
 
-  await side.getByRole('button', { name: /^(Send annotations|发送注释)$/ }).click()
+  await side.getByRole('button', { name: /^(Send|Send message|发送|发送消息|Queue message|加入队列|排队发送)$/ }).click()
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes('<note>侧回复的完整注解</note>'))).toHaveLength(1)
   const sent = userMessagesOf(child).find(text => text.includes('<note>侧回复的完整注解</note>'))!
   expect(sent.match(/<quote>full history snapshot<\/quote>/g)).toHaveLength(2)
@@ -149,7 +149,7 @@ test('whole side assistant selection keeps paragraphs, lists and code, excluding
   expect(record.text).toContain('const childId = await ctx.sessions.fork({ sessionId: parent.id })')
   expect(record.text).toContain('Overall: solid approach, ship it.')
   expect(record.text).not.toMatch(/Copy|Wrap lines/)
-  await side.getByRole('button', { name: /^(Send annotations|发送注释)$/ }).click()
+  await side.getByRole('button', { name: /^(Send|Send message|发送|发送消息|Queue message|加入队列|排队发送)$/ }).click()
   await expect.poll(() => userMessagesOf(child).slice(childBefore.length).filter(text => text.includes(record.text))).toHaveLength(1)
   expect(userMessagesOf(child).slice(0, childBefore.length)).toEqual(childBefore)
   expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)).toEqual(parentBefore)

@@ -7,6 +7,20 @@
 .nativeHost, .root { height: 100%; }
 .root { color: var(--dsw-alias-label-primary); }
 .nativeConversation { flex: 1; }
+.chatView { display: flex; flex-direction: column; flex: 1 0 auto; min-width: 0; }
+.mainContext { flex: none; padding: 12px 24px 4px; }
+.historyToggle { display: flex; align-items: center; gap: 6px; }
+.contextHint { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
+.contextChevron { transform: rotate(-90deg); }
+.contextChevron, .contextChevronOpen { flex: none; }
+.progressEntries { max-height: 240px; overflow: auto; margin: 8px 6px; }
+.progressEntry { margin: 10px 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
+.root [data-sidenote-progress-snapshot] { display: none; }
+.root[data-sidenote-context-pending] [data-submission-echo] { display: none; }
+.reflowAction { flex: none; order: 1; margin-left: auto; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
+.reflowAction:hover { color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-interactive-bg-hover); }
+.reflowAction:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
+.reflowAction:disabled { cursor: default; color: var(--dsw-alias-state-business-primary); background: transparent; }
 .nativeToolbar {
   display: flex;
   align-items: center;
@@ -31,7 +45,7 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 .nativeAction:disabled { opacity: .5; cursor: default; }
-.historyToggle { display: block; margin: 8px 0; text-align: left; }
+.historyToggle { margin: 0; text-align: left; }
 .stateScreen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 24px 16px; }
 .emptyIcon { color: var(--dsw-alias-label-tertiary); }
 .emptyTitle { font-size: 14px; font-weight: 600; }

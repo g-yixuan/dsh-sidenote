@@ -3,8 +3,13 @@
  * 序列化、呈现层的块拆分（气泡只留正文、快照提升到继承卡）。
  */
 import { describe, expect, it } from 'vitest'
-import { serializeSnapshot, snapshotEntriesOf, SNAPSHOT_BLOCK_MARK } from '../src/client/sidechat/snapshot.ts'
+import { serializeSnapshot, snapshotEntriesOf, snapshotEntriesFromText, SNAPSHOT_BLOCK_MARK } from '../src/client/sidechat/snapshot.ts'
 import { splitSnapshotPrefix } from '../src/client/sidechat/snapshot.ts'
+
+it('renders saved progress as readable entries without exposing protocol markup', () => {
+  const entries = [{ kind: 'request' as const, text: '检查目录' }, { kind: 'tool' as const, toolName: 'read', text: '完整输出\n第二行' }]
+  expect(snapshotEntriesFromText(serializeSnapshot(entries, new Date('2026-10-24T12:00:00Z')))).toEqual(entries)
+})
 
 const userNode = (text: string) => ({ kind: 'user', seq: 1, content: [{ type: 'text', text }] })
 const assistantNode = (reply: string, thinking?: string) => ({

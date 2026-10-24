@@ -101,6 +101,10 @@ test('busy fork keeps the parent running and consumes its progress snapshot once
   const side = sideChatOf(page)
   const input = side.locator('[data-composer-input]')
   await expect(input).toHaveText('')
+  await expect(side.locator('[data-sidenote-main-context]')).toContainText(/Updates on first send|发送时更新/)
+  const panelBox = (await side.boundingBox())!
+  const inputBox = (await input.boundingBox())!
+  expect(inputBox.y).toBeGreaterThan(panelBox.y + panelBox.height * 0.65)
   await addSideQuote(page, 'busy fork annotation')
   await input.fill('first accepted busy fork question'); await input.press('Enter')
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes('first accepted busy fork question'))).toHaveLength(1)
@@ -109,6 +113,8 @@ test('busy fork keeps the parent running and consumes its progress snapshot once
   expect(first).toContain('main is still executing the busy fork request [e2e:hold]')
   expect(first).toContain('<note>busy fork annotation</note>')
   await expect(input).toHaveText('')
+  await expect(side.locator('[data-sidenote-main-context]')).toContainText(/As of|截至/)
+  await expect(side.locator('[data-sidenote-progress-snapshot]')).not.toBeVisible()
 
   const sideStop = side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })
   await expect(sideStop).toHaveCount(0)

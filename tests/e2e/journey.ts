@@ -139,7 +139,7 @@ export async function openSideChat(page: Page): Promise<string> {
   expect(child).not.toBe(process.env.DSH_E2E_SEED_SESSION)
   await expect(side.locator('[data-composer-input]')).toBeVisible()
   const history = side.getByText(/full history snapshot/).first()
-  if (!await history.isVisible()) await side.getByRole('button', { name: /Inherited from main|继承自主会话/ }).click({ timeout: 15_000 })
+  if (!await history.isVisible()) await side.getByRole('button', { name: /Main conversation context|主线上下文/ }).click({ timeout: 15_000 })
   await expect(history).toBeVisible()
   return child!
 }
