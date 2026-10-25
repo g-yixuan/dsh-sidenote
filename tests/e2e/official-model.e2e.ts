@@ -7,6 +7,56 @@ import { openSideChat, prepareSeedPage, registerSeedWorkspace, sessionEventsOf, 
 test.skip(!process.env.DSH_E2E_REAL_MODEL, 'Set DSH_E2E_REAL_KEY_FILE for the official DeepSeek lane')
 test.beforeAll(registerSeedWorkspace)
 
+test('official Flash inherits live main progress on the first image + text message', async ({ page }) => {
+  test.setTimeout(180_000)
+  const mainId = process.env.DSH_E2E_SEED_SESSION!
+  const marker = 'IMAGE-CONTEXT-' + randomUUID()
+  writeFileSync(join(process.env.DSH_E2E_WORKSPACE!, 'image-main.txt'), marker + '\n')
+  await prepareSeedPage(page)
+  const main = page.locator('[data-conversation-session]').first()
+  await selectModel(page, main, 'DeepSeek Flash (official E2E)')
+  const before = sessionEventsOf(mainId).at(-1)!.seq
+  const mainInput = main.locator('[data-composer-input]')
+  await mainInput.fill('先调用 read 工具读取 image-main.txt；看到结果后再单独调用 bash 执行 sleep 35，等待结束后回复文件标记。不要合并两次工具调用。')
+  await mainInput.press('Enter')
+  await expect.poll(() => sessionEventsOf(mainId).some(event => event.seq > before && event.type === 'tool/result' && JSON.stringify(event.data).includes(marker)), { timeout: 60_000 }).toBe(true)
+  await expect.poll(() => sessionEventsOf(mainId).some(event => event.seq > before && event.type === 'tool/call' && JSON.stringify(event.data).includes('sleep 35')), { timeout: 60_000 }).toBe(true)
+  const mainStop = main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })
+  await expect(mainStop).toBeVisible()
+  const child = await openSideChat(page)
+  const side = sideChatOf(page)
+  const context = side.locator('[data-sidenote-main-context]')
+  await expect(context).toContainText(/Updates on first send|发送时更新/)
+  await expect(context).toContainText(marker)
+  await selectModel(page, side, 'DeepSeek Flash (official E2E)')
+  const childBefore = sessionEventsOf(child).at(-1)!.seq
+  await side.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
+  const prompt = '根据继承的主线进展，原样复述刚才工具读取到的文件标记，并简述附件是否可辨认。不要调用任何工具，不要猜测标记。'
+  await side.locator('[data-composer-input]').fill(prompt)
+  await expect(mainStop).toBeVisible()
+  await side.getByRole('button', { name: /^(Send message|发送消息)$/ }).click()
+  await expect.poll(() => userMessagesOf(child).some(text => text.includes(prompt))).toBe(true)
+  const sent = userMessagesOf(child).find(text => text.includes(prompt))!
+  expect(sent.match(/<mainline-progress-snapshot /g)).toHaveLength(1)
+  expect(sent).toContain(marker)
+  expect(userMessageContentsOf(child).at(-1)?.some(block => block.type === 'image')).toBe(true)
+  await expect(context).toContainText(/As of|截至/)
+  await expect(context).toContainText(marker)
+  await expect(side.locator('[data-chat-flow-kind="user"] img').last()).toBeVisible()
+  await expect(side.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: marker }).last()).toBeVisible({ timeout: 60_000 })
+  await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
+  expect(sessionEventsOf(child).some(event => event.seq > childBefore && event.type === 'tool/call')).toBe(false)
+  expect(userMessagesOf(mainId).some(text => text.includes(prompt))).toBe(false)
+  if (await mainStop.isVisible()) await mainStop.click()
+  await page.reload()
+  await expect(side).toHaveAttribute('data-sidenote-chat-session', child)
+  await expect(context).toContainText(/As of|截至/)
+  await expect(context).toContainText(marker)
+  await context.getByRole('button').scrollIntoViewIfNeeded()
+  await page.screenshot({ path: 'test-results/official-image-context.png' })
+  writeFileSync('test-results/official-image-context.json', JSON.stringify({ model: 'deepseek-flash', mainId, child, marker, imagePersisted: true, modelReadProgressWithoutTools: true, timestampAndDetailsRestored: true, isolated: true }, null, 2) + '\n')
+})
+
 test('official Flash UI regressions: live context, empty annotation send and inline reflow', async ({ page }) => {
   test.setTimeout(240_000)
   const mainId = process.env.DSH_E2E_SEED_SESSION!
