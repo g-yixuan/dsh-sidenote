@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { ConversationSnapshot } from '../../src/client/host/contracts.ts'
+import { splitSnapshotPrefix } from '../../src/client/annotations/format.ts'
 import {
   contentTextOf,
   partitionInherited,
@@ -12,13 +13,23 @@ import {
 } from '../../src/client/chat/transcript.ts'
 
 describe('contentTextOf', () => {
-  it('text 块拼接、image 块占位、未知块忽略', () => {
+  it('text 块拼接，附件不混入协议文本，未知块忽略', () => {
     expect(contentTextOf([
       { type: 'text', text: '一' },
       { type: 'image' },
       { type: 'tool_use', id: 'x' },
       { type: 'text', text: '二' },
-    ])).toBe('一\n[Image]\n二')
+    ])).toBe('一\n二')
+  })
+  it('没有正文的图片消息保留占位说明', () => {
+    expect(contentTextOf([{ type: 'image' }])).toBe('[Image]')
+  })
+  it.each(['user', 'steering'])('图片在前的 %s 消息仍可恢复完整主线进展', kind => {
+    const snapshot = '<mainline-progress-snapshot taken-at="2026-10-26 10:00"><user-request>主线任务</user-request><tool-call name="read">完整结果</tool-call></mainline-progress-snapshot>'
+    const content = [{ type: 'image', data: 'untouched' }, { type: 'text', text: snapshot + '\n\n图片里的问题' }]
+    const message = nodeToMessage({ kind, seq: 10, content })!
+    expect(splitSnapshotPrefix(message.text)).toEqual({ snapshot, takenAt: '2026-10-26 10:00', rest: '图片里的问题' })
+    expect(content[0]).toEqual({ type: 'image', data: 'untouched' })
   })
   it('非数组/空输入返回空串', () => {
     expect(contentTextOf(undefined)).toBe('')

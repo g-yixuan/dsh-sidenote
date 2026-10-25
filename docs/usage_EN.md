@@ -10,7 +10,7 @@ Use the session header's **Side** button, the right-sidebar entry, or `/side` in
 
 With an image-capable model, focus the side composer and press `⌘V` / `Ctrl+V` to paste clipboard images, or use the attachment button to select them. Images appear above the input and can be removed before sending. Send images on their own or together with text.
 
-**Main conversation context** appears as soon as the side chat opens, with inherited history collapsed by default. Click to expand it. When opened during a running main turn, progress updates until the first send, then freezes to the snapshot actually sent and shows its timestamp. The composer stays at the bottom even in an empty side chat. Fold state and native drafts survive reloads; `Alt+S` switches focus between the main and side composers.
+**Main conversation context** appears as soon as the side chat opens, with inherited history collapsed by default. Click to expand it. When opened during a running main turn, progress updates until the first send, then freezes to the snapshot actually sent and shows its timestamp. Sending images together with text retains the same snapshot, timestamp, and expandable details. The composer stays at the bottom even in an empty side chat. Fold state and native drafts survive reloads; `Alt+S` switches focus between the main and side composers.
 
 ![An independent conversation in the native sidebar](assets/sidechat.jpg)
 

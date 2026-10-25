@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { addReply, finalReplies, isReplyAdded, type SideConversation } from '../src/client/sidechat/NativeConversation.tsx'
 import { createReflowStore } from '../src/client/reflow.ts'
-import type { ChatMessage } from '../src/client/chat/transcript.ts'
+import { nodeToMessage, type ChatMessage } from '../src/client/chat/transcript.ts'
 import { pairQuestions } from '../src/client/sidechat/model.ts'
 
 const message = (role: ChatMessage['role'], text: string, seq: number, extra: Partial<ChatMessage> = {}): ChatMessage => ({ role, text, seq, key: String(seq), ...extra })
@@ -9,6 +9,13 @@ describe('fork-local final answers', () => {
   it('reflows the question without duplicating a busy-fork progress snapshot', () => {
     const question = '<mainline-progress-snapshot taken-at="now">inherited progress</mainline-progress-snapshot>\n\nactual question'
     expect(pairQuestions([message('user', question, 3), message('assistant', 'final', 4)]).get('4')).toBe('actual question')
+  })
+  it('reflows an image question without returning its inherited progress as question text', () => {
+    const question = nodeToMessage({ kind: 'user', seq: 3, content: [
+      { type: 'image' },
+      { type: 'text', text: '<mainline-progress-snapshot taken-at="now">inherited progress</mainline-progress-snapshot>\n\nactual image question' },
+    ] })!
+    expect(pairQuestions([question, message('assistant', 'final', 4)]).get('4')).toBe('actual image question')
   })
   it('does not return inherited or intermediate answers', () => {
     expect(finalReplies([

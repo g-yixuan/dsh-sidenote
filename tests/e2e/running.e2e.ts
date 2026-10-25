@@ -1,13 +1,14 @@
 import { expect, test, type Page } from '@playwright/test'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, selectModel } from './journey'
+import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, userMessageContentsOf, selectModel } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
 test.afterEach(async ({ page }, info) => {
   const dir = process.env.DSH_E2E_EVIDENCE_DIR ?? 'test-results'
   mkdirSync(dir, { recursive: true })
-  const name = info.title.startsWith('busy fork') ? 'busy-fork' : 'native-queue-steer'
+  const name = info.title.startsWith('busy fork') ? `busy-fork-${info.title.includes('image') ? 'image' : 'text'}` : 'native-queue-steer'
+  if (info.title.startsWith('busy fork')) await sideChatOf(page).locator('[data-sidenote-main-context] button').scrollIntoViewIfNeeded()
   await page.screenshot({ path: join(dir, name + '.png') })
   if (info.status !== info.expectedStatus) writeFileSync(join(dir, name + '.yml'), await page.locator('body').ariaSnapshot())
 })
@@ -80,7 +81,7 @@ test('native Queue acceptance, Stop preserving queued quotes, and explicit Steer
   if (await stop.isVisible()) await stop.click()
 })
 
-test('busy fork keeps the parent running and consumes its progress snapshot once after acceptance', async ({ page }) => {
+for (const withImage of [false, true]) test(`busy fork keeps the parent running and consumes its progress snapshot once after acceptance (${withImage ? 'image + text' : 'text'})`, async ({ page }) => {
   await prepareSeedPage(page)
   const mainSeat = page.locator('[data-composer-seat]').first()
   await mainSeat.getByRole('button', { name: /^(Select model|请选择模型|选择模型)/ }).click()
@@ -106,14 +107,20 @@ test('busy fork keeps the parent running and consumes its progress snapshot once
   const inputBox = (await input.boundingBox())!
   expect(inputBox.y).toBeGreaterThan(panelBox.y + panelBox.height * 0.65)
   await addSideQuote(page, 'busy fork annotation')
+  if (withImage) await side.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
   await input.fill('first accepted busy fork question'); await input.press('Enter')
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes('first accepted busy fork question'))).toHaveLength(1)
   const first = userMessagesOf(child).find(text => text.includes('first accepted busy fork question'))!
   expect(first.match(/<mainline-progress-snapshot /g)).toHaveLength(1)
   expect(first).toContain('main is still executing the busy fork request [e2e:hold]')
   expect(first).toContain('<note>busy fork annotation</note>')
+  if (withImage) {
+    expect(userMessageContentsOf(child).find(content => content.some(block => block.text?.includes('first accepted busy fork question')))?.some(block => block.type === 'image')).toBe(true)
+    await expect(side.locator('[data-chat-flow-kind="user"] img').last()).toBeVisible()
+  }
   await expect(input).toHaveText('')
   await expect(side.locator('[data-sidenote-main-context]')).toContainText(/As of|截至/)
+  await expect(side.locator('[data-sidenote-main-context]')).toContainText('main is still executing the busy fork request [e2e:hold]')
   await expect(side.locator('[data-sidenote-progress-snapshot]')).not.toBeVisible()
 
   const sideStop = side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })
@@ -123,4 +130,8 @@ test('busy fork keeps the parent running and consumes its progress snapshot once
   expect(userMessagesOf(child).find(text => text.includes('second busy fork question'))).not.toContain('<mainline-progress-snapshot')
   expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!).some(text => text.includes('accepted busy fork question') || text.includes('second busy fork question'))).toBe(false)
   if (await mainStop.isVisible()) await mainStop.click()
+  await page.reload()
+  await expect(side).toHaveAttribute('data-sidenote-chat-session', child)
+  await expect(side.locator('[data-sidenote-main-context]')).toContainText(/As of|截至/)
+  await expect(side.locator('[data-sidenote-main-context]')).toContainText('main is still executing the busy fork request [e2e:hold]')
 })

@@ -31,17 +31,19 @@ interface LooseBlock {
   name?: unknown
 }
 
-/** ContentBlock[] → 纯文本：text 块拼接；image 块降级占位；其余忽略。 */
+/** Protocol readers need actual text, not attachment preview labels before it.
+ * Native Conversation renders images; only an image-only message needs a label. */
 export function contentTextOf(content: unknown): string {
   if (!Array.isArray(content)) return ''
   const parts: string[] = []
+  let hasImage = false
   for (const block of content) {
     if (typeof block !== 'object' || block === null) continue
     const b = block as LooseBlock
     if (b.type === 'text' && typeof b.text === 'string') parts.push(b.text)
-    else if (b.type === 'image') parts.push(t('imagePlaceholder'))
+    else if (b.type === 'image') hasImage = true
   }
-  return parts.join('\n')
+  return parts.join('\n') || (hasImage ? t('imagePlaceholder') : '')
 }
 
 function seqKey(prefix: string, node: Record<string, unknown>): string {
