@@ -28,6 +28,7 @@ test('official Flash inherits live main progress on the first image + text messa
   const context = side.locator('[data-sidenote-main-context]')
   await expect(context).toContainText(/Updates on first send|发送时更新/)
   await expect(context).toContainText(marker)
+  await expect(context.locator('[data-sidenote-context-progress] > :last-child')).toBeInViewport()
   await selectModel(page, side, 'DeepSeek Flash (official E2E)')
   const childBefore = sessionEventsOf(child).at(-1)!.seq
   await side.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
@@ -166,6 +167,7 @@ test('official Flash executes real file tools in main and side, with isolated mu
   const child = await openSideChat(page)
   const side = sideChatOf(page)
   await selectModel(page, side, 'DeepSeek Flash (official E2E)')
+  await expect(side.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: mainMarker })).toBeInViewport()
   const baselineSide = sessionEventsOf(child).at(-1)!.seq
   const mainBefore = userMessagesOf(mainId)
   const input = side.locator('[data-composer-input]')
