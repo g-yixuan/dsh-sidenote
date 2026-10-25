@@ -8,6 +8,7 @@
 .root { color: var(--dsw-alias-label-primary); }
 .nativeConversation { flex: 1; }
 .chatView { display: flex; flex-direction: column; flex: 1 0 auto; min-width: 0; }
+.historyView { display: contents; }
 .mainContext { flex: none; padding: 12px 24px 4px; }
 .historyToggle { display: flex; align-items: center; gap: 6px; }
 .contextHint { color: var(--dsw-alias-label-tertiary); font-size: 12px; }

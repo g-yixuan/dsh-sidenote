@@ -1,8 +1,9 @@
-import { createContext, createElement, useCallback, useContext, useMemo, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
+import { createContext, createElement, useCallback, useContext, useLayoutEffect, useMemo, useRef, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
 import type { Context, SessionReference } from '../host/contracts.ts'
 import { transcriptOf, type ChatMessage } from '../chat/transcript.ts'
 import { createFoldStore } from '../chat/viewState.ts'
 import { completedReplySeqsOf, type ChatReplySnapshot } from '../host/chat.ts'
+import { lastConversationEntry, revealConversationEntryEnd } from '../host/dom.ts'
 import { IconCheckOutline16, IconChevronDownOutline14 } from '../host/icons.ts'
 import type { SnapshotEntry } from './snapshot.ts'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -45,7 +46,7 @@ function ChatView(props: { renderSlot(name: 'conversation.session', owner: { vie
         <IconChevronDownOutline14 size={12} className={expanded ? css.contextChevronOpen : css.contextChevron} />
         <span>{t('mainContext')}</span><span className={css.contextHint}>{side.contextPending ? t('contextAtSend') : side.progress?.takenAt ? t('contextAsOf', { time: side.progress.takenAt }) : t('contextInherited')}</span>
       </button>
-      {expanded && side.progress && <div className={css.progressEntries}>{side.progress.entries.map((entry, index) => <div key={index} className={css.progressEntry}><span className={css.contextHint}>{entry.kind === 'tool' ? entry.toolName : t(`context${entry.kind}`)}</span><div>{entry.text}</div></div>)}</div>}
+      {expanded && side.progress && <div className={css.progressEntries} data-sidenote-context-progress>{side.progress.entries.map((entry, index) => <div key={index} className={css.progressEntry}><span className={css.contextHint}>{entry.kind === 'tool' ? entry.toolName : t(`context${entry.kind}`)}</span><div>{entry.text}</div></div>)}</div>}
     </div>
     <SideContext.Provider value={{ ...side, contextExpanded: expanded }}>{props.renderSlot('conversation.session', { view: 'chat' })}</SideContext.Provider>
   </div>
@@ -107,6 +108,8 @@ interface ViewProps {
   useConversation<T>(select: (state: ViewSnapshot) => T): T
 }
 function HistoryView({ Original, props, side }: { Original: ComponentType<ViewProps>; props: ViewProps; side: SideConversation }) {
+  const root = useRef<HTMLDivElement>(null)
+  const wasExpanded = useRef(side.contextExpanded)
   const nodes = props.useChat(state => state.nodes)
   const snapshot = props.useConversation(state => state)
   const groups = snapshot.views.grouped('chat')
@@ -125,7 +128,27 @@ function HistoryView({ Original, props, side }: { Original: ComponentType<ViewPr
   const visible = side.contextExpanded ? entries : entries.filter(entry => !isInherited(entry))
   const projected = { ...snapshot, views: { ...snapshot.views, grouped: (name: string) => name === 'chat' && groups ? { ...groups, entries: visible } : snapshot.views.grouped(name) } }
   const useProjected = useCallback(<T,>(selector: (state: ViewSnapshot) => T): T => selector(projected), [projected])
-  return createElement(Original, { ...props, useConversation: useProjected })
+  // Only an explicit expansion navigates. Later stream/layout updates and
+  // restored fold state leave the host's reader-position policy in charge.
+  useLayoutEffect(() => {
+    const opening = side.contextExpanded && !wasExpanded.current
+    wasExpanded.current = side.contextExpanded
+    if (!opening) return
+    const keys = new Set(entries.filter(isInherited).map(entry => entry.key))
+    // Native Chat settles its content resize first; navigate in the next frame
+    // so its initial tail restoration cannot overwrite this explicit action.
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        if (!root.current) return
+        const progress = root.current.closest('[data-sidenote-transcript]')?.querySelector<HTMLElement>('[data-sidenote-context-progress]')
+        if (progress) progress.scrollTop = progress.scrollHeight
+        const target = progress ?? lastConversationEntry(root.current, keys)
+        if (target) revealConversationEntryEnd(target)
+      })
+    })
+    return () => { cancelAnimationFrame(frame) }
+  }, [side.contextExpanded])
+  return <div ref={root} className={css.historyView}>{createElement(Original, { ...props, useConversation: useProjected })}</div>
 }
 
 /** Both admitted hosts publish the native chat View; only 0.2.1 adds a Flow slot. */
