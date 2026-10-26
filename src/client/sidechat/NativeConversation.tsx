@@ -46,7 +46,7 @@ function ChatView(props: { renderSlot(name: 'conversation.session', owner: { vie
         <IconChevronDownOutline14 size={12} className={expanded ? css.contextChevronOpen : css.contextChevron} />
         <span>{t('mainContext')}</span><span className={css.contextHint}>{side.contextPending ? t('contextAtSend') : side.progress?.takenAt ? t('contextAsOf', { time: side.progress.takenAt }) : t('contextInherited')}</span>
       </button>
-      {expanded && side.progress && <div className={css.progressEntries} data-sidenote-context-progress>{side.progress.entries.map((entry, index) => <div key={index} className={css.progressEntry}><span className={css.contextHint}>{entry.kind === 'tool' ? entry.toolName : t(`context${entry.kind}`)}</span><div>{entry.text}</div></div>)}</div>}
+      {expanded && side.progress && side.progress.entries.length > 0 && <div className={css.progressEntries} data-sidenote-context-progress>{side.progress.entries.map((entry, index) => <div key={index} className={css.progressEntry}><span className={css.contextHint}>{entry.kind === 'tool' ? entry.toolName : t(`context${entry.kind}`)}</span><div>{entry.text}</div></div>)}</div>}
     </div>
     <SideContext.Provider value={{ ...side, contextExpanded: expanded }}>{props.renderSlot('conversation.session', { view: 'chat' })}</SideContext.Provider>
   </div>

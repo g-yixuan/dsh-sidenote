@@ -95,3 +95,32 @@ test('context expansion opens running progress at its newest entry', async ({ pa
   await expect.poll(() => endIsVisible(progress)).toBe(true)
   await stop.click()
 })
+
+test('context expansion with empty progress falls back to the latest inherited message', async ({ page }) => {
+  await prepareSeedPage(page)
+  const main = page.locator('[data-conversation-session]').first()
+  await selectModel(page, main, 'Controlled E2E')
+  await send(main, 'Latest completed main turn before sending an image alone')
+  const latestKey = await main.locator('[data-chat-flow-kind="assistant-step"]').last().getAttribute('data-chat-flow-key')
+  expect(latestKey).toBeTruthy()
+  await main.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
+  await main.getByRole('button', { name: /^(Send message|发送消息)$/ }).click()
+  const stop = main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })
+  await expect(stop).toBeVisible()
+  try {
+    await openSideChat(page)
+    const side = sideChatOf(page)
+    await expect(side.locator('[data-sidenote-main-context]')).toContainText(/Updates on first send|发送时更新/)
+    await expect(side.locator('[data-sidenote-context-progress]')).toHaveCount(0)
+    const latest = side.locator(`[data-chat-flow-key=${JSON.stringify(latestKey)}]`)
+    await expect.poll(() => endIsVisible(latest)).toBe(true)
+    const toggle = side.locator('[data-sidenote-main-context] button')
+    await toggle.press('Enter')
+    await toggle.press('Enter')
+    await expect.poll(() => endIsVisible(latest)).toBe(true)
+    await expect(stop).toBeVisible()
+    await page.screenshot({ path: 'test-results/context-empty-progress.png' })
+  } finally {
+    if (await stop.isVisible()) await stop.click()
+  }
+})
