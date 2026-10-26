@@ -3,6 +3,16 @@
 export const name = 'sidenote-e2e-model'
 export const inject = ['llm']
 
+// Keep a real turn pending until it is stopped, with an upper bound for failures.
+function holdResponse(signal) {
+  return new Promise((resolve, reject) => {
+    const abort = () => { clearTimeout(timer); reject(signal.reason) }
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', abort); resolve() }, 40_000)
+    if (signal?.aborted) abort()
+    else signal?.addEventListener('abort', abort, { once: true })
+  })
+}
+
 export function apply(ctx) {
   const provider = 'sidenote-e2e'
   const model = { provider, id: 'controlled', name: 'Controlled E2E', inputModalities: ['text', 'image'], context: { contextWindow: 32768 }, defaultMaxTokens: 128 }
@@ -19,6 +29,8 @@ export function apply(ctx) {
       const users = options.messages.filter(message => message.role === 'user' && message.source.kind === 'user')
       const last = users.at(-1)?.content ?? []
       const text = last.filter(block => block.type === 'text').map(block => block.text).join('\n')
+      // An image-only request can have no textual progress before its first token.
+      if (text.trim() === '' && last.some(block => block.type === 'image')) await holdResponse(options.signal)
       const lastHuman = options.messages.findLastIndex(message => message.role === 'user' && message.source.kind === 'user')
       const hasToolResult = options.messages.slice(lastHuman + 1).some(message => message.source.kind === 'tool')
       let call
@@ -46,14 +58,7 @@ export function apply(ctx) {
       }
       yield { type: 'block-start', index: 0, blockType: 'text' }
       yield { type: 'text-delta', index: 0, text: reply }
-      if (text.trimEnd().endsWith('[e2e:hold]')) {
-        await new Promise((resolve, reject) => {
-          const abort = () => { clearTimeout(timer); reject(options.signal.reason) }
-          const timer = setTimeout(() => { options.signal?.removeEventListener('abort', abort); resolve() }, 40_000)
-          if (options.signal?.aborted) abort()
-          else options.signal?.addEventListener('abort', abort, { once: true })
-        })
-      }
+      if (text.trimEnd().endsWith('[e2e:hold]')) await holdResponse(options.signal)
       options.signal?.throwIfAborted()
       yield { type: 'block-end', index: 0, block: { type: 'text', text: reply } }
       yield { type: 'finish', reason: { kind: 'stop' } }
