@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { expect, test, type Locator } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { openSideChat, prepareSeedPage, registerSeedWorkspace, selectModel, sessionEventsOf, userMessagesOf, sideChatOf } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
@@ -181,11 +181,24 @@ test('long side history restores the first-send progress when expanding after re
 })
 
 
+/** Stress histories must not change the shared seed used by selection and
+ * diagnostics journeys later in the same host process. */
+async function isolatedMain(page: Page, real = false): Promise<Locator> {
+  await prepareSeedPage(page)
+  await page.getByRole('button', { name: /^(New chat|New session|New conversation|新会话|新对话)$/ }).first().click()
+  const main = page.locator('[data-conversation-session]').first()
+  await expect(main).not.toHaveAttribute('data-conversation-session', process.env.DSH_E2E_SEED_SESSION!)
+  await selectModel(page, main, real ? 'DeepSeek Flash (official E2E)' : 'Controlled E2E')
+  await main.locator('[data-composer-input]').fill('Start an isolated full history snapshot. 只回复就绪，不调用工具。')
+  await main.locator('[data-composer-input]').press('Enter')
+  await expect(main.locator('[data-chat-flow-kind="assistant-step"]')).toHaveCount(1, { timeout: 30_000 })
+  await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0, { timeout: 30_000 })
+  return main
+}
+
 test('delayed context loading yields to newer reader intent and repairs a legacy boundary', async ({ page }) => {
   test.setTimeout(240_000)
-  await prepareSeedPage(page)
-  const main = page.locator('[data-conversation-session]').first()
-  await selectModel(page, main, 'Controlled E2E')
+  const main = await isolatedMain(page)
   await main.locator('[data-composer-input]').fill('Review snapshot marker [e2e:hold]')
   await main.locator('[data-composer-input]').press('Enter')
   await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toBeVisible()
@@ -259,14 +272,13 @@ test('delayed context loading yields to newer reader intent and repairs a legacy
 for (const real of [false, true]) test(`${real ? 'official Flash' : 'native'} first-send snapshot covers a mainline gap beyond the tail page`, async ({ page }) => {
   test.skip(real && !process.env.DSH_E2E_REAL_MODEL, 'Requires the official DeepSeek lane')
   test.setTimeout(300_000)
-  await prepareSeedPage(page)
-  const main = page.locator('[data-conversation-session]').first()
-  await selectModel(page, main, real ? 'DeepSeek Flash (official E2E)' : 'Controlled E2E')
+  const main = await isolatedMain(page, real)
+  const mainId = (await main.getAttribute('data-conversation-session'))!
   const marker = 'EARLY-MAIN-REQUIRED-' + randomUUID()
   await main.locator('[data-composer-input]').fill(real ? `请记住核验码 ${marker}。调用 bash 执行 sleep 45，结束后简短确认。` : `${marker} [e2e:hold]`)
   await main.locator('[data-composer-input]').press('Enter')
   await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toBeVisible()
-  if (real) await expect.poll(() => sessionEventsOf(process.env.DSH_E2E_SEED_SESSION!).some(event => event.type === 'tool/call' && JSON.stringify(event.data).includes('sleep 45')), { timeout: 30_000 }).toBe(true)
+  if (real) await expect.poll(() => sessionEventsOf(mainId).some(event => event.type === 'tool/call' && JSON.stringify(event.data).includes('sleep 45')), { timeout: 30_000 }).toBe(true)
   const child = await openSideChat(page)
   const side = sideChatOf(page)
   await main.getByRole('button', { name: /^(Stop generating|停止生成)$/ }).click()
@@ -280,7 +292,6 @@ for (const real of [false, true]) test(`${real ? 'official Flash' : 'native'} fi
   }
   const previewBefore = await side.locator('[data-sidenote-context-progress]').textContent()
   expect(previewBefore).toContain(marker)
-  const mainId = (await main.getAttribute('data-conversation-session'))!
   await page.reload()
   await expect(side).toHaveAttribute('data-sidenote-chat-session', child)
   await expect(side.locator('[data-sidenote-main-context]')).toContainText(/Updates on first send|发送时更新/)
