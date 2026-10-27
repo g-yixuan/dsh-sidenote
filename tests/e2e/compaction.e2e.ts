@@ -1,7 +1,18 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
+import { fromMarkdown } from 'mdast-util-from-markdown'
 import { randomUUID } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { prepareSeedPage, registerSeedWorkspace, selectModel, sessionEventsOf, sideChatOf, userMessagesOf } from './journey'
+
+// Context now renders Markdown. Check every source text leaf instead of
+// requiring visible heading/list delimiters that should disappear on rendering.
+async function expectMarkdownContent(row: Locator, markdown: string): Promise<void> {
+  const visit = async (node: { value?: string; children?: readonly unknown[] }): Promise<void> => {
+    if (node.value?.trim()) await expect(row).toContainText(node.value)
+    for (const child of node.children ?? []) await visit(child as typeof node)
+  }
+  await visit(fromMarkdown(markdown))
+}
 
 test.beforeAll(registerSeedWorkspace)
 test('native side send during standalone compaction does not inherit its lock or defer the first snapshot', async ({ page }) => {
@@ -84,8 +95,9 @@ for (const real of [false, true]) for (const busy of [false, true]) test(`${real
   await context.locator(':scope > button').click()
   const entries = side.locator('[data-sidenote-context-progress] [data-context-kind]')
   await expect(entries.first()).toContainText(/Latest compaction summary|最新压缩摘要/)
-  await expect(entries.first()).toContainText(summary)
-  await expect(entries.nth(1)).toContainText(retained)
+  await expect(entries.first()).toHaveAttribute('data-context-kind', 'checkpoint')
+  await expectMarkdownContent(entries.first(), summary)
+  await expectMarkdownContent(entries.nth(1), retained)
   for (const message of rawInputs) await expect(side.locator('[data-chat-flow-kind="user"]').filter({ hasText: message })).toHaveCount(0)
   await context.locator(':scope > button').click()
   await side.locator('[data-composer-input]').fill('不要调用工具，根据继承上下文回复当前项目核验码和阶段。')
@@ -101,8 +113,9 @@ for (const real of [false, true]) for (const busy of [false, true]) test(`${real
   await expect(context.locator(':scope > button')).toHaveAttribute('aria-expanded', 'false')
   await expect(reply).toBeVisible()
   await context.locator(':scope > button').click()
-  await expect(entries.first()).toContainText(summary)
-  await expect(entries.nth(1)).toContainText(retained)
+  await expect(entries.first()).toHaveAttribute('data-context-kind', 'checkpoint')
+  await expectMarkdownContent(entries.first(), summary)
+  await expectMarkdownContent(entries.nth(1), retained)
   const name = `${real ? 'official' : 'native'}-compaction-${busy ? 'running' : 'idle'}`
   await page.screenshot({ path: `test-results/${name}.png` })
   writeFileSync(`test-results/${name}.json`, JSON.stringify({ mainId, child, checkpoints: checkpoints.map(event => event.seq), retainedTailSeq: events.filter(event => event.seq < checkpoint.seq && event.type === 'assistant/message').at(-1)!.seq, inheritedLatestCheckpoint: true, restored: true }, null, 2) + '\n')
