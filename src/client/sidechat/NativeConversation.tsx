@@ -169,13 +169,12 @@ function HistoryView({ Original, props, side }: { Original: ComponentType<ViewPr
           const progress = root.current.querySelector<HTMLElement>('[data-sidenote-context-progress]')
           if (progress) progress.scrollTop = progress.scrollHeight
           const target = progress ?? lastConversationEntry(root.current, navigationKeys.current)
-          if (target) revealConversationEntryEnd(target)
-          openingLatest.current = false
+          if (target) { revealConversationEntryEnd(target); openingLatest.current = false }
         })
       })
     }).catch(error => { console.warn('[dsh-sidenote] 加载继承上下文失败:', error) })
     return () => { cancelled = true; cancelAnimationFrame(frame) }
-  }, [side.contextExpanded, side.loadContext])
+  }, [side.contextExpanded, side.loadContext, showProgress, inheritedKeys])
   return <div ref={root} className={css.historyView}>{createElement(Original, { ...props, useConversation: useProjected })}
     {showProgress && createPortal(<ContextProgress entries={contextEntries} live={side.contextPending === true} />, progressSeat)}
   </div>

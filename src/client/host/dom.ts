@@ -147,6 +147,10 @@ export function revealConversationEntryEnd(row: HTMLElement): void {
   const scroller = row.closest<HTMLElement>('[data-conversation-scroll]')
   if (!scroller) return
   const clip = quoteClipOf(row, conversationViewOf(row))
+  // The host retains a paging anchor after loadThrough. Forward the explicit
+  // open gesture as reading intent before landing, otherwise it restores the
+  // old anchor over our scrollTop on the next resize. Zero delta never scrolls.
+  scroller.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 0 }))
   scroller.scrollTop += row.getBoundingClientRect().bottom - clip.bottom + 12
 }
 
