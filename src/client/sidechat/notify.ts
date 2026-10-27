@@ -1,6 +1,6 @@
 /** Observe durable completed turns for live side chats, including hidden panels. */
 import type { Context } from '../host/contracts.ts'
-import { openSessionWindow, isPurgingInheritedTurn } from './lifecycle.ts'
+import { openSessionWindow } from './lifecycle.ts'
 import { sideChatMetaStore, sideChatMetasAll } from './metaStore.ts'
 import { sideChatTitleOf } from './identity.ts'
 import { chatSourceOf, sessionStatusSource } from '../host/chat.ts'
@@ -46,7 +46,6 @@ export function registerCompletionNotify(ctx: Context): void {
           const watcher: Watcher = { unsub: () => {}, wasRunning: runningNow(), lastEndSeq: chat.getLastTurnEnd()?.seq ?? -1 }
           const check = (): void => {
             const running = runningNow()
-            if (isPurgingInheritedTurn(childId)) { watcher.wasRunning = running; return }
             const end = chat?.getLastTurnEnd?.()
             if (end && end.seq > watcher.lastEndSeq) {
               if (end.reason === 'completed' && watcher.wasRunning) {

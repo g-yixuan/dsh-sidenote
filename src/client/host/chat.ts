@@ -1,4 +1,36 @@
-import type { Context, ConversationSnapshot, ObservableSnapshot, SessionBinding, SessionReference, UiConversationLike } from './contracts.ts'
+import type { Context, ConversationSnapshot, ObservableSnapshot, SessionBinding, SessionFace, SessionReference, UiConversationLike } from './contracts.ts'
+
+export interface ContextEvent {
+  type: string
+  seq: number
+  data: { turn?: number | null; source?: { kind?: string }; content?: readonly { type: string; text?: string }[]; summary?: readonly { type: string; text?: string }[]; shadowedSeqs?: readonly number[] }
+  surfaceOp?: 'append' | { op: 'replace'; startSeq: number; endSeq: number }
+}
+export interface ContextEventWindow { entries: readonly { event: ContextEvent }[] }
+export function contextEventSource(session: SessionFace | undefined): ObservableSnapshot<ContextEventWindow> | undefined {
+  return (session as { eventSource?: ObservableSnapshot<ContextEventWindow> } | undefined)?.eventSource
+}
+
+/** A standalone /compact transaction can be newer than turn/end. Fork before
+ * its opening lock while it is unfinished; the first-send delta can then carry
+ * a checkpoint that commits later. Automatic compaction stays in the busy turn. */
+export function unfinishedCompactionCut(session: SessionFace | undefined): number | undefined {
+  const last = contextEventSource(session)?.getSnapshot().entries.findLast(({ event }) => event.type === 'compaction/start' || event.type === 'compaction/end')?.event
+  return last?.type === 'compaction/start' && last.data.turn === null ? last.seq - 1 : undefined
+}
+
+/** Published event window, shared by all supported hosts. Its last seed marker
+ * is the child’s own fork cut (earlier markers can belong to ancestor forks). */
+export function inheritedBoundarySource(session: SessionFace | undefined): ObservableSnapshot<number | undefined> | undefined {
+  const source = contextEventSource(session)
+  return source && {
+    subscribe: notify => source.subscribe(notify),
+    getSnapshot: () => {
+      const seed = source.getSnapshot().entries.findLast(entry => entry.event.type === 'session/end-seed')
+      return seed === undefined ? undefined : seed.event.seq - 1
+    },
+  }
+}
 
 /** Native root status includes approvals and questions, independently of running. */
 export function sessionStatusSource(ctx: Context): ObservableSnapshot<ReadonlyMap<string, { running?: boolean; pendingInteraction?: unknown }>> | undefined {

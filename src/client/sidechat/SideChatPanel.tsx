@@ -2,14 +2,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { SessionReference, TabComponentProps } from '../host/contracts.ts'
 import { focusMainComposer, focusSideComposer } from '../host/dom.ts'
-import { sessionStatusSource } from '../host/chat.ts'
+import { contextEventSource, inheritedBoundarySource, sessionStatusSource } from '../host/chat.ts'
 import { useComposer } from './composer.ts'
 import { appendDraftText, clearPendingDraft, pairQuestions, parseSideChatMeta, phaseOf } from './model.ts'
 import { transcriptOf } from '../chat/transcript.ts'
 import { StateScreen } from './rows.tsx'
-import { armInheritedTurnPurge, chatSourceOf, ensurePanelOpen, forkAndRegister, openSession, openSessionWindow, retainSession, saveSideChatSession, setSideChatTopic, unarchiveSideSession, updateTabMeta } from './lifecycle.ts'
+import { chatSourceOf, ensurePanelOpen, forkAndRegister, openSession, openSessionWindow, retainSession, saveSideChatSession, setSideChatTopic, unarchiveSideSession, updateTabMeta } from './lifecycle.ts'
 import { topicOf } from './identity.ts'
-import { buildMainlineSnapshot, snapshotEntriesOf, snapshotEntriesFromText, splitSnapshotPrefix } from './snapshot.ts'
+import { buildMainlineSnapshot, effectiveContextNodes, snapshotEntriesOf, snapshotEntriesFromText, splitSnapshotPrefix } from './snapshot.ts'
 import { registerLiveSideChat, notifyLiveSideChats } from './native.ts'
 import { dropClosedSideChat, recordClosedSideChat } from './recentClosed.ts'
 import type { ReflowStore } from '../reflow.ts'
@@ -55,22 +55,39 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   const binding = childId === undefined ? undefined : ctx.sessions.binding(childId)
   const session = binding?.session
   const phase = phaseOf({ childId, forkError, bound: session !== undefined, listPhase: list.phase, listed: childId !== undefined && list.byId?.[childId] !== undefined })
+  useEffect(() => { openSessionWindow(session) }, [session])
+  const boundarySource = useMemo(() => inheritedBoundarySource(session), [session])
+  const inheritedBoundary = useSyncExternalStore(useCallback(notify => boundarySource?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [boundarySource]), () => boundarySource?.getSnapshot())
+  const boundarySeq = meta.snapshotOnly ? -1 : inheritedBoundary ?? meta.boundarySeq
+  // Repair pre-fix tab metadata from the durable fork marker, without touching history.
   useEffect(() => {
-    if (meta.forkedMidTurn && !meta.inheritedPurged && childId && session) armInheritedTurnPurge(ctx, childId, scope.sessionId, tab.id, meta.leakedPromptPrefix, meta.boundarySeq)
-    openSessionWindow(session)
-  }, [ctx, session, childId, scope.sessionId, tab.id, meta.forkedMidTurn, meta.inheritedPurged, meta.leakedPromptPrefix, meta.boundarySeq])
+    if (boundarySeq !== undefined && boundarySeq !== meta.boundarySeq) updateTabMeta(ctx, scope.sessionId, tab.id, current => ({ ...current, boundarySeq }))
+  }, [boundarySeq, meta.boundarySeq, ctx, scope.sessionId, tab.id])
   const snapshot = useSyncExternalStore(useCallback(notify => session?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [session]), () => session?.getSnapshot() ?? null)
   const chat = useMemo(() => chatSourceOf(ctx, binding), [ctx, childId, session])
   const legacy = useSyncExternalStore(useCallback(notify => chat?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [chat]), () => chat?.getLegacy() ?? null)
+  const childEvents = useMemo(() => contextEventSource(session), [session])
+  const childWindow = useSyncExternalStore(useCallback(notify => childEvents?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [childEvents]), () => childEvents?.getSnapshot())
+  const compactContext = useMemo(() => {
+    const inherited = effectiveContextNodes(legacy?.nodes ?? [], childWindow, boundarySeq ?? -1)
+    return inherited.checkpointSeq === undefined ? undefined : snapshotEntriesOf(inherited.nodes, undefined, -1)
+  }, [legacy, childWindow, boundarySeq])
   const messages = useMemo(() => transcriptOf(legacy ?? snapshot), [legacy, snapshot])
   const metaRef = useRef(meta)
-  metaRef.current = meta
+  metaRef.current = { ...meta, boundarySeq }
+  const sendingSnapshot = useRef<ReturnType<typeof splitSnapshotPrefix>>(null)
+  const [acceptedSnapshot, setAcceptedSnapshot] = useState<ReturnType<typeof splitSnapshotPrefix>>(null)
   const extras = useMemo(() => ({
     firstSendPrefix: (): string | null => {
       const current = metaRef.current
-      return current.forkedMidTurn && current.parentSessionId ? buildMainlineSnapshot(ctx, current.parentSessionId) : null
+      const text = current.forkedMidTurn && current.parentSessionId ? buildMainlineSnapshot(ctx, current.parentSessionId, new Date(), current.boundarySeq) : null
+      sendingSnapshot.current = text ? splitSnapshotPrefix(text) : null
+      return text
     },
-    onAccepted: (): void => { updateTabMeta(ctx, scope.sessionId, tab.id, current => ({ ...current, forkedMidTurn: undefined })) },
+    onAccepted: (): void => {
+      if (sendingSnapshot.current) setAcceptedSnapshot(sendingSnapshot.current)
+      updateTabMeta(ctx, scope.sessionId, tab.id, current => ({ ...current, forkedMidTurn: undefined }))
+    },
     onSubmitText: (text: string): void => {
       const topic = topicOf(text)
       if (topic && metaRef.current.topic === undefined) setSideChatTopic(ctx, scope.sessionId, tab.id, topic)
@@ -80,9 +97,9 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   useEffect(() => childId === undefined ? undefined : registerSubmissionExtras(childId, extras), [childId, extras])
   useEffect(() => {
     if (meta.topic !== undefined) return
-    const first = messages.find(message => message.role === 'user' && (message.seq ?? -1) > (meta.boundarySeq ?? -1))
+    const first = messages.find(message => message.role === 'user' && (message.seq ?? -1) > (boundarySeq ?? -1))
     if (first) extras.onSubmitText(first.text)
-  }, [messages, meta.topic, meta.boundarySeq, extras])
+  }, [messages, meta.topic, boundarySeq, extras])
   useEffect(() => {
     if (!meta.pendingDraft || phase !== 'chat' || !composer.machine) return
     composer.appendDraft(meta.pendingDraft)
@@ -126,9 +143,11 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   const parentSnapshot = useSyncExternalStore(useCallback(notify => parent?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [parent]), () => parent?.getSnapshot() ?? null)
   const parentChat = useMemo(() => chatSourceOf(ctx, ctx.sessions.binding(meta.parentSessionId ?? scope.sessionId)), [ctx, parent, meta.parentSessionId, scope.sessionId])
   const parentLegacy = useSyncExternalStore(useCallback(notify => parentChat?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [parentChat]), () => parentChat?.getLegacy() ?? null)
-  const savedProgress = useMemo(() => messages.filter(message => message.role === 'user' && (message.seq ?? -1) > (meta.boundarySeq ?? -1)).map(message => splitSnapshotPrefix(message.text)).find(Boolean), [messages, meta.boundarySeq])
+  const parentEvents = useMemo(() => contextEventSource(parent), [parent])
+  const parentWindow = useSyncExternalStore(useCallback(notify => parentEvents?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [parentEvents]), () => parentEvents?.getSnapshot())
+  const savedProgress = useMemo(() => messages.filter(message => message.role === 'user' && (message.seq ?? -1) > (boundarySeq ?? -1)).map(message => splitSnapshotPrefix(message.text)).find(Boolean), [messages, boundarySeq]) ?? acceptedSnapshot
   const progress = useMemo(() => savedProgress ? { entries: snapshotEntriesFromText(savedProgress.snapshot), takenAt: savedProgress.takenAt }
-    : meta.forkedMidTurn ? { entries: snapshotEntriesOf(parentLegacy?.nodes ?? [], parentLegacy?.partial) } : undefined, [savedProgress, meta.forkedMidTurn, parentLegacy])
+    : meta.forkedMidTurn ? { entries: snapshotEntriesOf(effectiveContextNodes(parentLegacy?.nodes ?? [], parentWindow).nodes, parentLegacy?.partial, boundarySeq) } : undefined, [savedProgress, meta.forkedMidTurn, parentLegacy, parentWindow, boundarySeq])
   const status = sessionStatusSource(ctx)
   const parentPending = useSyncExternalStore(useCallback(notify => status?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [status]), () => status?.getSnapshot().get(meta.parentSessionId ?? scope.sessionId)?.pendingInteraction != null)
   const [saving, setSaving] = useState(false)
@@ -145,8 +164,8 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   if (phase === 'fork-error') return <StateScreen title={t('forkErrorTitle')} detail={forkError ?? undefined} hint={t('forkErrorHint')} />
   if (phase === 'missing') return <StateScreen title={t('missingTitle')} detail={t('missingDetail')} hint={t('missingHint')} />
   if (phase !== 'chat' || !reference || !childId) return <StateScreen title={t('preparing')} />
-  const side: SideConversation = { sessionId: childId, parentSessionId: meta.parentSessionId ?? scope.sessionId, title: tab.title, boundarySeq: meta.boundarySeq, reflow: props.reflow, progress, contextPending: meta.forkedMidTurn && !savedProgress }
-  const replies = finalReplies(messages, meta.boundarySeq, new Set(chat?.getCompletedReplySeqs?.() ?? []))
+  const side: SideConversation = { sessionId: childId, parentSessionId: meta.parentSessionId ?? scope.sessionId, title: tab.title, boundarySeq, reflow: props.reflow, compactContext, progress, contextPending: meta.forkedMidTurn && !savedProgress }
+  const replies = finalReplies(messages, boundarySeq, new Set(chat?.getCompletedReplySeqs?.() ?? []))
   const questions = pairQuestions(messages)
   const allAdded = replies.length > 0 && replies.every(reply => isReplyAdded(side, reply, questions.get(reply.key)))
   const running = snapshot?.running === true

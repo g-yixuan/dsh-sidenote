@@ -120,11 +120,11 @@ it('does not attach another producer or cross an intervening response/input', ()
   expect(injectedReflowPrefix([{ ...context, source: { kind: 'another-plugin' } }, { kind: 'user', seq: 2 }], 2)).toBe('')
 })
 
-it('matches only the protocol range after a progress snapshot', () => {
+it('consumes snapshot and annotation prefixes while leaving the pending question visible', () => {
   const snapshot = '<mainline-progress-snapshot taken-at="2026-10-24 20:00">进展</mainline-progress-snapshot>\n\n'
   const text = snapshot + annotation + '\n\n正文'
   const node = sentContextRule.match(text, 0)!
-  expect(node.start).toBe(snapshot.length)
+  expect(node.start).toBe(0)
   expect(text.slice(node.end)).toBe('正文')
   expect(sentContextRule.match(text, node.end)).toBeUndefined()
 })

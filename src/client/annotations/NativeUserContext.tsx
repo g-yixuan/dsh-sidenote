@@ -41,9 +41,12 @@ export const sentContextRule = {
   match(text: string, from: number) {
     const snapshot = splitSnapshotPrefix(text)
     const start = snapshot ? text.length - snapshot.rest.length : 0
-    if (from > start) return undefined
+    if (from > 0) return undefined
     const protocol = splitProtocolPrefix(text.slice(start))
-    return protocol ? { id: CONTEXT_NODE, start, end: start + protocol.length, data: protocol } : undefined
+    if (!snapshot && !protocol) return undefined
+    // Pending echoes use UserText before a durable user node exists. Consume
+    // the snapshot itself too, so only the actual question/images remain visible.
+    return { id: CONTEXT_NODE, start: 0, end: start + (protocol?.length ?? 0), data: protocol ?? { length: 0, annotations: [], reflows: [] } }
   },
 }
 
@@ -102,6 +105,7 @@ function ContextChip({ label, icon, children, interactive }: { label: string; ic
 
 export function SentContext({ protocol, interactive = true }: { protocol: ProtocolPrefix; interactive?: boolean }) {
   useLocaleTick()
+  if (protocol.annotations.length === 0 && protocol.reflows.length === 0) return null
   return <span className={css.sentChips} data-dsh-sidenote-bubble data-sidenote-no-quote>
     {protocol.annotations.length > 0 && <ContextChip label={t('sentChipLabel', { n: protocol.annotations.length })} icon={<IconListPenOutline16 size={12} />} interactive={interactive}>
       <ul className={css.contextList}>{protocol.annotations.map(annotation => <li className={css.contextItem} key={annotation.id}>

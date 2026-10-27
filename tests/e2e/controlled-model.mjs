@@ -4,10 +4,10 @@ export const name = 'sidenote-e2e-model'
 export const inject = ['llm']
 
 // Keep a real turn pending until it is stopped, with an upper bound for failures.
-function holdResponse(signal) {
+function holdResponse(signal, duration = 40_000) {
   return new Promise((resolve, reject) => {
     const abort = () => { clearTimeout(timer); reject(signal.reason) }
-    const timer = setTimeout(() => { signal?.removeEventListener('abort', abort); resolve() }, 40_000)
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', abort); resolve() }, duration)
     if (signal?.aborted) abort()
     else signal?.addEventListener('abort', abort, { once: true })
   })
@@ -25,14 +25,15 @@ export function apply(ctx) {
     async prepareCall() { return { model, stream: options => this.stream(options) } },
     async *stream(options) {
       options.signal?.throwIfAborted()
+      if (options.messages.at(-1)?.source === undefined && options.messages.some(message => message.content.some(block => block.type === 'text' && block.text.includes('[e2e:slow-compact]')))) await holdResponse(options.signal, 15_000)
       // Context producers also use role=user; only source=user is human input.
-      const users = options.messages.filter(message => message.role === 'user' && message.source.kind === 'user')
+      const users = options.messages.filter(message => message.role === 'user' && message.source?.kind === 'user')
       const last = users.at(-1)?.content ?? []
       const text = last.filter(block => block.type === 'text').map(block => block.text).join('\n')
       // An image-only request can have no textual progress before its first token.
       if (text.trim() === '' && last.some(block => block.type === 'image')) await holdResponse(options.signal)
-      const lastHuman = options.messages.findLastIndex(message => message.role === 'user' && message.source.kind === 'user')
-      const hasToolResult = options.messages.slice(lastHuman + 1).some(message => message.source.kind === 'tool')
+      const lastHuman = options.messages.findLastIndex(message => message.role === 'user' && message.source?.kind === 'user')
+      const hasToolResult = options.messages.slice(lastHuman + 1).some(message => message.source?.kind === 'tool')
       let call
       if (!hasToolResult && text.includes('[e2e:question]')) call = { name: 'ask_user_question', arguments: { questions: [{ id: 'layout', question: 'Which native layout should we use?', options: [{ label: 'Compact', description: 'Keep the narrow sidebar' }, { label: 'Spacious', description: 'Use more space' }] }] } }
       if (!hasToolResult && text.includes('[e2e:approval]')) call = { name: 'bash', arguments: { description: 'Write isolated E2E marker', command: "printf 'approved native side tool\\n' > ../approval-target.txt", sandbox_permissions: 'danger-full-access', justification: 'Create only the isolated E2E marker after explicit approval.' } }
@@ -53,11 +54,12 @@ export function apply(ctx) {
         const priorReply = options.messages.some(message => message.role === 'assistant' && message.content.some(block => block.type === 'text' && block.text === 'Remembered SIDENOTE_SIDE_BLUE in this side conversation.'))
         reply = remembered && priorReply ? 'Conclusion: SIDENOTE_SIDE_BLUE.' : 'The prior side-conversation context is missing.'
       } else if (text.endsWith('Use the returned side conclusion in this main conversation.')) {
-        const returned = options.messages.some(message => message.role === 'user' && message.source.kind === 'user' && message.content.some(block => block.type === 'text' && block.text.includes('<答>Conclusion: SIDENOTE_SIDE_BLUE.</答>')))
+        const returned = options.messages.some(message => message.role === 'user' && message.source?.kind === 'user' && message.content.some(block => block.type === 'text' && block.text.includes('<答>Conclusion: SIDENOTE_SIDE_BLUE.</答>')))
         reply = returned ? 'Main received SIDENOTE_SIDE_BLUE.' : 'The returned side-conversation context is missing.'
       }
       yield { type: 'block-start', index: 0, blockType: 'text' }
       yield { type: 'text-delta', index: 0, text: reply }
+      if (text.trimEnd().endsWith('[e2e:steer-window]')) await holdResponse(options.signal, 4_000)
       if (text.trimEnd().endsWith('[e2e:hold]')) await holdResponse(options.signal)
       options.signal?.throwIfAborted()
       yield { type: 'block-end', index: 0, block: { type: 'text', text: reply } }

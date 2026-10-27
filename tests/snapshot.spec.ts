@@ -3,12 +3,21 @@
  * 序列化、呈现层的块拆分（气泡只留正文、快照提升到继承卡）。
  */
 import { describe, expect, it } from 'vitest'
-import { serializeSnapshot, snapshotEntriesOf, snapshotEntriesFromText, SNAPSHOT_BLOCK_MARK } from '../src/client/sidechat/snapshot.ts'
+import { buildMainlineSnapshot, effectiveContextNodes, serializeSnapshot, snapshotEntriesOf, snapshotEntriesFromText, SNAPSHOT_BLOCK_MARK } from '../src/client/sidechat/snapshot.ts'
+import type { Context } from '../src/client/host/contracts.ts'
+import type { ContextEvent } from '../src/client/host/chat.ts'
 import { splitSnapshotPrefix } from '../src/client/sidechat/snapshot.ts'
 
 it('renders saved progress as readable entries without exposing protocol markup', () => {
   const entries = [{ kind: 'request' as const, text: '检查目录' }, { kind: 'tool' as const, toolName: 'read', text: '完整输出\n第二行' }]
   expect(snapshotEntriesFromText(serializeSnapshot(entries, new Date('2026-10-24T12:00:00Z')))).toEqual(entries)
+})
+
+it('records an empty but readable first-send cut instead of deferring it to the second message', () => {
+  const ctx = { get: () => undefined, sessions: { binding: () => ({ session: { getSnapshot: () => ({ nodes: [] }) } }) } } as unknown as Context
+  const text = buildMainlineSnapshot(ctx, 'parent', new Date(2026, 9, 27, 12, 0), 42)!
+  expect(splitSnapshotPrefix(text)?.takenAt).toBe('2026-10-27 12:00')
+  expect(snapshotEntriesFromText(text)).toEqual([])
 })
 
 const userNode = (text: string) => ({ kind: 'user', seq: 1, content: [{ type: 'text', text }] })
@@ -25,7 +34,50 @@ const toolNode = (name: string, args: string, result: string) => ({
   content: [{ type: 'text', text: result }],
 })
 
+describe('committed compaction checkpoints', () => {
+  const compact = (seq: number, shadowedSeqs: number[], text: string): ContextEvent[] => [
+    { type: 'compaction/summary', seq: seq - 1, data: { summary: [{ type: 'text', text }], shadowedSeqs } },
+    { type: 'user/message', seq, data: { source: { kind: 'compact-checkpoint' }, content: [{ type: 'text', text }] }, surfaceOp: { op: 'replace', startSeq: shadowedSeqs[0]!, endSeq: shadowedSeqs.at(-1)! } },
+  ]
+  const nodes = [userNode('obsolete original'), { ...assistantNode('obsolete answer'), seq: 2 },
+    { ...userNode('retained before latest checkpoint'), seq: 5 }, { kind: 'compaction', seq: 8, summary: 'old summary' },
+    { ...userNode('retained recent tail'), seq: 9 }, { kind: 'compaction', seq: 14, summary: 'latest summary' },
+    { ...userNode('new steering'), kind: 'steering', seq: 16 }]
+  const window = { entries: [...compact(8, [1, 2], 'old summary'), ...compact(14, [8, 5], 'latest summary')].map(event => ({ event })) }
+  it('keeps only the latest checkpoint and its surviving tail, even when replacement endpoints run backwards', () => {
+    const context = effectiveContextNodes(nodes, window)
+    expect(context.checkpointSeq).toBe(14)
+    expect(snapshotEntriesOf(context.nodes, undefined, -1).map(entry => entry.text)).toEqual(['latest summary', 'retained recent tail', 'new steering'])
+    // A checkpoint newer than the fork supersedes that earlier context and
+    // includes the retained pre-checkpoint tail; a later fork sends only its delta.
+    expect(snapshotEntriesOf(context.nodes, undefined, 10).map(entry => entry.text)).toEqual(['latest summary', 'retained recent tail', 'new steering'])
+    expect(snapshotEntriesOf(context.nodes, undefined, 15).map(entry => entry.text)).toEqual(['new steering'])
+  })
+  it('does not hide history for a failed or still running summary without a committed replacement', () => {
+    const partial = { entries: [...window.entries.slice(0, 2), window.entries[2]!] }
+    const context = effectiveContextNodes(nodes.filter(node => node.seq < 14), partial)
+    expect(snapshotEntriesOf(context.nodes, undefined, -1).map(entry => entry.text)).toEqual(['old summary', 'retained before latest checkpoint', 'retained recent tail'])
+  })
+  it('uses the checkpoint at the inherited cut, not a later main or side compaction', () => {
+    const context = effectiveContextNodes(nodes, window, 10)
+    expect(context.checkpointSeq).toBe(8)
+    expect(snapshotEntriesOf(context.nodes, undefined, -1).map(entry => entry.text)).toEqual(['old summary', 'retained before latest checkpoint', 'retained recent tail'])
+  })
+})
+
 describe('snapshotEntriesOf（当前 turn 内容提取）', () => {
+  it('includes the whole suffix after the actual fork cut, across steering and later turns', () => {
+    const nodes = [userNode('inherited'),
+      { ...userNode('original task'), seq: 11 },
+      { ...assistantNode('progress before steering'), seq: 12 },
+      { ...userNode('first steering'), kind: 'steering', seq: 13 },
+      { ...toolNode('read', '{}', 'tool result'), seq: 14 },
+      { ...userNode('second steering'), kind: 'steering', seq: 15 },
+    ]
+    expect(snapshotEntriesOf(nodes, undefined, 10).map(entry => entry.text)).toEqual([
+      'original task', 'progress before steering', 'first steering', '调用：{}\ntool result', 'second steering',
+    ])
+  })
   it('从最后一个 user 节点取起：思考/正文/工具各成拍', () => {
     const nodes = [
       userNode('旧轮的问题'),

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, userMessageContentsOf, selectModel } from './journey'
+import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, userMessageContentsOf, sessionEventsOf, selectModel } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
 test.afterEach(async ({ page }, info) => {
@@ -134,4 +134,92 @@ for (const withImage of [false, true]) test(`busy fork keeps the parent running 
   await expect(side).toHaveAttribute('data-sidenote-chat-session', child)
   await expect(side.locator('[data-sidenote-main-context]')).toContainText(/As of|截至/)
   await expect(side.locator('[data-sidenote-main-context]')).toContainText('main is still executing the busy fork request [e2e:hold]')
+})
+
+test('busy fork after repeated steering keeps side messages and answers outside inherited history', async ({ page }) => {
+  await prepareSeedPage(page)
+  const mainId = process.env.DSH_E2E_SEED_SESSION!
+  const main = page.locator('[data-conversation-session]').first()
+  await selectModel(page, main, 'Controlled E2E')
+  const input = main.locator('[data-composer-input]')
+  const before = sessionEventsOf(mainId).at(-1)!.seq
+  await input.fill('Original running task [e2e:long-tool] [e2e:steer-window]'); await input.press('Enter')
+  for (const [index, ending] of ['[e2e:steer-window]', '[e2e:hold]'].entries()) {
+    await expect.poll(() => sessionEventsOf(mainId).filter(event => event.seq > before && event.type === 'tool/result').length).toBe(index + 1)
+    await input.fill(`Steering update ${index + 1} [e2e:long-tool] ${ending}`); await input.press('ControlOrMeta+Enter')
+  }
+  await expect.poll(() => sessionEventsOf(mainId).filter(event => event.seq > before && event.type === 'tool/result').length).toBe(3)
+  expect(sessionEventsOf(mainId).filter(event => event.seq > before && event.type === 'turn/start')).toHaveLength(1)
+  const child = await openSideChat(page)
+  const side = sideChatOf(page)
+  const context = side.locator('[data-sidenote-main-context]')
+  await context.getByRole('button').click()
+  await expect(context.getByRole('button')).toHaveAttribute('aria-expanded', 'false')
+  const question = 'Side question must stay outside the inherited history [e2e:steer-window]'
+  let release!: () => void
+  const admission = new Promise<void>(resolve => { release = resolve })
+  await page.route('**/api/session/prompt', async route => { await admission; await route.continue() })
+  await side.locator('[data-composer-input]').fill(question)
+  await side.locator('[data-composer-input]').press('Enter')
+  try {
+    const echo = side.locator('[data-submission-echo]')
+    await expect(echo).toContainText(question)
+    await expect(echo).toBeInViewport()
+    await expect(echo).not.toContainText('mainline-progress-snapshot')
+    await expect(context.getByRole('button')).toBeVisible()
+  } finally { release() }
+  await expect.poll(() => userMessagesOf(child).some(text => text.includes(question))).toBe(true)
+  await page.unroute('**/api/session/prompt')
+  await expect(side.locator('[data-chat-flow-kind="user"]').filter({ hasText: question })).toBeVisible()
+  await expect(side.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'Controlled E2E reply.' })).toBeVisible()
+  await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toBeVisible()
+  await expect(context).toContainText(/As of|截至/)
+  await context.getByRole('button').click()
+  await expect(context).toContainText('Original running task')
+  await expect(context).toContainText('Steering update 1')
+  await expect(context).toContainText('Steering update 2')
+  await main.getByRole('button', { name: /^(Stop generating|停止生成)$/ }).click()
+  await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
+  await context.getByRole('button').click()
+  // Restore a tab whose old implementation persisted an over-large boundary.
+  await page.addInitScript(id => {
+    for (const key of Object.keys(localStorage).filter(key => key.startsWith('dsh-sidenote:side-meta:v1:'))) {
+      const meta = JSON.parse(localStorage.getItem(key)!)
+      if (meta.childId === id) localStorage.setItem(key, JSON.stringify({ ...meta, boundarySeq: 999999 }))
+    }
+  }, child)
+  await page.reload()
+  await expect(side).toHaveAttribute('data-sidenote-chat-session', child)
+  await expect(context.getByRole('button')).toHaveAttribute('aria-expanded', 'false')
+  await expect(side.locator('[data-chat-flow-kind="user"]').filter({ hasText: question })).toBeVisible()
+  await expect(side.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'Controlled E2E reply.' })).toBeVisible()
+  await expect(context).toContainText(/As of|截至/)
+})
+
+test('fork keeps a stopped parent queue out of the new side conversation', async ({ page }) => {
+  await prepareSeedPage(page)
+  const main = page.locator('[data-conversation-session]').first()
+  await selectModel(page, main, 'Controlled E2E')
+  const input = main.locator('[data-composer-input]')
+  await input.fill('Hold before a parent-only queued task [e2e:hold]'); await input.press('Enter')
+  await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toBeVisible()
+  const queued = 'PARENT-ONLY queue must remain on the main conversation'
+  await input.fill(queued); await input.press('Enter')
+  await expect(main.locator('[data-queue-dock]')).toContainText(queued)
+  await main.getByRole('button', { name: /^(Stop generating|停止生成)$/ }).click()
+  await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
+  try {
+    const child = await openSideChat(page)
+    const side = sideChatOf(page)
+    await expect(side.locator('[data-queue-dock]')).toHaveCount(0)
+    await side.locator('[data-composer-input]').fill('Only this side question should execute')
+    await side.locator('[data-composer-input]').press('Enter')
+    await expect.poll(() => userMessagesOf(child).some(text => text.includes('Only this side question'))).toBe(true)
+    expect(userMessagesOf(child)).not.toContain(queued)
+    await expect(main.locator('[data-queue-dock]')).toContainText(queued)
+  } finally {
+    await input.fill('Resume the parent queue after isolation check'); await input.press('Enter')
+    await expect(main.locator('[data-queue-dock]')).toHaveCount(0)
+    await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
+  }
 })

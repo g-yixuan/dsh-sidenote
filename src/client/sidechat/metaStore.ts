@@ -29,8 +29,7 @@ export interface SideChatMetaRecord {
   readonly parentSessionId?: string
   /** 待投递草稿（面板 composer 就绪后应用并清除）。 */
   readonly pendingDraft?: string
-  /** D1 折叠边界：fork 时刻父会话的最大节点 seq（busy fork 后推进覆盖
-   *  被 cancel 的遗传 turn，允许小数——中断 turn 的冻结节点带小数 seq）。 */
+  /** 宿主实际 fork 切点；后续插话或回复不会推进它。 */
   readonly boundarySeq?: number
   /** busy fork 标记（Delivery_04）：fork 时主线 turn 在飞，首条侧边消息
    *  发送时拼接主线进展快照。 */
@@ -38,10 +37,6 @@ export interface SideChatMetaRecord {
   /** 零完成轮兜底（Delivery_04）：主线首轮在飞无法 fork，create 出来的
    *  纯快照会话（无继承历史）。 */
   readonly snapshotOnly?: boolean
-  /** 监护判别依据（Delivery_04）：fork 时刻主线在飞消息的前缀。 */
-  readonly leakedPromptPrefix?: string
-  /** 遗传 turn 已中和（cancel + 边界覆盖完成）。 */
-  readonly inheritedPurged?: boolean
   /** 内容身份（Delivery_05）：首条用户消息摘要，sticky。 */
   readonly topic?: string
   /** 实例编号（「侧边 2」的 2；单实例期恒 1）。 */
@@ -100,8 +95,6 @@ function revive(value: unknown): SideChatMetaRecord | null {
     ...(typeof r.boundarySeq === 'number' && Number.isFinite(r.boundarySeq) ? { boundarySeq: r.boundarySeq } : {}),
     ...(r.forkedMidTurn === true ? { forkedMidTurn: true } : {}),
     ...(r.snapshotOnly === true ? { snapshotOnly: true } : {}),
-    ...(typeof r.leakedPromptPrefix === 'string' ? { leakedPromptPrefix: r.leakedPromptPrefix } : {}),
-    ...(r.inheritedPurged === true ? { inheritedPurged: true } : {}),
     ...(typeof r.topic === 'string' && r.topic !== '' ? { topic: r.topic } : {}),
     number: r.number,
     createdAt: typeof r.createdAt === 'number' ? r.createdAt : 0,

@@ -20,6 +20,7 @@ export interface SideConversation {
   reflow: ReflowStore
   contextExpanded?: boolean
   contextPending?: boolean
+  compactContext?: SnapshotEntry[]
   progress?: { entries: SnapshotEntry[]; takenAt?: string | null }
 }
 export interface ConversationRendererProps {
@@ -40,13 +41,15 @@ function ChatView(props: { renderSlot(name: 'conversation.session', owner: { vie
   const fold = useMemo(() => createFoldStore(`dsh-sidenote:fold:v1:${side.sessionId}`), [side.sessionId])
   useSyncExternalStore(fold.subscribe, fold.getSnapshot)
   const expanded = fold.isOpen('inherited')
+  const checkpointReplacesHistory = side.progress?.entries.some(entry => entry.kind === 'checkpoint')
+  const contextEntries = [...(checkpointReplacesHistory ? [] : side.compactContext ?? []), ...(side.progress?.entries ?? [])]
   return <div className={css.chatView}>
     <div className={css.mainContext} data-sidenote-main-context>
       <button type="button" className={css.historyToggle} aria-expanded={expanded} onClick={() => { fold.toggle('inherited') }}>
         <IconChevronDownOutline14 size={12} className={expanded ? css.contextChevronOpen : css.contextChevron} />
         <span>{t('mainContext')}</span><span className={css.contextHint}>{side.contextPending ? t('contextAtSend') : side.progress?.takenAt ? t('contextAsOf', { time: side.progress.takenAt }) : t('contextInherited')}</span>
       </button>
-      {expanded && side.progress && side.progress.entries.length > 0 && <div className={css.progressEntries} data-sidenote-context-progress>{side.progress.entries.map((entry, index) => <div key={index} className={css.progressEntry}><span className={css.contextHint}>{entry.kind === 'tool' ? entry.toolName : t(`context${entry.kind}`)}</span><div>{entry.text}</div></div>)}</div>}
+      {expanded && contextEntries.length > 0 && <div className={css.progressEntries} data-sidenote-context-progress>{contextEntries.map((entry, index) => <div key={index} className={css.progressEntry}><span className={css.contextHint}>{entry.kind === 'tool' ? entry.toolName : t(`context${entry.kind}`)}</span><div>{entry.text}</div></div>)}</div>}
     </div>
     <SideContext.Provider value={{ ...side, contextExpanded: expanded }}>{props.renderSlot('conversation.session', { view: 'chat' })}</SideContext.Provider>
   </div>
@@ -125,7 +128,8 @@ function HistoryView({ Original, props, side }: { Original: ComponentType<ViewPr
     const members = groups?.groupSource(entry.key).getSnapshot()?.members ?? []
     return members.length > 0 && members.every(isInherited)
   }
-  const visible = side.contextExpanded ? entries : entries.filter(entry => !isInherited(entry))
+  const compacted = side.compactContext !== undefined || side.progress?.entries.some(entry => entry.kind === 'checkpoint')
+  const visible = side.contextExpanded && !compacted ? entries : entries.filter(entry => !isInherited(entry))
   const projected = { ...snapshot, views: { ...snapshot.views, grouped: (name: string) => name === 'chat' && groups ? { ...groups, entries: visible } : snapshot.views.grouped(name) } }
   const useProjected = useCallback(<T,>(selector: (state: ViewSnapshot) => T): T => selector(projected), [projected])
   // Only an explicit expansion navigates. Later stream/layout updates and

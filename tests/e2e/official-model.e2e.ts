@@ -7,6 +7,64 @@ import { openSideChat, prepareSeedPage, registerSeedWorkspace, sessionEventsOf, 
 test.skip(!process.env.DSH_E2E_REAL_MODEL, 'Set DSH_E2E_REAL_KEY_FILE for the official DeepSeek lane')
 test.beforeAll(registerSeedWorkspace)
 
+test('official Flash keeps the full running context and side bubbles after repeated main steering', async ({ page }) => {
+  test.setTimeout(240_000)
+  const mainId = process.env.DSH_E2E_SEED_SESSION!
+  const markers = ['ORIGINAL', 'STEER1', 'STEER2'].map(name => name + '-' + randomUUID())
+  markers.forEach((marker, i) => writeFileSync(join(process.env.DSH_E2E_WORKSPACE!, `steer-${i}.txt`), marker + '\n'))
+  await prepareSeedPage(page)
+  const main = page.locator('[data-conversation-session]').first()
+  await selectModel(page, main, 'DeepSeek Flash (official E2E)')
+  const before = sessionEventsOf(mainId).at(-1)!.seq
+  for (let i = 0; i < 3; i++) {
+    const seconds = i === 2 ? 60 : 10
+    await main.locator('[data-composer-input]').fill(`先单独调用 read 读取 steer-${i}.txt，然后再单独调用 bash 执行 sleep ${seconds}。不要合并工具调用。等待结束后简短回复文件核验码。`)
+    await main.locator('[data-composer-input]').press(i === 0 ? 'Enter' : 'ControlOrMeta+Enter')
+    await expect.poll(() => sessionEventsOf(mainId).some(event => event.seq > before && event.type === 'tool/result' && JSON.stringify(event.data).includes(markers[i]!)), { timeout: 60_000 }).toBe(true)
+    await expect.poll(() => {
+      const events = sessionEventsOf(mainId)
+      const read = events.findLast(event => event.seq > before && event.type === 'tool/result' && JSON.stringify(event.data).includes(markers[i]!))!
+      return events.some(event => event.seq > read.seq && event.type === 'tool/call' && JSON.stringify(event.data).includes(`sleep ${seconds}`))
+    }, { timeout: 60_000 }).toBe(true)
+  }
+  expect(sessionEventsOf(mainId).filter(event => event.seq > before && event.type === 'turn/start')).toHaveLength(1)
+  const child = await openSideChat(page)
+  const side = sideChatOf(page)
+  const context = side.locator('[data-sidenote-main-context]')
+  for (const marker of markers) await expect(context).toContainText(marker)
+  await context.getByRole('button').click()
+  await expect(context.getByRole('button')).toHaveAttribute('aria-expanded', 'false')
+  await selectModel(page, side, 'DeepSeek Flash (official E2E)')
+  await side.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
+  const question = '不要调用任何工具，只根据继承的主线进展，逐字列出三个文件中的三个核验码，并简述附件内容。不要猜测。'
+  await side.locator('[data-composer-input]').fill(question)
+  await side.getByRole('button', { name: /^(Send message|发送消息)$/ }).click()
+  const bubble = side.locator('[data-chat-flow-kind="user"]').filter({ hasText: question })
+  await expect(bubble).toBeInViewport()
+  await expect(bubble.locator('img')).toBeVisible()
+  await expect(context).toContainText(/As of|截至/)
+  const reply = side.locator('[data-chat-flow-kind="assistant-step"]').last()
+  for (const marker of markers) await expect(reply).toContainText(marker, { timeout: 60_000 })
+  await expect(reply).toBeInViewport()
+  await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
+  const sent = userMessagesOf(child).filter(text => text.includes(question))
+  expect(sent).toHaveLength(1)
+  for (const marker of markers) expect(sent[0]).toContain(marker)
+  expect(sent[0]!.match(/<mainline-progress-snapshot /g)).toHaveLength(1)
+  expect(userMessagesOf(mainId).some(text => text.includes(question))).toBe(false)
+  const mainStop = main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })
+  if (await mainStop.isVisible()) await mainStop.click()
+  await page.reload()
+  await expect(side).toHaveAttribute('data-sidenote-chat-session', child)
+  await expect(context.getByRole('button')).toHaveAttribute('aria-expanded', 'false')
+  await expect(bubble).toBeVisible()
+  for (const marker of markers) await expect(reply).toContainText(marker)
+  await context.getByRole('button').click()
+  for (const marker of markers) await expect(context).toContainText(marker)
+  await page.screenshot({ path: 'test-results/official-steering-context.png' })
+  writeFileSync('test-results/official-steering-context.json', JSON.stringify({ model: 'deepseek-flash', mainId, child, markers, oneMainTurn: true, sideImage: true, fullSnapshotRead: true, visibleWhileCollapsed: true, restoredAfterReload: true }, null, 2) + '\n')
+})
+
 test('official Flash inherits live main progress on the first image + text message', async ({ page }) => {
   test.setTimeout(180_000)
   const mainId = process.env.DSH_E2E_SEED_SESSION!

@@ -17,7 +17,6 @@
 .progressEntries { max-height: 240px; overflow: auto; margin: 8px 6px; }
 .progressEntry { margin: 10px 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
 .root [data-sidenote-progress-snapshot] { display: none; }
-.root[data-sidenote-context-pending] [data-submission-echo] { display: none; }
 .reflowAction { flex: none; order: 1; margin-left: auto; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
 .reflowAction:hover { color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-interactive-bg-hover); }
 .reflowAction:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
