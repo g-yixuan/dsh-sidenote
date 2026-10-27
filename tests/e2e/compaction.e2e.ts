@@ -82,7 +82,7 @@ for (const real of [false, true]) for (const busy of [false, true]) test(`${real
   expect(sessionEventsOf(child).some(event => event.seq === checkpoint.seq && event.type === 'user/message' && event.data.source?.kind === 'compact-checkpoint')).toBe(true)
   const context = side.locator('[data-sidenote-main-context]')
   await context.getByRole('button').click()
-  const entries = context.locator('[data-sidenote-context-progress] > div')
+  const entries = side.locator('[data-sidenote-context-progress] > div')
   await expect(entries.first()).toContainText(/Latest compaction summary|最新压缩摘要/)
   await expect(entries.first()).toContainText(summary)
   await expect(entries.nth(1)).toContainText(retained)

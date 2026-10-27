@@ -126,6 +126,22 @@ export function lastConversationEntry(root: HTMLElement, keys: ReadonlySet<strin
     .find(row => keys.has(row.dataset.chatFlowKey ?? '') && row.getBoundingClientRect().height > 0)
 }
 
+/** Place only our portal seat at the fork boundary. Native rows retain their
+ * ownership, renderers and scroll policy on both pre-Flow and Flow hosts. */
+export function placeContextProgress(root: HTMLElement, seat: HTMLElement, inheritedKeys: ReadonlySet<string>): void {
+  const column = root.querySelector<HTMLElement>('[data-chat-flow]')
+  if (!column) return
+  const flow = column.querySelector<HTMLElement>(':scope > [data-slot="conversation.chat.flow"]') ?? column
+  const rows = [...flow.children].filter((row): row is HTMLElement => row instanceof HTMLElement && row !== seat)
+  const inherited = rows.findLast(row => inheritedKeys.has(row.dataset.chatFlowKey ?? ''))
+  if (inherited) {
+    if (inherited.nextSibling !== seat) inherited.after(seat)
+  } else {
+    const first = rows.find(row => row.hasAttribute('data-chat-flow-key') || row.matches('[data-submission-echo], [data-pending-steering]'))
+    if (first ? first.previousSibling !== seat : seat.parentElement !== flow) flow.insertBefore(seat, first ?? null)
+  }
+}
+
 /** Land above the native composer, without scrolling another pane or moving focus. */
 export function revealConversationEntryEnd(row: HTMLElement): void {
   const scroller = row.closest<HTMLElement>('[data-conversation-scroll]')

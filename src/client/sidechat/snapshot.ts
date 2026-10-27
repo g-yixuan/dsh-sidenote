@@ -1,7 +1,7 @@
 /** Mainline progress after the actual fork cut. Chat retains an audit trail;
  * committed compaction replacements determine the effective context instead. */
 import type { Context, ConversationSnapshot } from '../host/contracts.ts'
-import { chatSourceOf, contextEventSource, type ContextEventWindow } from '../host/chat.ts'
+import { chatSourceOf, contextEventSource, type ContextEvent, type ContextEventWindow } from '../host/chat.ts'
 
 /** 快照里的一拍（当前 turn 的一段内容）。 */
 export interface SnapshotEntry {
@@ -43,28 +43,42 @@ export function effectiveContextNodes(nodes: readonly unknown[], window: Context
   const events = window?.entries.map(entry => entry.event).filter(event => event.seq <= throughSeq) ?? []
   const checkpoint = events.findLast(event => event.type === 'user/message' && event.data.source?.kind === 'compact-checkpoint' && event.surfaceOp !== undefined && event.surfaceOp !== 'append')
   const eligible = nodes.filter(node => (node as { seq: number }).seq <= throughSeq)
-  if (!checkpoint) return { nodes: eligible }
   const shadowed = new Set<number>()
+  const pruned = new Map<number, ContextEvent>()
   for (let i = 0; i < events.length - 1; i++) {
     const event = events[i]!, next = events[i + 1]!
     // A summary without its committed replacement (failed/in-flight compaction)
     // cannot hide history. This adjacency is the host's shadow-price contract.
     if (['compaction/summary', 'compaction/prune'].includes(event.type) && next.surfaceOp && next.surfaceOp !== 'append') {
       for (const seq of event.data.shadowedSeqs ?? []) shadowed.add(seq)
+      if (event.type === 'compaction/prune' && next.type === 'tool/result' && next.data.message) {
+        for (const seq of event.data.shadowedSeqs ?? []) pruned.set(seq, next)
+      }
     }
   }
+  // Chat keeps the original tool/result for auditing and ignores replacement
+  // events. Replay just those committed replacements before removing shadows;
+  // otherwise a retained, pruned tool result either leaks its old body or vanishes.
+  const tail = eligible.map(node => {
+    let current = node as { seq: number; kind: string; content?: unknown }
+    if (current.kind !== 'tool-result') return current
+    for (let replacement = pruned.get(current.seq); replacement; replacement = pruned.get(current.seq)) {
+      current = { ...current, seq: replacement.seq, content: replacement.data.message!.content }
+    }
+    return current
+  }).filter(node => {
+    const n = node as { seq: number; kind: string }
+    return !shadowed.has(n.seq) && n.kind !== 'compaction' && n.seq !== checkpoint?.seq
+  })
+  if (!checkpoint) return { nodes: tail }
   const summary = events.find(event => event.seq === checkpoint.seq - 1 && event.type === 'compaction/summary')
   const content = summary?.data.summary ?? checkpoint.data.content ?? []
-  const tail = eligible.filter(node => {
-    const n = node as { seq: number; kind: string }
-    return !shadowed.has(n.seq) && n.kind !== 'compaction' && n.seq !== checkpoint.seq
-  })
   return { nodes: [{ kind: 'checkpoint', seq: checkpoint.seq, content }, ...tail], checkpointSeq: checkpoint.seq }
 }
 
 /** Effective context → readable snapshot entries. A new checkpoint carries its
  * surviving tail; otherwise only nodes after the child's inherited cut are added. */
-export function snapshotEntriesOf(nodes: readonly unknown[], partial?: unknown, boundarySeq?: number): SnapshotEntry[] {
+export function snapshotEntriesOf(nodes: readonly unknown[], partial?: unknown, boundarySeq?: number, runningCalls: readonly unknown[] = []): SnapshotEntry[] {
   let start = -1
   const checkpoint = nodes.findIndex(node => (node as { kind: string }).kind === 'checkpoint' && (node as { seq: number }).seq > (boundarySeq ?? -1))
   if (checkpoint >= 0) start = checkpoint
@@ -112,10 +126,16 @@ export function snapshotEntriesOf(nodes: readonly unknown[], partial?: unknown, 
     }
   }
   // 在途流式输出（正在生成的 assistant 正文）——投影的 partial 面。
+  const thinking = blocksText((partial as { blocks?: unknown })?.blocks, ['reasoning'])
+  if (thinking) entries.push({ kind: 'thinking', text: thinking })
   const streaming = typeof partial === 'string'
     ? partial
     : contentText((partial as { blocks?: unknown })?.blocks)
   if (streaming !== '') entries.push({ kind: 'streaming', text: streaming })
+  for (const value of runningCalls) {
+    const call = value as { name?: string; argsRaw?: string }
+    if (call.name) entries.push({ kind: 'tool', toolName: call.name, text: `调用：${call.argsRaw ?? ''}\n（执行中）` })
+  }
   return entries
 }
 
@@ -154,7 +174,7 @@ export function buildMainlineSnapshot(ctx: Context, parentSessionId: string, now
     const snap = source?.getLegacy() as (ConversationSnapshot & { partial?: unknown }) | null
     if (snap === undefined || snap === null) return null
     const effective = effectiveContextNodes(snap.nodes ?? [], contextEventSource(binding?.session)?.getSnapshot())
-    const entries = snapshotEntriesOf(effective.nodes, snap.partial, boundarySeq)
+    const entries = snapshotEntriesOf(effective.nodes, snap.partial, boundarySeq, snap.runningCalls)
     return serializeSnapshot(entries, now)
   } catch {
     return null

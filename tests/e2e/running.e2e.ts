@@ -120,7 +120,7 @@ for (const withImage of [false, true]) test(`busy fork keeps the parent running 
   }
   await expect(input).toHaveText('')
   await expect(side.locator('[data-sidenote-main-context]')).toContainText(/As of|截至/)
-  await expect(side.locator('[data-sidenote-main-context]')).toContainText('main is still executing the busy fork request [e2e:hold]')
+  await expect(side.locator('[data-sidenote-context-progress]')).toContainText('main is still executing the busy fork request [e2e:hold]')
   await expect(side.locator('[data-sidenote-progress-snapshot]')).not.toBeVisible()
 
   const sideStop = side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })
@@ -133,7 +133,7 @@ for (const withImage of [false, true]) test(`busy fork keeps the parent running 
   await page.reload()
   await expect(side).toHaveAttribute('data-sidenote-chat-session', child)
   await expect(side.locator('[data-sidenote-main-context]')).toContainText(/As of|截至/)
-  await expect(side.locator('[data-sidenote-main-context]')).toContainText('main is still executing the busy fork request [e2e:hold]')
+  await expect(side.locator('[data-sidenote-context-progress]')).toContainText('main is still executing the busy fork request [e2e:hold]')
 })
 
 test('busy fork after repeated steering keeps side messages and answers outside inherited history', async ({ page }) => {
@@ -175,9 +175,9 @@ test('busy fork after repeated steering keeps side messages and answers outside 
   await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toBeVisible()
   await expect(context).toContainText(/As of|截至/)
   await context.getByRole('button').click()
-  await expect(context).toContainText('Original running task')
-  await expect(context).toContainText('Steering update 1')
-  await expect(context).toContainText('Steering update 2')
+  await expect(side.locator('[data-sidenote-context-progress]')).toContainText('Original running task')
+  await expect(side.locator('[data-sidenote-context-progress]')).toContainText('Steering update 1')
+  await expect(side.locator('[data-sidenote-context-progress]')).toContainText('Steering update 2')
   await main.getByRole('button', { name: /^(Stop generating|停止生成)$/ }).click()
   await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
   await context.getByRole('button').click()

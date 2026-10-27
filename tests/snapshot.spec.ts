@@ -44,6 +44,17 @@ describe('committed compaction checkpoints', () => {
     { ...userNode('retained recent tail'), seq: 9 }, { kind: 'compaction', seq: 14, summary: 'latest summary' },
     { ...userNode('new steering'), kind: 'steering', seq: 16 }]
   const window = { entries: [...compact(8, [1, 2], 'old summary'), ...compact(14, [8, 5], 'latest summary')].map(event => ({ event })) }
+  it.each([false, true])('uses the retained pruned tool result instead of its audit original (checkpoint=%s)', hasCheckpoint => {
+    const nodes = [userNode('task'), { ...toolNode('read', '{}', 'large audit-only result'), seq: 5 }]
+    const events = [
+      ...(hasCheckpoint ? compact(3, [1], 'latest summary') : []),
+      { type: 'compaction/prune', seq: 6, data: { shadowedSeqs: [5] } },
+      { type: 'tool/result', seq: 7, data: { message: { content: [{ type: 'text', text: 'retained head … retained tail' }] } }, surfaceOp: { op: 'replace', startSeq: 5, endSeq: 5 } },
+    ] as ContextEvent[]
+    const result = snapshotEntriesOf(effectiveContextNodes(nodes, { entries: events.map(event => ({ event })) }).nodes, undefined, -1)
+    expect(result.at(-1)).toMatchObject({ kind: 'tool', toolName: 'read', text: '调用：{}\nretained head … retained tail' })
+    expect(JSON.stringify(result)).not.toContain('large audit-only result')
+  })
   it('keeps only the latest checkpoint and its surviving tail, even when replacement endpoints run backwards', () => {
     const context = effectiveContextNodes(nodes, window)
     expect(context.checkpointSeq).toBe(14)
@@ -108,6 +119,11 @@ describe('snapshotEntriesOf（当前 turn 内容提取）', () => {
   it('在途流式输出（partial）追加为 streaming 拍', () => {
     const entries = snapshotEntriesOf([userNode('任务')], { blocks: [{ kind: 'text', text: '正在输出' }] })
     expect(entries.map(e => e.kind)).toEqual(['request', 'streaming'])
+  })
+
+  it('includes in-flight reasoning and tools before a result or final answer exists', () => {
+    const entries = snapshotEntriesOf([], { blocks: [{ kind: 'reasoning', text: 'Checking the directory' }] }, 10, [{ name: 'bash', argsRaw: '{"command":"pwd"}' }])
+    expect(entries).toEqual([{ kind: 'thinking', text: 'Checking the directory' }, { kind: 'tool', toolName: 'bash', text: '调用：{"command":"pwd"}\n（执行中）' }])
   })
 
   it('无 user 节点（空历史）→ 空序列', () => {

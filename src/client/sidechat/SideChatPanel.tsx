@@ -147,7 +147,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   const parentWindow = useSyncExternalStore(useCallback(notify => parentEvents?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [parentEvents]), () => parentEvents?.getSnapshot())
   const savedProgress = useMemo(() => messages.filter(message => message.role === 'user' && (message.seq ?? -1) > (boundarySeq ?? -1)).map(message => splitSnapshotPrefix(message.text)).find(Boolean), [messages, boundarySeq]) ?? acceptedSnapshot
   const progress = useMemo(() => savedProgress ? { entries: snapshotEntriesFromText(savedProgress.snapshot), takenAt: savedProgress.takenAt }
-    : meta.forkedMidTurn ? { entries: snapshotEntriesOf(effectiveContextNodes(parentLegacy?.nodes ?? [], parentWindow).nodes, parentLegacy?.partial, boundarySeq) } : undefined, [savedProgress, meta.forkedMidTurn, parentLegacy, parentWindow, boundarySeq])
+    : meta.forkedMidTurn ? { entries: snapshotEntriesOf(effectiveContextNodes(parentLegacy?.nodes ?? [], parentWindow).nodes, parentLegacy?.partial, boundarySeq, parentLegacy?.runningCalls) } : undefined, [savedProgress, meta.forkedMidTurn, parentLegacy, parentWindow, boundarySeq])
   const status = sessionStatusSource(ctx)
   const parentPending = useSyncExternalStore(useCallback(notify => status?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [status]), () => status?.getSnapshot().get(meta.parentSessionId ?? scope.sessionId)?.pendingInteraction != null)
   const [saving, setSaving] = useState(false)

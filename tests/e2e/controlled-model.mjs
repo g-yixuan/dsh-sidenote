@@ -59,6 +59,12 @@ export function apply(ctx) {
       }
       yield { type: 'block-start', index: 0, blockType: 'text' }
       yield { type: 'text-delta', index: 0, text: reply }
+      if (text.trimEnd().endsWith('[e2e:progress-stream]')) for (let i = 1; i <= 40; i++) {
+        await holdResponse(options.signal, 600)
+        const delta = `\n\nLive progress ${i}: a new step in the running main conversation.`
+        reply += delta
+        yield { type: 'text-delta', index: 0, text: delta }
+      }
       if (text.trimEnd().endsWith('[e2e:steer-window]')) await holdResponse(options.signal, 4_000)
       if (text.trimEnd().endsWith('[e2e:hold]')) await holdResponse(options.signal)
       options.signal?.throwIfAborted()

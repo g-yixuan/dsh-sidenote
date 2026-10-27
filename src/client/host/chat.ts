@@ -3,7 +3,7 @@ import type { Context, ConversationSnapshot, ObservableSnapshot, SessionBinding,
 export interface ContextEvent {
   type: string
   seq: number
-  data: { turn?: number | null; commandId?: string; sourceCommandId?: string; source?: { kind?: string }; content?: readonly { type: string; text?: string }[]; summary?: readonly { type: string; text?: string }[]; shadowedSeqs?: readonly number[] }
+  data: { turn?: number | null; commandId?: string; sourceCommandId?: string; source?: { kind?: string }; content?: readonly { type: string; text?: string }[]; message?: { content: readonly { type: string; text?: string }[] }; summary?: readonly { type: string; text?: string }[]; shadowedSeqs?: readonly number[] }
   surfaceOp?: 'append' | { op: 'replace'; startSeq: number; endSeq: number }
 }
 export interface ContextEventWindow { entries: readonly { event: ContextEvent }[] }
