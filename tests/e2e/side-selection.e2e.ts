@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { writeFileSync } from 'node:fs'
-import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, selectModel, dragText } from './journey'
+import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, selectModel, dragText, loadEarlierUntil, revealForReading } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
 test.afterEach(async ({ page }, info) => {
@@ -45,7 +45,7 @@ test('side local selection saves outside, reanchors after reload, and sends full
   await expect(overlay.locator('input')).toHaveCount(0)
   await expect(input).toHaveText('ordinary body remains clean')
   await expect.poll(records).toMatchObject([{ sessionId: child, sourceSessionId: child, sourceSurface: 'side', text: 'full history snapshot', note: '侧回复的完整注解', state: 'active' }])
-  await quoteBody.scrollIntoViewIfNeeded()
+  await revealForReading(page, quoteBody)
   const badge = overlay.getByRole('button', { name: /^1 · / })
   await expect(badge).toBeVisible()
   const badgeRect = await badge.boundingBox(), paneRect = await side.boundingBox()
@@ -68,14 +68,15 @@ test('side local selection saves outside, reanchors after reload, and sends full
   await restoreSameSide(page, child)
   await expect(side.getByText(/^(2 annotations|2 条注释)$/)).toBeVisible()
   const inherited = side.getByRole('button', { name: /Main conversation context|主线上下文/ })
-  if (!await quoteBody.isVisible()) await inherited.click()
-  await quoteBody.scrollIntoViewIfNeeded()
+  if (await inherited.getAttribute('aria-expanded') === 'false') await inherited.click()
+  await loadEarlierUntil(side, quoteBody)
+  await revealForReading(page, quoteBody)
   await expect(badge).toBeVisible()
   await inherited.click()
   await expect(badge).toHaveCount(0)
   expect(await records()).toHaveLength(2)
   await inherited.click()
-  await quoteBody.scrollIntoViewIfNeeded()
+  await revealForReading(page, quoteBody)
   await expect(badge).toBeVisible()
 
   await side.getByRole('button', { name: /^(Send|Send message|发送|发送消息|Queue message|加入队列|排队发送)$/ }).click()

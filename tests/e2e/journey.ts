@@ -59,11 +59,7 @@ export async function openSeedSession(page: Page): Promise<void> {
   const conversation = page.locator('[data-conversation-session]').first()
   await expect(conversation).toHaveAttribute('data-conversation-session', seed)
   const history = conversation.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()
-  await expect(conversation.locator('[data-chat-flow-kind]').first()).toBeAttached({ timeout: 30_000 })
-  // A long shared session opens its recent window. Load the quoted seed through
-  // native turn navigation instead of assuming the first turn is already mounted.
-  if (await history.count() === 0) await conversation.getByRole('button', { name: /^(?:Load and jump to|Jump to) turn 1$|^(?:加载并)?跳转到第 1 轮$/ }).click()
-  await expect(history).toBeAttached({ timeout: 30_000 })
+  await loadEarlierUntil(conversation, history)
 }
 
 export async function prepareSeedPage(page: Page): Promise<void> {
@@ -86,23 +82,70 @@ export async function openGeneralSettings(page: Page): Promise<void> {
 
 export const sideChatOf = (page: Page) => page.locator('[data-sidenote-chat-session]:visible')
 
+/** Both the transcript and its turn rail are paged. Embedded views have no
+ * rail at all; the native Load earlier control works for both presentations. */
+export async function loadEarlierUntil(view: Locator, target: Locator): Promise<void> {
+  const earlier = view.getByRole('button', { name: /^(Load earlier|加载更早)$/ })
+  for (let pageIndex = 0; pageIndex < 20 && await target.count() === 0; pageIndex++) {
+    await expect.poll(async () => await target.count() > 0 || await earlier.count() > 0, { timeout: 30_000 }).toBe(true)
+    if (await target.count() > 0) break
+    const firstKey = await view.locator('[data-chat-flow-key]').first().getAttribute('data-chat-flow-key')
+    await expect(earlier).toBeEnabled()
+    // Setup invokes the native control without scrolling into its auto-preload
+    // threshold first (which can remove this very button during pointer click).
+    await earlier.dispatchEvent('click')
+    await expect.poll(async () => await target.count() > 0 || await view.locator('[data-chat-flow-key]').first().getAttribute('data-chat-flow-key') !== firstKey).toBe(true)
+  }
+  await expect(target).toBeAttached()
+  await view.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+}
+
+/** Express reader intent with real wheel input. Direct DOM scrolling is owned
+ * by the native follow/restore policy and may be reversed on its next layout. */
+export async function revealForReading(page: Page, target: Locator): Promise<void> {
+  await expect(async () => {
+    const view = await target.evaluate(el => {
+      const scroll = el.closest('[data-conversation-scroll]')!
+      const viewport = scroll.getBoundingClientRect(), rect = el.getBoundingClientRect()
+      const top = viewport.top + 12
+      const bottom = (scroll.querySelector('[data-composer-seat]')?.getBoundingClientRect().top ?? viewport.bottom) - 12
+      const end = rect.top + Math.min(rect.height, bottom - top)
+      return { x: viewport.left + viewport.width / 2, y: (top + bottom) / 2,
+        delta: rect.top < top ? rect.top - top : end > bottom ? end - bottom : 0 }
+    })
+    if (Math.abs(view.delta) <= 2) return
+    await page.mouse.move(view.x, view.y)
+    await page.mouse.wheel(0, view.delta)
+    await target.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+    // Re-evaluate after the wheel's native scroll/reader sampling settles.
+    expect(view.delta).toBe(0)
+  }).toPass({ timeout: 8_000 })
+}
+
 /** Exercise selection with real pointer events, including the host's scrolling. */
 export async function dragText(page: Page, body: Locator, text: string): Promise<void> {
-  await body.scrollIntoViewIfNeeded()
-  const points = await body.evaluate((el, needle) => {
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const at = (node.textContent ?? '').indexOf(needle)
-      if (at < 0) continue
-      const first = document.createRange(), last = document.createRange()
-      first.setStart(node, at); first.setEnd(node, at + 1)
-      last.setStart(node, at + needle.length - 1); last.setEnd(node, at + needle.length)
-      const a = first.getBoundingClientRect(), b = last.getBoundingClientRect()
-      return { x1: a.left + 0.1, y1: a.top + a.height / 2, x2: b.right - 0.1, y2: b.top + b.height / 2 }
-    }
-    return null
-  }, text)
-  expect(points).not.toBeNull()
+  await revealForReading(page, body.getByText(text, { exact: false }).first())
+  let points: { x1: number; y1: number; x2: number; y2: number } | null = null
+  await expect(async () => {
+    await body.getByText(text, { exact: false }).first().scrollIntoViewIfNeeded()
+    await body.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+    points = await body.evaluate((el, needle) => {
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const at = (node.textContent ?? '').indexOf(needle)
+        if (at < 0) continue
+        const first = document.createRange(), last = document.createRange()
+        first.setStart(node, at); first.setEnd(node, at + 1)
+        last.setStart(node, at + needle.length - 1); last.setEnd(node, at + needle.length)
+        const a = first.getBoundingClientRect(), b = last.getBoundingClientRect()
+        const points = { x1: a.left + 0.1, y1: a.top + a.height / 2, x2: b.right - 0.1, y2: b.top + b.height / 2 }
+        if (!el.contains(document.elementFromPoint(points.x1, points.y1)) || !el.contains(document.elementFromPoint(points.x2, points.y2))) return null
+        return points
+      }
+      return null
+    }, text)
+    expect(points).not.toBeNull()
+  }).toPass({ timeout: 5_000 })
   await page.mouse.move(points!.x1, points!.y1); await page.mouse.down()
   await page.mouse.move(points!.x2, points!.y2, { steps: 12 }); await page.mouse.up()
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toContain(text)
@@ -147,7 +190,7 @@ export async function openSideChat(page: Page): Promise<string> {
   const toggle = side.getByRole('button', { name: /Main conversation context|主线上下文/ })
   if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click({ timeout: 15_000 })
   const checkpoint = side.getByText(/^(Latest compaction summary|最新压缩摘要)$/)
-  if (await history.count() === 0 && await checkpoint.count() === 0) await side.getByRole('button', { name: /^(?:Load and jump to|Jump to) turn 1$|^(?:加载并)?跳转到第 1 轮$/ }).click()
+  await loadEarlierUntil(side, history.or(checkpoint))
   await expect(history.or(checkpoint)).toBeVisible()
   return child!
 }
