@@ -23,6 +23,7 @@ test('native side send during standalone compaction does not inherit its lock or
   await expect(side.locator('[data-composer-input]')).toBeVisible()
   const child = (await side.getAttribute('data-sidenote-chat-session'))!
   expect(sessionEventsOf(child).some(event => event.type === 'compaction/start')).toBe(false)
+  expect(sessionEventsOf(child).some(event => event.type === 'command/run' && event.data.name === 'compact')).toBe(false)
   await side.locator('[data-composer-input]').fill('Side reply while the main compact transaction is pending')
   await side.locator('[data-composer-input]').press('Enter')
   await expect(side.locator('[data-chat-flow-kind="assistant-step"]')).toBeVisible()
@@ -91,7 +92,7 @@ for (const real of [false, true]) for (const busy of [false, true]) test(`${real
   await side.locator('[data-composer-input]').press('Enter')
   const reply = side.locator('[data-chat-flow-kind="assistant-step"]').last()
   await expect(reply).toBeVisible({ timeout: 60_000 })
-  if (real) { await expect(reply).toContainText(marker, { timeout: 60_000 }); await expect(reply).toContainText(/2|二/) }
+  if (real) { await expect(reply).toContainText(marker, { timeout: 60_000 }); await expect(reply).toContainText(/阶段[：:为是\s]*(?:第\s*)?(?:2|二)|第?\s*(?:2|二)\s*阶段/) }
   await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
   expect(userMessagesOf(child).filter(text => text.includes('根据继承上下文回复当前项目核验码和阶段'))).toHaveLength(1)
   if (await mainStop.isVisible()) await mainStop.click()

@@ -74,10 +74,10 @@ describe('retainSession（0.1.7 显式 generation 所有权）', () => {
 
 describe('fork cut and history ownership', () => {
   it('cuts before an unfinished standalone compression lock, including its failed-close boundary', () => {
-    const entries = [{ event: { type: 'compaction/start', seq: 13, data: { turn: null } } }]
+    const entries = [{ event: { type: 'command/run', seq: 12, data: { commandId: 'compact-1' } } }, { event: { type: 'compaction/start', seq: 13, data: { turn: null, sourceCommandId: 'compact-1' } } }]
     const session = { eventSource: { getSnapshot: () => ({ entries }) } } as unknown as SessionFace
-    expect(unfinishedCompactionCut(session)).toBe(12)
-    entries.push({ event: { type: 'compaction/end', seq: 14, data: { turn: null } } })
+    expect(unfinishedCompactionCut(session)).toBe(11)
+    entries.push({ event: { type: 'compaction/end', seq: 14, data: { turn: null, sourceCommandId: 'compact-1' } } })
     expect(unfinishedCompactionCut(session)).toBeUndefined()
   })
   it('removes only a fresh fork’s pending copies and refuses to proceed on rejection', async () => {

@@ -58,7 +58,12 @@ export async function openSeedSession(page: Page): Promise<void> {
   await byId.getByText('Side chat plugin review', { exact: true }).click()
   const conversation = page.locator('[data-conversation-session]').first()
   await expect(conversation).toHaveAttribute('data-conversation-session', seed)
-  await expect(page.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()).toBeAttached({ timeout: 30_000 })
+  const history = conversation.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()
+  await expect(conversation.locator('[data-chat-flow-kind]').first()).toBeAttached({ timeout: 30_000 })
+  // A long shared session opens its recent window. Load the quoted seed through
+  // native turn navigation instead of assuming the first turn is already mounted.
+  if (await history.count() === 0) await conversation.getByRole('button', { name: /^(?:Load and jump to|Jump to) turn 1$|^(?:加载并)?跳转到第 1 轮$/ }).click()
+  await expect(history).toBeAttached({ timeout: 30_000 })
 }
 
 export async function prepareSeedPage(page: Page): Promise<void> {
@@ -139,8 +144,11 @@ export async function openSideChat(page: Page): Promise<string> {
   expect(child).not.toBe(process.env.DSH_E2E_SEED_SESSION)
   await expect(side.locator('[data-composer-input]')).toBeVisible()
   const history = side.getByText(/full history snapshot/).first()
-  if (!await history.isVisible()) await side.getByRole('button', { name: /Main conversation context|主线上下文/ }).click({ timeout: 15_000 })
-  await expect(history).toBeVisible()
+  const toggle = side.getByRole('button', { name: /Main conversation context|主线上下文/ })
+  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click({ timeout: 15_000 })
+  const checkpoint = side.getByText(/^(Latest compaction summary|最新压缩摘要)$/)
+  if (await history.count() === 0 && await checkpoint.count() === 0) await side.getByRole('button', { name: /^(?:Load and jump to|Jump to) turn 1$|^(?:加载并)?跳转到第 1 轮$/ }).click()
+  await expect(history.or(checkpoint)).toBeVisible()
   return child!
 }
 

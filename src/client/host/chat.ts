@@ -3,7 +3,7 @@ import type { Context, ConversationSnapshot, ObservableSnapshot, SessionBinding,
 export interface ContextEvent {
   type: string
   seq: number
-  data: { turn?: number | null; source?: { kind?: string }; content?: readonly { type: string; text?: string }[]; summary?: readonly { type: string; text?: string }[]; shadowedSeqs?: readonly number[] }
+  data: { turn?: number | null; commandId?: string; sourceCommandId?: string; source?: { kind?: string }; content?: readonly { type: string; text?: string }[]; summary?: readonly { type: string; text?: string }[]; shadowedSeqs?: readonly number[] }
   surfaceOp?: 'append' | { op: 'replace'; startSeq: number; endSeq: number }
 }
 export interface ContextEventWindow { entries: readonly { event: ContextEvent }[] }
@@ -15,8 +15,13 @@ export function contextEventSource(session: SessionFace | undefined): Observable
  * its opening lock while it is unfinished; the first-send delta can then carry
  * a checkpoint that commits later. Automatic compaction stays in the busy turn. */
 export function unfinishedCompactionCut(session: SessionFace | undefined): number | undefined {
-  const last = contextEventSource(session)?.getSnapshot().entries.findLast(({ event }) => event.type === 'compaction/start' || event.type === 'compaction/end')?.event
-  return last?.type === 'compaction/start' && last.data.turn === null ? last.seq - 1 : undefined
+  const entries = contextEventSource(session)?.getSnapshot().entries ?? []
+  const last = entries.findLast(({ event }) => event.type === 'compaction/start' || event.type === 'compaction/end')?.event
+  if (last?.type !== 'compaction/start' || last.data.turn !== null) return undefined
+  // Exclude the correlated command row as well; a frozen command/run without
+  // command/done would otherwise look permanently pending in inherited history.
+  const command = last.data.sourceCommandId === undefined ? undefined : entries.findLast(({ event }) => event.type === 'command/run' && event.data.commandId === last.data.sourceCommandId)?.event
+  return (command?.seq ?? last.seq) - 1
 }
 
 /** Published event window, shared by all supported hosts. Its last seed marker
