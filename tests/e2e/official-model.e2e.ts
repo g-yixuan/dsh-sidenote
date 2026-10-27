@@ -226,7 +226,7 @@ test('official Flash executes real file tools in main and side, with isolated mu
   const child = await openSideChat(page)
   const side = sideChatOf(page)
   await selectModel(page, side, 'DeepSeek Flash (official E2E)')
-  await expect(side.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: mainMarker })).toBeInViewport()
+  await expect(side.locator('[data-sidenote-context-history] [data-context-kind="reply"]').filter({ hasText: mainMarker })).toBeInViewport()
   const baselineSide = sessionEventsOf(child).at(-1)!.seq
   const mainBefore = userMessagesOf(mainId)
   const input = side.locator('[data-composer-input]')
