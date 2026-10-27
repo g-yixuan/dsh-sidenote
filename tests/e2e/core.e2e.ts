@@ -28,17 +28,14 @@ test('shared host journey: real fork, inherited history, accepted side message a
   await inherited.click()
   await expect(side.locator('[data-turn-tail]')).toHaveCount(0)
   await inherited.click()
-  await expect(side.locator('[data-turn-tail]').first()).toBeVisible()
-  // Exercise the host TerminalBlock too: opening inherited history alone leaves
-  // tool cards collapsed and misses required-label changes in newer hosts.
-  for (const button of await side.getByRole('button', { name: /^(Completed|已完成)/ }).all()) {
-    if (await button.isEnabled()) await button.click()
-  }
-  await side.getByRole('button', { name: /^(Read files and ran commands|读取了文件并运行了命令)/ }).click()
-  await side.getByRole('button', { name: /^Bash List workspace files$/ }).click()
-  const terminal = side.locator('[data-terminal]')
-  await expect(terminal).toContainText('ls -1')
-  await expect(terminal).toContainText('package.json')
+  await expect(side.locator('[data-turn-tail]')).toHaveCount(0)
+  await expect(side.locator('[data-sidenote-context-history]')).toContainText('Complete a native turn before testing inherited folding')
+  // Read-only context preserves the full call and result without mounting a
+  // second native Conversation (and its running/queue/scroll machinery).
+  const tool = side.locator('details[data-context-kind="tool"]').filter({ hasText: 'ls -1' }).first()
+  await tool.locator('summary').click()
+  await expect(tool).toContainText('ls -1')
+  await expect(tool).toContainText('package.json')
   const input = side.locator('[data-composer-input]')
   const message = 'Shared host journey: send to this child only'
   await input.fill(message)

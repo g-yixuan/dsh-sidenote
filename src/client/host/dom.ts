@@ -120,41 +120,6 @@ export function pendingTextNodes(element: HTMLElement): Text[] {
   return nodes
 }
 
-/** Find the last rendered member of an explicit history range, not the side-chat tail. */
-export function lastConversationEntry(root: HTMLElement, keys: ReadonlySet<string>): HTMLElement | undefined {
-  return [...root.querySelectorAll<HTMLElement>('[data-chat-flow-key]')].reverse()
-    .find(row => keys.has(row.dataset.chatFlowKey ?? '') && row.getBoundingClientRect().height > 0)
-}
-
-/** Place only our portal seat at the fork boundary. Native rows retain their
- * ownership, renderers and scroll policy on both pre-Flow and Flow hosts. */
-export function placeContextProgress(root: HTMLElement, seat: HTMLElement, inheritedKeys: ReadonlySet<string>): void {
-  const column = root.querySelector<HTMLElement>('[data-chat-flow]')
-  if (!column) return
-  const flow = column.querySelector<HTMLElement>(':scope > [data-slot="conversation.chat.flow"]') ?? column
-  const rows = [...flow.children].filter((row): row is HTMLElement => row instanceof HTMLElement && row !== seat)
-  const inherited = rows.findLast(row => inheritedKeys.has(row.dataset.chatFlowKey ?? ''))
-  if (inherited) {
-    if (inherited.nextSibling !== seat) inherited.after(seat)
-  } else {
-    const first = rows.find(row => row.hasAttribute('data-chat-flow-key') || row.matches('[data-submission-echo], [data-pending-steering]'))
-    if (first ? first.previousSibling !== seat : seat.parentElement !== flow) flow.insertBefore(seat, first ?? null)
-  }
-}
-
-/** Land above the native composer, without scrolling another pane or moving focus. */
-export function revealConversationEntryEnd(row: HTMLElement): void {
-  const scroller = row.closest<HTMLElement>('[data-conversation-scroll]')
-  if (!scroller) return
-  const clip = quoteClipOf(row, conversationViewOf(row))
-  // The host retains a paging anchor after loadThrough. Forward the explicit
-  // open gesture as reading intent before landing, otherwise it restores the
-  // old anchor over our scrollTop on the next resize. Zero delta never scrolls.
-  scroller.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 0 }))
-  scroller.scrollTop += row.getBoundingClientRect().bottom - clip.bottom + 12
-}
-
-
 export function isMainComposerInput(target: EventTarget | null): boolean {
   return target instanceof HTMLElement
     && (target.closest('[data-composer-input]') !== null || target instanceof HTMLTextAreaElement)

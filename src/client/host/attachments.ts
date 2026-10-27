@@ -4,6 +4,12 @@ import { addInputAttachments } from './input.ts'
 interface Preview { readonly id: string; readonly previewUrl: string }
 interface Draft { readonly id: string; readonly kind: 'image' | 'file'; readonly previewUrl?: string }
 
+/** Reuse the host's session-authorized image cache; never construct media URLs. */
+export function contextImageLoader(ctx: Context, sessionId: string): ((attachment: unknown) => Promise<string>) | undefined {
+  const service = ctx.get('uiConversation') as { imageUrl?(sessionId: string, attachment: unknown): Promise<string> } | undefined
+  return service?.imageUrl ? attachment => service.imageUrl!(sessionId, attachment) : undefined
+}
+
 /** Image intake only; serialization and lifecycle stay owned by native submit. */
 export interface AttachmentApis {
   createDraftImages(files: readonly File[]): readonly Preview[]

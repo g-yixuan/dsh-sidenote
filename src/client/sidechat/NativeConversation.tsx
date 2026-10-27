@@ -1,12 +1,11 @@
-import { createContext, createElement, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
+import { createContext, createElement, useCallback, useContext, useEffect, useId, useMemo, useState, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
 import type { Context, SessionReference } from '../host/contracts.ts'
 import { transcriptOf, type ChatMessage } from '../chat/transcript.ts'
 import { createFoldStore } from '../chat/viewState.ts'
 import { completedReplySeqsOf, type ChatReplySnapshot } from '../host/chat.ts'
-import { lastConversationEntry, placeContextProgress, revealConversationEntryEnd } from '../host/dom.ts'
 import { IconCheckOutline16, IconChevronDownOutline14 } from '../host/icons.ts'
 import type { SnapshotEntry } from './snapshot.ts'
+import type { ContextEntry } from './context.ts'
 import { ContextProgress } from './ContextProgress.tsx'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { pairQuestions } from './model.ts'
@@ -20,9 +19,9 @@ export interface SideConversation {
   title: string
   boundarySeq?: number
   reflow: ReflowStore
-  contextExpanded?: boolean
   contextPending?: boolean
-  compactContext?: SnapshotEntry[]
+  history: readonly ContextEntry[]
+  loadImage?: (attachment: unknown) => Promise<string>
   progress?: { entries: SnapshotEntry[]; takenAt?: string | null }
   loadContext?: () => Promise<void>
 }
@@ -44,14 +43,28 @@ function ChatView(props: { renderSlot(name: 'conversation.session', owner: { vie
   const fold = useMemo(() => createFoldStore(`dsh-sidenote:fold:v1:${side.sessionId}`), [side.sessionId])
   useSyncExternalStore(fold.subscribe, fold.getSnapshot)
   const expanded = fold.isOpen('inherited')
+  const contextId = useId()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string>()
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    if (!expanded) return
+    let active = true
+    setLoading(true); setError(undefined)
+    void Promise.resolve(side.loadContext?.()).then(() => { if (active) setLoading(false) }, reason => {
+      if (active) { setLoading(false); setError(String(reason instanceof Error ? reason.message : reason)) }
+    })
+    return () => { active = false }
+  }, [expanded, side.loadContext, attempt])
   return <div className={css.chatView}>
     <div className={css.mainContext} data-sidenote-main-context>
-      <button type="button" className={css.historyToggle} aria-expanded={expanded} onClick={() => { fold.toggle('inherited') }}>
+      <button type="button" className={css.historyToggle} aria-expanded={expanded} aria-controls={contextId} onClick={() => { fold.toggle('inherited') }}>
         <IconChevronDownOutline14 size={12} className={expanded ? css.contextChevronOpen : css.contextChevron} />
         <span>{t('mainContext')}</span><span className={css.contextHint}>{side.contextPending ? t('contextAtSend') : side.progress?.takenAt ? t('contextAsOf', { time: side.progress.takenAt }) : t('contextInherited')}</span>
       </button>
+      {expanded && <ContextProgress id={contextId} history={side.history} entries={side.progress?.entries ?? []} live={side.contextPending === true} loading={loading} error={error} onRetry={() => { setAttempt(value => value + 1) }} loadImage={side.loadImage} />}
     </div>
-    <SideContext.Provider value={{ ...side, contextExpanded: expanded }}>{props.renderSlot('conversation.session', { view: 'chat' })}</SideContext.Provider>
+    {props.renderSlot('conversation.session', { view: 'chat' })}
   </div>
 }
 function Content(props: ContentProps) {
@@ -111,10 +124,6 @@ interface ViewProps {
   useConversation<T>(select: (state: ViewSnapshot) => T): T
 }
 function HistoryView({ Original, props, side }: { Original: ComponentType<ViewProps>; props: ViewProps; side: SideConversation }) {
-  const root = useRef<HTMLDivElement>(null)
-  const [progressSeat] = useState(() => document.createElement('div'))
-  const wasExpanded = useRef(side.contextExpanded)
-  const openingLatest = useRef(false)
   const nodes = props.useChat(state => state.nodes)
   const snapshot = props.useConversation(state => state)
   const groups = snapshot.views.grouped('chat')
@@ -130,61 +139,12 @@ function HistoryView({ Original, props, side }: { Original: ComponentType<ViewPr
     const members = groups?.groupSource(entry.key).getSnapshot()?.members ?? []
     return members.length > 0 && members.every(isInherited)
   }
-  const compacted = side.compactContext !== undefined || side.progress?.entries.some(entry => entry.kind === 'checkpoint')
-  const contextEntries = useMemo(() => [...(side.progress?.entries.some(entry => entry.kind === 'checkpoint') ? [] : side.compactContext ?? []), ...(side.progress?.entries ?? [])], [side.compactContext, side.progress])
-  const visible = side.contextExpanded && !compacted ? entries : entries.filter(entry => !isInherited(entry))
+  // The native conversation owns side messages only. Context has its own
+  // stable React region, including when the native session is still blank.
+  const visible = entries.filter(entry => !isInherited(entry))
   const projected = { ...snapshot, views: { ...snapshot.views, grouped: (name: string) => name === 'chat' && groups ? { ...groups, entries: visible } : snapshot.views.grouped(name) } }
   const useProjected = useCallback(<T,>(selector: (state: ViewSnapshot) => T): T => selector(projected), [projected])
-  const inheritedKeys = visible.filter(isInherited).map(entry => entry.key).join('\n')
-  const navigationKeys = useRef(new Set<string>())
-  navigationKeys.current = new Set(inheritedKeys.split('\n'))
-  const showProgress = side.contextExpanded && contextEntries.length > 0
-  useLayoutEffect(() => {
-    if (!showProgress || !root.current) return
-    const element = root.current
-    const keys = new Set(inheritedKeys.split('\n'))
-    const place = () => { placeContextProgress(element, progressSeat, keys) }
-    // Host node seats can mount after their View. Reposition our own seat only;
-    // do not split native Chat into two views or move React-owned history.
-    const observer = new MutationObserver(place)
-    observer.observe(element, { childList: true, subtree: true })
-    place()
-    return () => { observer.disconnect(); progressSeat.remove() }
-  }, [showProgress, inheritedKeys, progressSeat])
-  useLayoutEffect(() => {
-    const view = root.current?.closest('[data-sidenote-chat-session]')
-    if (!view) return
-    const cancelNavigation = (event: Event) => { if (event.isTrusted) openingLatest.current = false }
-    for (const type of ['wheel', 'pointerdown', 'keydown']) view.addEventListener(type, cancelNavigation, true)
-    return () => { for (const type of ['wheel', 'pointerdown', 'keydown']) view.removeEventListener(type, cancelNavigation, true) }
-  }, [])
-  // Only an explicit expansion navigates. Later stream/layout updates and
-  // restored fold state leave the host's reader-position policy in charge.
-  useLayoutEffect(() => {
-    const opening = side.contextExpanded && !wasExpanded.current
-    wasExpanded.current = side.contextExpanded
-    if (opening) openingLatest.current = true
-    if (!side.contextExpanded) { openingLatest.current = false; return }
-    // Native Chat settles its content resize first; navigate in the next frame
-    // after lazy paging, so its restoration cannot overwrite the explicit open.
-    let cancelled = false, frame = 0
-    void Promise.resolve(side.loadContext?.()).then(() => {
-      if (cancelled || !openingLatest.current) return
-      frame = requestAnimationFrame(() => {
-        frame = requestAnimationFrame(() => {
-          if (cancelled || !openingLatest.current || !root.current) return
-          const progress = root.current.querySelector<HTMLElement>('[data-sidenote-context-progress]')
-          if (progress) progress.scrollTop = progress.scrollHeight
-          const target = progress ?? lastConversationEntry(root.current, navigationKeys.current)
-          if (target) { revealConversationEntryEnd(target); openingLatest.current = false }
-        })
-      })
-    }).catch(error => { console.warn('[dsh-sidenote] 加载继承上下文失败:', error) })
-    return () => { cancelled = true; cancelAnimationFrame(frame) }
-  }, [side.contextExpanded, side.loadContext, showProgress, inheritedKeys])
-  return <div ref={root} className={css.historyView}>{createElement(Original, { ...props, useConversation: useProjected })}
-    {showProgress && createPortal(<ContextProgress entries={contextEntries} live={side.contextPending === true} />, progressSeat)}
-  </div>
+  return createElement(Original, { ...props, useConversation: useProjected })
 }
 
 /** Both admitted hosts publish the native chat View; only 0.2.1 adds a Flow slot. */

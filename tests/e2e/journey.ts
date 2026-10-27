@@ -105,7 +105,7 @@ export async function loadEarlierUntil(view: Locator, target: Locator): Promise<
 export async function revealForReading(page: Page, target: Locator): Promise<void> {
   await expect(async () => {
     const view = await target.evaluate(el => {
-      const scroll = el.closest('[data-conversation-scroll]')!
+      const scroll = el.closest('[data-sidenote-context-progress]') ?? el.closest('[data-conversation-scroll]')!
       const viewport = scroll.getBoundingClientRect(), rect = el.getBoundingClientRect()
       const top = viewport.top + 12
       const bottom = (scroll.querySelector('[data-composer-seat]')?.getBoundingClientRect().top ?? viewport.bottom) - 12

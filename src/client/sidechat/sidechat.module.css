@@ -8,8 +8,7 @@
 .root { color: var(--dsw-alias-label-primary); }
 .nativeConversation { flex: 1; }
 .chatView { display: flex; flex-direction: column; flex: 1 0 auto; min-width: 0; }
-.historyView { display: contents; }
-.mainContext { flex: none; padding: 12px 24px 4px; }
+.mainContext { flex: none; padding: 12px 24px 4px; min-width: 0; }
 .historyToggle { display: flex; align-items: center; gap: 6px; }
 .contextHint { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
 .contextChevron { transform: rotate(-90deg); }
@@ -19,8 +18,10 @@
 .liveDot { width: 5px; height: 5px; border-radius: 50%; background: var(--dsw-alias-state-business-primary); animation: contextPulse 1.8s ease-in-out infinite; }
 .progressEntries { max-height: min(240px, 32vh); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; overflow-anchor: none; padding-right: 8px; }
 .progressEntries:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
-.progressEntry, .progressDetail { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.65; }
-.progressEntry { margin: 0 0 12px; }
+.progressDetail, .contextRequest { white-space: pre-wrap; }
+.progressEntry, .progressDetail { overflow-wrap: anywhere; font-size: 13px; line-height: 1.65; }
+.contextImage { max-width: 100%; max-height: 160px; border-radius: 8px; margin: 8px 0; }
+.progressEntry { display: flow-root; margin: 0 0 12px; }
 .progressEntry:last-child { margin-bottom: 0; }
 .progressProcess { color: var(--dsw-alias-label-tertiary); font-size: 13px; margin: 8px 0; }
 .progressProcess summary { display: flex; align-items: center; gap: 6px; cursor: pointer; min-height: 24px; border-radius: 4px; list-style: none; }

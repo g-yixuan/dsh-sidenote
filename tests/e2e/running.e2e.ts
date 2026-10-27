@@ -8,7 +8,7 @@ test.afterEach(async ({ page }, info) => {
   const dir = process.env.DSH_E2E_EVIDENCE_DIR ?? 'test-results'
   mkdirSync(dir, { recursive: true })
   const name = info.title.startsWith('busy fork') ? `busy-fork-${info.title.includes('image') ? 'image' : 'text'}` : 'native-queue-steer'
-  if (info.title.startsWith('busy fork')) await sideChatOf(page).locator('[data-sidenote-main-context] button').scrollIntoViewIfNeeded()
+  if (info.title.startsWith('busy fork')) await sideChatOf(page).locator('[data-sidenote-main-context] > button').scrollIntoViewIfNeeded()
   await page.screenshot({ path: join(dir, name + '.png') })
   if (info.status !== info.expectedStatus) writeFileSync(join(dir, name + '.yml'), await page.locator('body').ariaSnapshot())
 })
@@ -153,8 +153,8 @@ test('busy fork after repeated steering keeps side messages and answers outside 
   const child = await openSideChat(page)
   const side = sideChatOf(page)
   const context = side.locator('[data-sidenote-main-context]')
-  await context.getByRole('button').click()
-  await expect(context.getByRole('button')).toHaveAttribute('aria-expanded', 'false')
+  await context.locator(':scope > button').click()
+  await expect(context.locator(':scope > button')).toHaveAttribute('aria-expanded', 'false')
   const question = 'Side question must stay outside the inherited history [e2e:steer-window]'
   let release!: () => void
   const admission = new Promise<void>(resolve => { release = resolve })
@@ -166,7 +166,7 @@ test('busy fork after repeated steering keeps side messages and answers outside 
     await expect(echo).toContainText(question)
     await expect(echo).toBeInViewport()
     await expect(echo).not.toContainText('mainline-progress-snapshot')
-    await expect(context.getByRole('button')).toBeVisible()
+    await expect(context.locator(':scope > button')).toBeVisible()
   } finally { release() }
   await expect.poll(() => userMessagesOf(child).some(text => text.includes(question))).toBe(true)
   await page.unroute('**/api/session/prompt')
@@ -174,13 +174,13 @@ test('busy fork after repeated steering keeps side messages and answers outside 
   await expect(side.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'Controlled E2E reply.' })).toBeVisible()
   await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toBeVisible()
   await expect(context).toContainText(/As of|截至/)
-  await context.getByRole('button').click()
+  await context.locator(':scope > button').click()
   await expect(side.locator('[data-sidenote-context-progress]')).toContainText('Original running task')
   await expect(side.locator('[data-sidenote-context-progress]')).toContainText('Steering update 1')
   await expect(side.locator('[data-sidenote-context-progress]')).toContainText('Steering update 2')
   await main.getByRole('button', { name: /^(Stop generating|停止生成)$/ }).click()
   await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
-  await context.getByRole('button').click()
+  await context.locator(':scope > button').click()
   // Restore a tab whose old implementation persisted an over-large boundary.
   await page.addInitScript(id => {
     for (const key of Object.keys(localStorage).filter(key => key.startsWith('dsh-sidenote:side-meta:v1:'))) {
@@ -190,7 +190,7 @@ test('busy fork after repeated steering keeps side messages and answers outside 
   }, child)
   await page.reload()
   await expect(side).toHaveAttribute('data-sidenote-chat-session', child)
-  await expect(context.getByRole('button')).toHaveAttribute('aria-expanded', 'false')
+  await expect(context.locator(':scope > button')).toHaveAttribute('aria-expanded', 'false')
   await expect(side.locator('[data-chat-flow-kind="user"]').filter({ hasText: question })).toBeVisible()
   await expect(side.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'Controlled E2E reply.' })).toBeVisible()
   await expect(context).toContainText(/As of|截至/)
