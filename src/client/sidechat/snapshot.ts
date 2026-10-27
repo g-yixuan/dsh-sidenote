@@ -1,7 +1,7 @@
 /** Mainline progress after the actual fork cut. Chat retains an audit trail;
  * committed compaction replacements determine the effective context instead. */
 import type { Context, ConversationSnapshot } from '../host/contracts.ts'
-import { chatSourceOf, contextEventSource, type ContextEvent, type ContextEventWindow } from '../host/chat.ts'
+import { chatSourceOf, contextEventSource, loadInheritedContext, retainSession, type ContextEvent, type ContextEventWindow } from '../host/chat.ts'
 
 /** 快照里的一拍（当前 turn 的一段内容）。 */
 export interface SnapshotEntry {
@@ -179,6 +179,23 @@ export function buildMainlineSnapshot(ctx: Context, parentSessionId: string, now
   } catch {
     return null
   }
+}
+
+/** A cold parent may expose only its tail page. Do not permanently freeze that
+ * partial view into the first side prompt. A newer checkpoint needs its full
+ * retained surface (which can contain older seqs); replay it from shared history. */
+export async function loadMainlineSnapshot(ctx: Context, parentSessionId: string, boundarySeq: number): Promise<string> {
+  const retained = retainSession(ctx, parentSessionId)
+  try {
+    const binding = retained ? await retained.ready : ctx.sessions.binding(parentSessionId)
+    await loadInheritedContext(binding?.session, boundarySeq)
+    if (contextEventSource(binding?.session)?.getSnapshot().entries.some(({ event }) => event.seq > boundarySeq && event.type === 'user/message' && event.data.source?.kind === 'compact-checkpoint')) {
+      await loadInheritedContext(binding?.session, 0)
+    }
+    const text = buildMainlineSnapshot(ctx, parentSessionId, new Date(), boundarySeq)
+    if (text === null) throw new Error('主线上下文尚未就绪，内容已保留，请重新发送')
+    return text
+  } finally { retained?.release() }
 }
 
 export { splitSnapshotPrefix } from '../annotations/format.ts'

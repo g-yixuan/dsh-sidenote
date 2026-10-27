@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context, SessionInput } from '../src/client/host/contracts.ts'
 import type { ReflowStore } from '../src/client/reflow.ts'
 import { createAnnotationStore } from '../src/client/annotations/model.ts'
+import { registerSubmissionExtras } from '../src/client/annotations/submissionExtras.ts'
 import { submitNativeWithContext } from '../src/client/annotations/NativeComposer.tsx'
 
 const SESSION = 's1'
@@ -43,7 +44,7 @@ function makeHarness(options: { draft?: string; missingInput?: boolean; withAnno
   }
   const input = {
     state: {
-      getSnapshot: () => state,
+      getSnapshot: () => ({ ...state }),
       subscribe: () => () => {},
     },
     setDraft: (text: string) => { drafts.push(text); state.draft = text },
@@ -118,6 +119,32 @@ describe('native composer context submission', () => {
   afterEach(() => {
     harness = undefined
     vi.unstubAllGlobals()
+  })
+
+  it.each(['edit', 'failure', 'success'] as const)('preserves first-send context during asynchronous preparation: %s', async outcome => {
+    harness = makeHarness({ draft: '原始问题', withAnnotation: false })
+    let resolve!: (text: string) => void, reject!: (error: Error) => void
+    const ready = new Promise<string>((yes, no) => { resolve = yes; reject = no })
+    const accepted = vi.fn()
+    const off = registerSubmissionExtras(SESSION, { needsFirstSend: () => true, firstSendPrefix: () => ready, onAccepted: accepted, onSubmitText: () => {} })
+    try {
+      harness.send(); harness.send()
+      expect(harness.submitted).toEqual([])
+      if (outcome === 'edit') harness.type('修改')
+      if (outcome === 'failure') reject(new Error('page failed'))
+      else resolve('<mainline-progress-snapshot>完整上下文</mainline-progress-snapshot>')
+      await flushMicrotasks()
+      if (outcome === 'success') {
+        expect(harness.submitted).toHaveLength(1)
+        expect(harness.texts[0]).toMatch(/完整上下文.*原始问题/s)
+        expect(accepted).toHaveBeenCalledOnce()
+      } else {
+        expect(harness.submitted).toHaveLength(0)
+        expect(harness.draft()).toBe(outcome === 'edit' ? '原始问题修改' : '原始问题')
+        expect(harness.error()).toBeTruthy()
+        expect(accepted).not.toHaveBeenCalled()
+      }
+    } finally { off() }
   })
 
   it('preserves the host-selected steer mode for context-only sends and ignores a repeated submit', async () => {

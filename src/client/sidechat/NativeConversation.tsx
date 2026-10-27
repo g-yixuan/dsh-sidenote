@@ -151,6 +151,13 @@ function HistoryView({ Original, props, side }: { Original: ComponentType<ViewPr
     place()
     return () => { observer.disconnect(); progressSeat.remove() }
   }, [showProgress, inheritedKeys, progressSeat])
+  useLayoutEffect(() => {
+    const view = root.current?.closest('[data-sidenote-chat-session]')
+    if (!view) return
+    const cancelNavigation = (event: Event) => { if (event.isTrusted) openingLatest.current = false }
+    for (const type of ['wheel', 'pointerdown', 'keydown']) view.addEventListener(type, cancelNavigation, true)
+    return () => { for (const type of ['wheel', 'pointerdown', 'keydown']) view.removeEventListener(type, cancelNavigation, true) }
+  }, [])
   // Only an explicit expansion navigates. Later stream/layout updates and
   // restored fold state leave the host's reader-position policy in charge.
   useLayoutEffect(() => {
@@ -165,7 +172,7 @@ function HistoryView({ Original, props, side }: { Original: ComponentType<ViewPr
       if (cancelled || !openingLatest.current) return
       frame = requestAnimationFrame(() => {
         frame = requestAnimationFrame(() => {
-          if (!root.current) return
+          if (cancelled || !openingLatest.current || !root.current) return
           const progress = root.current.querySelector<HTMLElement>('[data-sidenote-context-progress]')
           if (progress) progress.scrollTop = progress.scrollHeight
           const target = progress ?? lastConversationEntry(root.current, navigationKeys.current)

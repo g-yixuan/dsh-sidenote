@@ -6,7 +6,7 @@ export interface ContextEvent {
   data: { turn?: number | null; commandId?: string; sourceCommandId?: string; source?: { kind?: string }; content?: readonly { type: string; text?: string }[]; message?: { content: readonly { type: string; text?: string }[] }; summary?: readonly { type: string; text?: string }[]; shadowedSeqs?: readonly number[] }
   surfaceOp?: 'append' | { op: 'replace'; startSeq: number; endSeq: number }
 }
-export interface ContextEventWindow { entries: readonly { event: ContextEvent }[] }
+export interface ContextEventWindow { entries: readonly { event: ContextEvent }[]; hasMore?: boolean }
 export function contextEventSource(session: SessionFace | undefined): ObservableSnapshot<ContextEventWindow> | undefined {
   return (session as { eventSource?: ObservableSnapshot<ContextEventWindow> } | undefined)?.eventSource
 }
@@ -37,13 +37,50 @@ export function inheritedBoundarySource(session: SessionFace | undefined): Obser
   }
 }
 
-/** The first side input may be outside the tail page after a long discussion.
- * Use the host's shared history window on expansion, without copying snapshots
- * into localStorage or eagerly loading the whole parent transcript. */
+/** Wait for the host's single-page pull before requesting a jump. loadThrough
+ * deliberately returns early while loadOlder owns the paging flag. */
+async function waitForHistoryPage(session: SessionFace): Promise<void> {
+  if (!session.getSnapshot().loadingOlder) return
+  await new Promise<void>(resolve => {
+    const off = session.subscribe(() => { if (!session.getSnapshot().loadingOlder) { off(); resolve() } })
+    if (!session.getSnapshot().loadingOlder) { off(); resolve() }
+  })
+}
+
+/** Reuse the native contiguous window, but verify coverage: the host swallows
+ * page failures and a resolved loadThrough alone does not establish success. */
 export async function loadInheritedContext(session: SessionFace | undefined, boundarySeq: number | undefined): Promise<void> {
   if (boundarySeq === undefined) return
-  const reader = session as (SessionFace & { loadThrough?: (seq: number) => Promise<void> }) | undefined
-  await reader?.loadThrough?.(Math.max(0, boundarySeq))
+  const reader = session as (SessionFace & { open?: () => Promise<void>; loadThrough?: (seq: number) => Promise<void> }) | undefined
+  const source = contextEventSource(session)
+  if (!reader || !source) throw new Error('上下文尚未就绪，请稍后重试')
+  await reader.open?.()
+  const target = Math.max(0, boundarySeq)
+  while (true) {
+    await waitForHistoryPage(reader)
+    const before = source.getSnapshot()
+    const first = before.entries[0]?.event.seq ?? Infinity
+    if (!before.hasMore || first <= target) return
+    if (!reader.loadThrough) throw new Error('宿主无法补载上下文')
+    await reader.loadThrough(target)
+    await waitForHistoryPage(reader)
+    const after = source.getSnapshot()
+    if (after.hasMore && (after.entries[0]?.event.seq ?? Infinity) >= first) throw new Error('上下文加载未完成，内容已保留，请重新尝试')
+  }
+}
+
+/** A legacy saved boundary can point into the child's own messages. Locate
+ * the last durable seed marker independently of that unverified number. */
+export async function loadForkBoundary(session: SessionFace | undefined): Promise<number> {
+  await loadInheritedContext(session, Infinity)
+  const source = contextEventSource(session)!
+  while (true) {
+    const boundary = inheritedBoundarySource(session)?.getSnapshot()
+    if (boundary !== undefined) return boundary
+    const window = source.getSnapshot()
+    if (!window.hasMore) throw new Error('未找到侧聊的继承边界')
+    await loadInheritedContext(session, (window.entries[0]?.event.seq ?? 1) - 1)
+  }
 }
 
 /** Native root status includes approvals and questions, independently of running. */

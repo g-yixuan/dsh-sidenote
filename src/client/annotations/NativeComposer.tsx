@@ -32,14 +32,14 @@ export function submitNativeWithContext(ctx: Context, annotations: AnnotationSto
   const hasContext = annotations.countActive(sessionId) > 0 || reflow.list(sessionId).length > 0
   const input = resolveInput(ctx, sessionId)
   if (!input) {
-    if (hasContext || submissionExtrasOf(sessionId)?.firstSendPrefix()) annotations.setSubmission(sessionId, { pending: false, error: t('inputUnavailable') })
+    if (hasContext || submissionExtrasOf(sessionId)?.needsFirstSend()) annotations.setSubmission(sessionId, { pending: false, error: t('inputUnavailable') })
     else native(mode, source)
     return
   }
   const draft = input.state.getSnapshot()
   if (draft.phase !== 'plain' || draft.draft.trimStart().startsWith('/')) { native(mode, source); return }
   const hasMessage = draft.draft.trim() !== '' || inputAttachmentIds(input).length > 0
-  if (hasContext || hasMessage && submissionExtrasOf(sessionId)?.firstSendPrefix()) {
+  if (hasContext || hasMessage && submissionExtrasOf(sessionId)?.needsFirstSend()) {
     void submitControlledInput(ctx, annotations, reflow, sessionId, mode)
   } else native(mode, source)
 }

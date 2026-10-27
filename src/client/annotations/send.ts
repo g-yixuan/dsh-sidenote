@@ -62,9 +62,11 @@ export async function submitControlledInput(ctx: Context, store: AnnotationStore
   const reflows = reflow.list(sessionId)
   if (draft.draft.trim() === '' && inputAttachmentIds(input).length === 0 && active.length === 0 && reflows.length === 0) return false
   const extras = submissionExtrasOf(sessionId)
-  const prefix = extras?.firstSendPrefix()
   store.setSubmission(sessionId, { pending: true })
   try {
+    const prefix = await extras?.firstSendPrefix()
+    const current = input.state.getSnapshot()
+    if (current.draft !== draft.draft || current.draftRev !== draft.draftRev) throw new Error('加载上下文期间草稿已改变；内容已保留，请重新发送')
     // Context and body must share one host admission and delivery window.
     // An independent inject can run before a queued message or be repeated
     // when its acknowledgement arrives after the client timeout.

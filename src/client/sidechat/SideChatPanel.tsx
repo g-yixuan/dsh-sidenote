@@ -2,14 +2,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { SessionReference, TabComponentProps } from '../host/contracts.ts'
 import { focusMainComposer, focusSideComposer } from '../host/dom.ts'
-import { contextEventSource, inheritedBoundarySource, loadInheritedContext, sessionStatusSource } from '../host/chat.ts'
+import { contextEventSource, inheritedBoundarySource, loadForkBoundary, loadInheritedContext, sessionStatusSource } from '../host/chat.ts'
 import { useComposer } from './composer.ts'
 import { appendDraftText, clearPendingDraft, pairQuestions, parseSideChatMeta, phaseOf } from './model.ts'
 import { transcriptOf } from '../chat/transcript.ts'
 import { StateScreen } from './rows.tsx'
 import { chatSourceOf, ensurePanelOpen, forkAndRegister, openSession, openSessionWindow, retainSession, saveSideChatSession, setSideChatTopic, unarchiveSideSession, updateTabMeta } from './lifecycle.ts'
 import { topicOf } from './identity.ts'
-import { buildMainlineSnapshot, effectiveContextNodes, snapshotEntriesOf, snapshotEntriesFromText, splitSnapshotPrefix } from './snapshot.ts'
+import { loadMainlineSnapshot, effectiveContextNodes, snapshotEntriesOf, snapshotEntriesFromText, splitSnapshotPrefix } from './snapshot.ts'
 import { registerLiveSideChat, notifyLiveSideChats } from './native.ts'
 import { dropClosedSideChat, recordClosedSideChat } from './recentClosed.ts'
 import type { ReflowStore } from '../reflow.ts'
@@ -58,8 +58,14 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   useEffect(() => { openSessionWindow(session) }, [session])
   const boundarySource = useMemo(() => inheritedBoundarySource(session), [session])
   const inheritedBoundary = useSyncExternalStore(useCallback(notify => boundarySource?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [boundarySource]), () => boundarySource?.getSnapshot())
-  const boundarySeq = meta.snapshotOnly ? -1 : inheritedBoundary ?? meta.boundarySeq
-  const loadContext = useCallback(() => loadInheritedContext(session, boundarySeq), [session, boundarySeq])
+  const boundarySeq = meta.snapshotOnly ? -1 : inheritedBoundary
+  const loadContext = useCallback(async () => {
+    const boundary = meta.snapshotOnly ? -1 : await loadForkBoundary(session)
+    await loadInheritedContext(session, boundary)
+  }, [session, meta.snapshotOnly])
+  useEffect(() => {
+    if (session && !meta.snapshotOnly && inheritedBoundary === undefined) void loadForkBoundary(session).catch(error => { console.warn('[dsh-sidenote] 恢复继承边界失败:', error) })
+  }, [session, meta.snapshotOnly, inheritedBoundary])
   // Repair pre-fix tab metadata from the durable fork marker, without touching history.
   useEffect(() => {
     if (boundarySeq !== undefined && boundarySeq !== meta.boundarySeq) updateTabMeta(ctx, scope.sessionId, tab.id, current => ({ ...current, boundarySeq }))
@@ -79,9 +85,13 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   const sendingSnapshot = useRef<ReturnType<typeof splitSnapshotPrefix>>(null)
   const [acceptedSnapshot, setAcceptedSnapshot] = useState<ReturnType<typeof splitSnapshotPrefix>>(null)
   const extras = useMemo(() => ({
-    firstSendPrefix: (): string | null => {
+    needsFirstSend: (): boolean => metaRef.current.forkedMidTurn === true,
+    firstSendPrefix: async (): Promise<string | null> => {
       const current = metaRef.current
-      const text = current.forkedMidTurn && current.parentSessionId ? buildMainlineSnapshot(ctx, current.parentSessionId, new Date(), current.boundarySeq) : null
+      if (!current.forkedMidTurn) return null
+      if (!current.parentSessionId || !current.childId) throw new Error('侧聊上下文尚未就绪，请稍后重试')
+      const boundary = current.snapshotOnly ? -1 : await loadForkBoundary(ctx.sessions.binding(current.childId)?.session)
+      const text = await loadMainlineSnapshot(ctx, current.parentSessionId, boundary)
       sendingSnapshot.current = text ? splitSnapshotPrefix(text) : null
       return text
     },
