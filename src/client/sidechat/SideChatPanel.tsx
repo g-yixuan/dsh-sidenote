@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { SessionReference, TabComponentProps } from '../host/contracts.ts'
 import { focusMainComposer, focusSideComposer } from '../host/dom.ts'
-import { contextEventSource, inheritedBoundarySource, sessionStatusSource } from '../host/chat.ts'
+import { contextEventSource, inheritedBoundarySource, loadInheritedContext, sessionStatusSource } from '../host/chat.ts'
 import { useComposer } from './composer.ts'
 import { appendDraftText, clearPendingDraft, pairQuestions, parseSideChatMeta, phaseOf } from './model.ts'
 import { transcriptOf } from '../chat/transcript.ts'
@@ -59,6 +59,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   const boundarySource = useMemo(() => inheritedBoundarySource(session), [session])
   const inheritedBoundary = useSyncExternalStore(useCallback(notify => boundarySource?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [boundarySource]), () => boundarySource?.getSnapshot())
   const boundarySeq = meta.snapshotOnly ? -1 : inheritedBoundary ?? meta.boundarySeq
+  const loadContext = useCallback(() => loadInheritedContext(session, boundarySeq), [session, boundarySeq])
   // Repair pre-fix tab metadata from the durable fork marker, without touching history.
   useEffect(() => {
     if (boundarySeq !== undefined && boundarySeq !== meta.boundarySeq) updateTabMeta(ctx, scope.sessionId, tab.id, current => ({ ...current, boundarySeq }))
@@ -164,7 +165,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   if (phase === 'fork-error') return <StateScreen title={t('forkErrorTitle')} detail={forkError ?? undefined} hint={t('forkErrorHint')} />
   if (phase === 'missing') return <StateScreen title={t('missingTitle')} detail={t('missingDetail')} hint={t('missingHint')} />
   if (phase !== 'chat' || !reference || !childId) return <StateScreen title={t('preparing')} />
-  const side: SideConversation = { sessionId: childId, parentSessionId: meta.parentSessionId ?? scope.sessionId, title: tab.title, boundarySeq, reflow: props.reflow, compactContext, progress, contextPending: meta.forkedMidTurn && !savedProgress }
+  const side: SideConversation = { sessionId: childId, parentSessionId: meta.parentSessionId ?? scope.sessionId, title: tab.title, boundarySeq, reflow: props.reflow, compactContext, progress, loadContext, contextPending: meta.forkedMidTurn && !savedProgress }
   const replies = finalReplies(messages, boundarySeq, new Set(chat?.getCompletedReplySeqs?.() ?? []))
   const questions = pairQuestions(messages)
   const allAdded = replies.length > 0 && replies.every(reply => isReplyAdded(side, reply, questions.get(reply.key)))

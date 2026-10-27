@@ -37,6 +37,15 @@ export function inheritedBoundarySource(session: SessionFace | undefined): Obser
   }
 }
 
+/** The first side input may be outside the tail page after a long discussion.
+ * Use the host's shared history window on expansion, without copying snapshots
+ * into localStorage or eagerly loading the whole parent transcript. */
+export async function loadInheritedContext(session: SessionFace | undefined, boundarySeq: number | undefined): Promise<void> {
+  if (boundarySeq === undefined) return
+  const reader = session as (SessionFace & { loadThrough?: (seq: number) => Promise<void> }) | undefined
+  await reader?.loadThrough?.(Math.max(0, boundarySeq))
+}
+
 /** Native root status includes approvals and questions, independently of running. */
 export function sessionStatusSource(ctx: Context): ObservableSnapshot<ReadonlyMap<string, { running?: boolean; pendingInteraction?: unknown }>> | undefined {
   return (ctx.get('uiSession') as { sessionStatus?: ObservableSnapshot<ReadonlyMap<string, { running?: boolean; pendingInteraction?: unknown }>> } | undefined)?.sessionStatus

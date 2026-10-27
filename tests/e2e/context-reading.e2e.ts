@@ -153,3 +153,28 @@ test('context expansion with empty progress falls back to the latest inherited m
     if (await stop.isVisible()) await stop.click()
   }
 })
+
+
+test('long side history restores the first-send progress when expanding after reload', async ({ page }) => {
+  test.setTimeout(240_000)
+  await prepareSeedPage(page)
+  const main = page.locator('[data-conversation-session]').first()
+  await selectModel(page, main, 'Controlled E2E')
+  await main.locator('[data-composer-input]').fill('Initial main progress must survive side history pagination [e2e:hold]')
+  await main.locator('[data-composer-input]').press('Enter')
+  await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toBeVisible()
+  const child = await openSideChat(page)
+  const side = sideChatOf(page)
+  await send(side, 'Keep this first mainline progress snapshot')
+  await main.getByRole('button', { name: /^(Stop generating|停止生成)$/ }).click()
+  const toggle = side.locator('[data-sidenote-main-context] button')
+  await toggle.click()
+  for (let i = 0; i < 30; i++) await send(side, `Later side discussion ${i}`)
+  await page.reload()
+  await expect(side).toHaveAttribute('data-sidenote-chat-session', child)
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await toggle.click()
+  await expect(side.locator('[data-sidenote-context-progress]')).toContainText('Initial main progress must survive side history pagination')
+  await expect(side.locator('[data-sidenote-main-context]')).toContainText(/As of|截至/)
+  await expect.poll(() => endIsVisible(side.locator('[data-sidenote-context-progress]'))).toBe(true)
+})

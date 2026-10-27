@@ -24,6 +24,7 @@ export interface SideConversation {
   contextPending?: boolean
   compactContext?: SnapshotEntry[]
   progress?: { entries: SnapshotEntry[]; takenAt?: string | null }
+  loadContext?: () => Promise<void>
 }
 export interface ConversationRendererProps {
   SessionProvider: ComponentType<{ session: SessionReference; children?: ReactNode }>
@@ -113,6 +114,7 @@ function HistoryView({ Original, props, side }: { Original: ComponentType<ViewPr
   const root = useRef<HTMLDivElement>(null)
   const [progressSeat] = useState(() => document.createElement('div'))
   const wasExpanded = useRef(side.contextExpanded)
+  const openingLatest = useRef(false)
   const nodes = props.useChat(state => state.nodes)
   const snapshot = props.useConversation(state => state)
   const groups = snapshot.views.grouped('chat')
@@ -134,6 +136,8 @@ function HistoryView({ Original, props, side }: { Original: ComponentType<ViewPr
   const projected = { ...snapshot, views: { ...snapshot.views, grouped: (name: string) => name === 'chat' && groups ? { ...groups, entries: visible } : snapshot.views.grouped(name) } }
   const useProjected = useCallback(<T,>(selector: (state: ViewSnapshot) => T): T => selector(projected), [projected])
   const inheritedKeys = visible.filter(isInherited).map(entry => entry.key).join('\n')
+  const navigationKeys = useRef(new Set<string>())
+  navigationKeys.current = new Set(inheritedKeys.split('\n'))
   const showProgress = side.contextExpanded && contextEntries.length > 0
   useLayoutEffect(() => {
     if (!showProgress || !root.current) return
@@ -152,21 +156,26 @@ function HistoryView({ Original, props, side }: { Original: ComponentType<ViewPr
   useLayoutEffect(() => {
     const opening = side.contextExpanded && !wasExpanded.current
     wasExpanded.current = side.contextExpanded
-    if (!opening) return
-    const keys = new Set(entries.filter(isInherited).map(entry => entry.key))
+    if (opening) openingLatest.current = true
+    if (!side.contextExpanded) { openingLatest.current = false; return }
     // Native Chat settles its content resize first; navigate in the next frame
-    // so its initial tail restoration cannot overwrite this explicit action.
-    let frame = requestAnimationFrame(() => {
+    // after lazy paging, so its restoration cannot overwrite the explicit open.
+    let cancelled = false, frame = 0
+    void Promise.resolve(side.loadContext?.()).then(() => {
+      if (cancelled || !openingLatest.current) return
       frame = requestAnimationFrame(() => {
-        if (!root.current) return
-        const progress = root.current.closest('[data-sidenote-transcript]')?.querySelector<HTMLElement>('[data-sidenote-context-progress]')
-        if (progress) progress.scrollTop = progress.scrollHeight
-        const target = progress ?? lastConversationEntry(root.current, keys)
-        if (target) revealConversationEntryEnd(target)
+        frame = requestAnimationFrame(() => {
+          if (!root.current) return
+          const progress = root.current.querySelector<HTMLElement>('[data-sidenote-context-progress]')
+          if (progress) progress.scrollTop = progress.scrollHeight
+          const target = progress ?? lastConversationEntry(root.current, navigationKeys.current)
+          if (target) revealConversationEntryEnd(target)
+          openingLatest.current = false
+        })
       })
-    })
-    return () => { cancelAnimationFrame(frame) }
-  }, [side.contextExpanded])
+    }).catch(error => { console.warn('[dsh-sidenote] 加载继承上下文失败:', error) })
+    return () => { cancelled = true; cancelAnimationFrame(frame) }
+  }, [side.contextExpanded, side.loadContext])
   return <div ref={root} className={css.historyView}>{createElement(Original, { ...props, useConversation: useProjected })}
     {showProgress && createPortal(<ContextProgress entries={contextEntries} live={side.contextPending === true} />, progressSeat)}
   </div>
