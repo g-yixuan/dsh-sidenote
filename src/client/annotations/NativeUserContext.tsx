@@ -1,7 +1,8 @@
-import { createElement, useEffect, useId, useLayoutEffect, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from 'react'
+import { createElement, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { createRoot } from 'react-dom/client'
 import type { Context, UiConversationLike } from '../host/contracts.ts'
-import { conversationViewOf, mountUserBubbleAddon } from '../host/dom.ts'
+import { conversationViewOf, isPendingContextSurface, mountUserBubbleAddon, pendingTextNodes, pendingTextSurfaces, queuedTextSurfaces } from '../host/dom.ts'
 import { IconChevronDownOutline14, IconListPenOutline16, IconShareOutline16 } from '../host/icons.ts'
 import { flattenReflowContent, splitProtocolPrefix, splitSnapshotPrefix, type ProtocolPrefix } from './format.ts'
 import { t } from '../locales.ts'
@@ -118,6 +119,83 @@ export function SentContext({ protocol, interactive = true }: { protocol: Protoc
   </span>
 }
 
+export function ContextTextNode({ node, interactive }: { node: { data: ProtocolPrefix }; interactive: boolean }) {
+  const root = useRef<HTMLSpanElement>(null)
+  const [pending, setPending] = useState(false)
+  useLayoutEffect(() => { setPending(root.current !== null && isPendingContextSurface(root.current)) }, [interactive])
+  return <span ref={root}><SentContext protocol={node.data} interactive={interactive || pending} /></span>
+}
+
+/** 0.2.0's pending bubbles/queue do not expose a text renderer slot. Keep
+ * native rows intact and project only their protocol prefix into our seat. */
+export function LegacyPendingContexts({ queue }: { queue?: { root: HTMLElement; texts: readonly string[] } }) {
+  interface Projection { seat: HTMLElement; protocol: ProtocolPrefix; body?: string; nodes: { node: Text; before: string; after: string }[] }
+  const [projections, setProjections] = useState<Projection[]>([])
+  useLayoutEffect(() => {
+    const active = new Map<HTMLElement, Projection>()
+    let frame = 0
+    const restore = (projection: Projection) => {
+      projection.seat.remove()
+      for (const { node, before, after } of projection.nodes) if (node.data === after && before !== after) node.data = before
+    }
+    const sync = () => {
+      frame = 0
+      let changed = false
+      for (const [element, projection] of active) {
+        const nodes = pendingTextNodes(element)
+        if (element.isConnected && nodes.length === projection.nodes.length && projection.nodes.every((item, index) => nodes[index] === item.node && item.node.data === item.after)) continue
+        restore(projection); active.delete(element); changed = true
+      }
+      const surfaces = queue ? queuedTextSurfaces(queue.root).map(({ element, index }) => ({ element, text: queue.texts[index] })) : pendingTextSurfaces().map(element => ({ element, text: undefined }))
+      for (const { element, text } of surfaces) {
+        if (active.has(element)) continue
+        const nodes = pendingTextNodes(element)
+        const match = sentContextRule.match(text ?? nodes.map(node => node.data).join(''), 0)
+        if (!match) continue
+        let remaining = text === undefined ? match.end : Infinity
+        const projected = nodes.map(node => {
+          const before = node.data, after = before.slice(remaining)
+          remaining = Math.max(0, remaining - before.length)
+          if (after !== before) node.data = after
+          return { node, before, after }
+        })
+        const seat = document.createElement('span')
+        seat.dataset.sidenotePendingSeat = ''
+        element.prepend(seat)
+        active.set(element, { seat, protocol: match.data, body: text?.slice(match.end).replace(/\s+/g, ' ').trim(), nodes: projected }); changed = true
+      }
+      if (changed) setProjections([...active.values()])
+    }
+    const observer = new MutationObserver(() => { if (!frame) frame = requestAnimationFrame(sync) })
+    observer.observe(queue?.root ?? document.body, { childList: true, subtree: true, characterData: true })
+    sync()
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); for (const projection of active.values()) restore(projection) }
+  }, [queue])
+  return <>{projections.map((projection, index) => createPortal(<><SentContext protocol={projection.protocol} />{projection.body}</>, projection.seat, String(index)))}</>
+}
+
+interface QueueProps {
+  useSession<T>(select: (state: { pendingSubmissions: { requestId: string; placement: string; text: string }[] }) => T): T
+  useProjection(key: 'inbox'): { 'next-turn': { source: { kind: string; rpcId?: string }; content: { type: string; text?: string }[] }[] } | undefined
+}
+
+/** The old QueueDock flattens and truncates its preview to 200 characters.
+ * Read the same authoritative rows for details; leave its data/actions intact. */
+function LegacyQueue({ Original, props }: { Original: ComponentType<QueueProps>; props: QueueProps }) {
+  const [root, setRoot] = useState<HTMLDivElement | null>(null)
+  const pending = props.useSession(state => state.pendingSubmissions)
+  const inbox = props.useProjection('inbox')
+  const queue = useMemo(() => {
+    if (!root) return undefined
+    const inChat = new Set(pending.filter(item => item.placement === 'transcript').map(item => item.requestId))
+    const rows = (inbox?.['next-turn'] ?? []).filter(row => row.source.kind !== 'user' || !inChat.has(row.source.rpcId!))
+    const admitted = new Set(rows.filter(row => row.source.kind === 'user').map(row => row.source.rpcId))
+    const texts = [...rows.map(row => row.content.filter(block => block.type === 'text').map(block => block.text ?? '').join('\n')), ...pending.filter(item => item.placement === 'queued' && !admitted.has(item.requestId)).map(item => item.text)]
+    return { root, texts }
+  }, [root, pending, inbox])
+  return <div ref={setRoot} className={css.userContextHost}>{createElement(Original, props)}{queue && <LegacyPendingContexts queue={queue} />}</div>
+}
+
 function LegacyContext({ Original, props, protocol }: { Original: ComponentType<UserProps>; props: UserProps; protocol: ProtocolPrefix }) {
   const root = useRef<HTMLDivElement>(null)
   const [seat] = useState(() => document.createElement('span'))
@@ -133,12 +211,34 @@ export function registerUserContext(ctx: Context): void {
     const nativeText = ui.userText !== undefined
     if (nativeText) {
       ctx.slots.inject('conversation.user.text.node', () => {
-        const offRenderer = ctx.slots.register({ name: 'conversation.user.text.node', key: CONTEXT_NODE }, (props: { node: { data: ProtocolPrefix }; interactive: boolean }) => <SentContext protocol={props.node.data} interactive={props.interactive} />)
+        const offRenderer = ctx.slots.register({ name: 'conversation.user.text.node', key: CONTEXT_NODE }, ContextTextNode)
         const offRule = ui.userText!.register(sentContextRule)
         return () => { offRule(); offRenderer() }
       })
+    } else {
+      ctx.effect(() => {
+        const root = createRoot(document.createElement('div'))
+        root.render(<LegacyPendingContexts />)
+        return () => { root.unmount() }
+      }, 'dsh-sidenote: legacy pending context')
     }
     const slots = ctx.slots as Context['slots'] & { entries(name: string): readonly Entry[]; subscribe(name: string, notify: () => void): () => void }
+    if (!nativeText) ctx.slots.inject('conversation.input.dock', () => {
+      type QueueEntry = { component: ComponentType<QueueProps>; options: { id?: string } }
+      const patched = new Map<QueueEntry, { original: ComponentType<QueueProps>; wrapped: ComponentType<QueueProps> }>()
+      const patch = () => {
+        for (const entry of slots.entries('conversation.input.dock') as unknown as QueueEntry[]) {
+          if (entry.options.id !== 'queue' || patched.has(entry)) continue
+          const Original = entry.component
+          const Wrapped = (props: QueueProps) => <LegacyQueue Original={Original} props={props} />
+          entry.component = Wrapped
+          patched.set(entry, { original: Original, wrapped: Wrapped })
+        }
+      }
+      patch()
+      const off = slots.subscribe('conversation.input.dock', patch)
+      return () => { off(); for (const [entry, value] of patched) if (entry.component === value.wrapped) entry.component = value.original }
+    })
     ctx.slots.inject('conversation.chat.node', () => {
       const patched = new Map<Entry, { original: ComponentType<UserProps>; wrapped: ComponentType<UserProps> }>()
       const patch = (): void => {

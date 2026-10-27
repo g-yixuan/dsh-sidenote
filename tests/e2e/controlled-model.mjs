@@ -52,8 +52,8 @@ export function apply(ctx) {
         const remembered = users.some(message => message.content.some(block => block.type === 'text' && block.text === '[e2e:reflow] Remember the conclusion code SIDENOTE_SIDE_BLUE.'))
         const priorReply = options.messages.some(message => message.role === 'assistant' && message.content.some(block => block.type === 'text' && block.text === 'Remembered SIDENOTE_SIDE_BLUE in this side conversation.'))
         reply = remembered && priorReply ? 'Conclusion: SIDENOTE_SIDE_BLUE.' : 'The prior side-conversation context is missing.'
-      } else if (text === 'Use the returned side conclusion in this main conversation.') {
-        const returned = options.messages.some(message => message.role === 'user' && message.source.kind === 'dsh-sidenote' && message.content.some(block => block.type === 'text' && block.text.includes('<答>Conclusion: SIDENOTE_SIDE_BLUE.</答>')))
+      } else if (text.endsWith('Use the returned side conclusion in this main conversation.')) {
+        const returned = options.messages.some(message => message.role === 'user' && message.source.kind === 'user' && message.content.some(block => block.type === 'text' && block.text.includes('<答>Conclusion: SIDENOTE_SIDE_BLUE.</答>')))
         reply = returned ? 'Main received SIDENOTE_SIDE_BLUE.' : 'The returned side-conversation context is missing.'
       }
       yield { type: 'block-start', index: 0, blockType: 'text' }

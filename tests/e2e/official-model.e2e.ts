@@ -128,7 +128,8 @@ test('official Flash UI regressions: live context, empty annotation send and inl
   await returnChip.click()
   await expect(main.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: '批注直发验证通过' }).last()).toBeVisible({ timeout: 90_000 })
   await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
-  expect(userMessagesOf(mainId).at(-1)).toBe(returnPrompt)
+  expect(userMessagesOf(mainId).at(-1)).toContain('<reflow ')
+  expect(userMessagesOf(mainId).at(-1)?.endsWith(returnPrompt)).toBe(true)
 
   await openGeneralSettings(page)
   const settings = page.getByRole('dialog', { name: /^(Settings|设置)$/ })
@@ -140,7 +141,7 @@ test('official Flash UI regressions: live context, empty annotation send and inl
   await settings.getByRole('button', { name: '中文', exact: true }).click()
   await page.getByRole('menuitem', { name: 'English', exact: true }).click()
   await settings.getByRole('button', { name: /^(Close(?: settings)?|关闭(?:设置)?)$/i }).click()
-  writeFileSync('test-results/official-ui-regressions.json', JSON.stringify({ model: 'deepseek-flash', liveContextBeforeSend: true, bottomComposer: true, annotationOnlySend: true, inlineReflow: true, bubbleContext: true, injectedReflowBubble: true, isolated: true }, null, 2) + '\n')
+  writeFileSync('test-results/official-ui-regressions.json', JSON.stringify({ model: 'deepseek-flash', liveContextBeforeSend: true, bottomComposer: true, annotationOnlySend: true, inlineReflow: true, bubbleContext: true, atomicReflowBubble: true, isolated: true }, null, 2) + '\n')
 })
 
 test('official Flash executes real file tools in main and side, with isolated multi-turn replies', async ({ page }) => {

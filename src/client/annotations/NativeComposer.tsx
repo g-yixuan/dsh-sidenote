@@ -60,10 +60,13 @@ function ContextComposer({ Original, props, ctx, annotations, reflow }: { Origin
   const keyboard = useMemo(() => props.keyboard && new Proxy(props.keyboard, {
     get(target, property) {
       if (property === 'submit') return (mode?: 'queue' | 'steer', source?: 'click' | 'enter') => submitNativeWithContext(ctx, annotations, reflow, sessionId, target.submit.bind(target), mode, source)
+      // A context-only draft is not empty. Accelerated Enter must send it,
+      // rather than steer an unrelated existing queue as an empty editor would.
+      if (property === 'steerQueue' && hasContext) return () => submitNativeWithContext(ctx, annotations, reflow, sessionId, target.submit.bind(target), busyMode === 'queue' ? 'steer' : 'queue', 'enter')
       const value = Reflect.get(target, property, target)
       return typeof value === 'function' ? value.bind(target) : value
     },
-  }), [props.keyboard, ctx, annotations, reflow, sessionId])
+  }), [props.keyboard, ctx, annotations, reflow, sessionId, hasContext, busyMode])
   const useInput = useCallback(<T,>(select: (state: InputStateSnapshot | undefined) => T): T => props.useInput(state => select(pending && state?.phase === 'plain' ? { ...state, phase: 'submitting' } : state)), [props.useInput, pending])
   useLayoutEffect(() => {
     if (!contextOnly || !root.current) return

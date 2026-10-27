@@ -10,6 +10,9 @@ const SESSION = 's1'
 interface Harness {
   send: (mode?: 'queue' | 'steer') => void
   submitted: string[]
+  texts: string[]
+  acknowledge: () => void
+  activeAnnotations: () => number
   drafts: string[]
   removeAllAnnotations: () => void
   /** 模拟用户输入（inject 等待窗口内的编辑）。 */
@@ -19,10 +22,12 @@ interface Harness {
   error: () => string | undefined
 }
 
-function makeHarness(options: { draft?: string; missingInput?: boolean; withAnnotation?: boolean; rejectFirstSend?: boolean; reflowItems?: { id: number; text: string; sideTitle: string }[] } = {}): Harness {
+function makeHarness(options: { draft?: string; missingInput?: boolean; withAnnotation?: boolean; rejectFirstSend?: boolean; deferAdmission?: boolean; reflowItems?: { id: number; text: string; sideTitle: string }[] } = {}): Harness {
 
   const state = { draft: options.draft ?? '', phase: 'plain' as const }
   const submitted: string[] = []
+  const texts: string[] = []
+  let pendingText = ''
   const drafts: string[] = []
   const sessionState = { sessionId: SESSION, running: false, nodes: [] as unknown[], promptError: undefined as { op: string, error: { message: string } } | undefined }
   let rejectNextSend = options.rejectFirstSend ?? false
@@ -32,6 +37,10 @@ function makeHarness(options: { draft?: string; missingInput?: boolean; withAnno
     subscribe: (fn: () => void) => { sessionListeners.add(fn); return () => { sessionListeners.delete(fn) } },
   }
 
+  const acknowledge = () => {
+    sessionState.nodes.push({ kind: 'user', seq: sessionState.nodes.length + 1, content: [{ type: 'text', text: pendingText }] })
+    for (const fn of sessionListeners) fn()
+  }
   const input = {
     state: {
       getSnapshot: () => state,
@@ -40,6 +49,7 @@ function makeHarness(options: { draft?: string; missingInput?: boolean; withAnno
     setDraft: (text: string) => { drafts.push(text); state.draft = text },
     submit: (mode?: string) => {
       submitted.push(mode ?? 'queue')
+      texts.push(state.draft)
       if (rejectNextSend) {
         rejectNextSend = false
         sessionState.promptError = { op: 'send', error: { message: 'host rejected this send' } }
@@ -47,9 +57,9 @@ function makeHarness(options: { draft?: string; missingInput?: boolean; withAnno
         return
       }
       sessionState.promptError = undefined
-      sessionState.nodes.push({ kind: 'user', seq: sessionState.nodes.length + 1, content: [{ type: 'text', text: state.draft }] })
+      pendingText = state.draft
       state.draft = ''
-      for (const fn of sessionListeners) fn()
+      if (!options.deferAdmission) acknowledge()
     },
     notify: () => {},
   } as unknown as SessionInput
@@ -88,6 +98,9 @@ function makeHarness(options: { draft?: string; missingInput?: boolean; withAnno
   return {
     send: mode => submitNativeWithContext(ctx, store, reflow, SESSION, input.submit.bind(input), mode, 'click'),
     submitted,
+    texts,
+    acknowledge,
+    activeAnnotations: () => store.countActive(SESSION),
     drafts,
     removeAllAnnotations: () => { for (const a of store.listActive(SESSION)) store.remove(a.id) },
     type: (text: string) => { state.draft += text },
@@ -142,65 +155,61 @@ describe('native composer context submission', () => {
     expect(harness.error()).toBeUndefined()
   })
 
-  it('纯回流+空草稿+注入成功：不发消息、不吞后续输入（B-1 回归）', async () => {
-    harness = makeHarness({ draft: '', withAnnotation: false, reflowItems: [{ id: 1, text: '结论', sideTitle: '侧边' }] })
-    // fetch 成功（注入通道可用）
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 })))
-    harness.send()
+  it.each(['queue', 'steer'] as const)('submits reflow, annotations and body in one native %s message without an independent injection', async mode => {
+    harness = makeHarness({ draft: '继续处理正文', reflowItems: [{ id: 1, text: '结论', sideTitle: '侧边' }] })
+    vi.stubGlobal('fetch', vi.fn())
+    harness.send(mode)
     await flushMicrotasks()
-    // 注入成功 → 拼稿为空 → 不开事务（submit 不被调）
-    expect(harness.submitted).toEqual([])
+    expect(harness.submitted).toEqual([mode])
+    expect(harness.texts[0]).toContain('<答>结论</答>')
+    expect(harness.texts[0]).toContain('<quote>原文片段</quote>')
+    expect(harness.texts[0]).toMatch(/继续处理正文$/)
+    expect(harness.texts[0]!.match(/<reflow /g)).toHaveLength(1)
     expect(harness.removedReflow).toEqual([1])
-    // 用户随后输入不被吞（护栏已解锁，草稿保持）
+    expect(harness.activeAnnotations()).toBe(0)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('sends context-only reflows through the same native admission', async () => {
+    harness = makeHarness({ withAnnotation: false, reflowItems: [{ id: 1, text: '结论', sideTitle: '侧边' }] })
+    harness.send('steer')
+    await flushMicrotasks()
+    expect(harness.submitted).toEqual(['steer'])
+    expect(harness.texts[0]).toContain('<答>结论</答>')
+    expect(harness.removedReflow).toEqual([1])
     harness.type('后续输入')
     expect(harness.draft()).toBe('后续输入')
   })
 
-  it('注入等待窗口内的用户输入不被回滚吃掉（M-1 回归）', async () => {
-    harness = makeHarness({ draft: '正文' })
-    // fetch 挂起（模拟慢注入）→ 窗口内输入 → 注入失败 → 搭车拼稿应含窗口内输入
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(
-      () => new Promise((_resolve, reject) => { setTimeout(() => reject(new Error('timeout')), 400) }),
-    ))
-    harness.send()
-    harness.type('（窗口内补充）')
+  it('retains the complete batch until the host acknowledges it, even after the draft clears', async () => {
+    harness = makeHarness({ draft: '正文', deferAdmission: true, reflowItems: [{ id: 1, text: '结论', sideTitle: '侧边' }] })
+    harness.send('queue')
     await flushMicrotasks()
-    await new Promise(resolve => setTimeout(resolve, 450))
-    await flushMicrotasks()
-    expect(harness.submitted).toEqual(['queue'])
-    expect(harness.drafts[0]).toContain('（窗口内补充）')
-  })
-
-  it('回流全部成功注入时仍通过原生机器发送已有正文', async () => {
-    harness = makeHarness({ draft: '继续处理正文', withAnnotation: false, reflowItems: [{ id: 1, text: '结论', sideTitle: '侧边' }] })
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 })))
-    harness.send()
-    await flushMicrotasks()
-    expect(harness.removedReflow).toEqual([1])
-    expect(harness.submitted).toEqual(['queue'])
-    expect(harness.drafts).toEqual([])
     expect(harness.draft()).toBe('')
-  })
-
-  it('部分注入后正文发送拒绝：保留未投递结论和干净草稿，重试只投递剩余项', async () => {
-    harness = makeHarness({ draft: '保留正文', withAnnotation: false, rejectFirstSend: true, reflowItems: [{ id: 1, text: '已注入结论', sideTitle: '侧边' }, { id: 2, text: '待重试结论', sideTitle: '侧边' }] })
-    vi.stubGlobal('fetch', vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: false, injectedIndexes: [0] }), { status: 200 }))
-      .mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ ok: false, injectedIndexes: [] }), { status: 200 }))))
-    harness.send()
+    expect(harness.removedReflow).toEqual([])
+    expect(harness.activeAnnotations()).toBe(1)
+    harness.send('queue')
+    expect(harness.submitted).toEqual(['queue'])
+    harness.acknowledge()
     await flushMicrotasks()
     expect(harness.removedReflow).toEqual([1])
-    expect(harness.draft()).toBe('保留正文')
-    expect(harness.drafts.some(text => text.includes('待重试结论'))).toBe(true)
-    expect(harness.drafts.some(text => text.includes('已注入结论'))).toBe(false)
+    expect(harness.activeAnnotations()).toBe(0)
+  })
 
+  it('restores a rejected batch and retries each reflow exactly once with its original body', async () => {
+    harness = makeHarness({ draft: '保留正文', rejectFirstSend: true, reflowItems: [{ id: 1, text: '结论一', sideTitle: '侧边' }, { id: 2, text: '结论二', sideTitle: '侧边' }] })
+    harness.send()
+    await flushMicrotasks()
+    expect(harness.removedReflow).toEqual([])
+    expect(harness.activeAnnotations()).toBe(1)
+    expect(harness.draft()).toBe('保留正文')
+    expect(harness.error()).toContain('host rejected')
     harness.send()
     await flushMicrotasks()
     expect(harness.removedReflow).toEqual([1, 2])
+    expect(harness.activeAnnotations()).toBe(0)
     expect(harness.submitted).toEqual(['queue', 'queue'])
-    expect(harness.draft()).toBe('')
-    const retry = JSON.parse(vi.mocked(fetch).mock.calls[1]![1]!.body as string)
-    expect(retry.items).toHaveLength(1)
-    expect(retry.items[0].text).toContain('待重试结论')
+    expect(harness.texts[1]).toBe(harness.texts[0])
+    expect(harness.texts[1]!.match(/<reflow /g)).toHaveLength(2)
   })
 })

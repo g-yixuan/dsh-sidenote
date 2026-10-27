@@ -5,70 +5,13 @@
  * 不经草稿文本流（用户裁定：直接进草稿「很脏」）。
  *
  * 气泡留痕：序列化形态是 XML 协议块（见 buildReflowBlock），随注释协议块
- * 一起作为消息连续前缀注入，bubble.ts 反解析后折叠为「含侧边回流上下文」标签。
+ * 一起作为消息连续前缀注入，NativeUserContext.tsx 反解析后折叠为「含侧边回流上下文」标签。
  *
  * 持久化：localStorage 按会话键（dsh-sidenote:reflow:v1:<sessionId>），
  * 与注释 store 同款纪律（刷新不丢、容错 revive、空删键）。
  */
 import { t } from './locales.ts'
 import { xmlAttr } from './protocol.ts'
-
-/**
- * reflow 注入通道（Workitem_06）：优先经宿主路由 /sidenote/reflow 以
- * agent.inject 落父会话日志（插件自有 source 独立事件，context row 折叠）；
- * 路由缺席/父会话无 live agent/超时 → 调用方回落搭车形态（发送拦截器
- * 序列化前缀）。逐个 item 投递；成功项由调用方从 store 移除（不等发送
- * 确认——注入已入 inbox，chip 消失表达「已注入」）。
- *
- * 有界等待：注入尝试绝不能拖住发送手势——300ms 超时即回落搭车。
- */
-const REFLOW_ROUTE_TIMEOUT_MS = 300
-
-export interface ReflowInjectResult {
-  /** 成功注入（应从 store 移除、不拼前缀）的 item id 集。 */
-  injectedIds: ReadonlySet<number>
-}
-
-/** 只消费宿主明确确认的项；未注入项由调用方搭车，发送拒绝时继续保留。 */
-export async function tryInjectReflows(parentSessionId: string, items: readonly ReflowItem[]): Promise<ReflowInjectResult> {
-  if (items.length === 0) return { injectedIds: new Set() }
-  const empty: ReflowInjectResult = { injectedIds: new Set() }
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => { controller.abort() }, REFLOW_ROUTE_TIMEOUT_MS)
-    let res: Response
-    try {
-      res = await fetch('/sidenote/reflow', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          parentSessionId,
-          // inject 形态下块是独立插件来源消息（审查 M6：自造标签在
-          // 无用户正文相伴时可能被当第三方元数据）——前置一行自然语言引导
-          // 规避。搭车路径的块结构不变（气泡反解析兼容）。
-          items: items.map(item => ({
-            text: `以下是用户从侧边对话带回的结论（参考上下文）：\n\n${buildReflowBlock(item)}`,
-            sideTitle: item.sideTitle,
-          })),
-        }),
-        signal: controller.signal,
-      })
-    } finally {
-      clearTimeout(timer)
-    }
-    if (!res.ok) return empty
-    const data = await res.json() as { ok?: boolean, injectedIndexes?: unknown }
-    if (Array.isArray(data.injectedIndexes)) {
-      const indexes = data.injectedIndexes.filter((index): index is number => typeof index === 'number' && Number.isInteger(index) && index >= 0 && index < items.length)
-      return { injectedIds: new Set(indexes.map(index => items[index]!.id)) }
-    }
-    // Older host halves acknowledge the complete batch with ok:true only.
-    if (data.ok !== true) return empty
-    return { injectedIds: new Set(items.map(item => item.id)) }
-  } catch {
-    return empty
-  }
-}
 
 /** 回流内容不截断（2026-09-06 用户裁定：静默截断让用户不知道内容少了，
  *  「会产生幻觉」；结论是用户亲手选择回流的，全文注入）。 */
