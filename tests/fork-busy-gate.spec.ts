@@ -93,7 +93,7 @@ describe('fork cut and history ownership', () => {
     await forkAndRegister(env.ctx, 'parent-1', 'tab1')
     expect(env.fork).toHaveBeenCalledWith({ sessionId: 'parent-1' })
     expect(env.lastMeta()).toMatchObject({ childId: currentChildId(), boundarySeq: 12 })
-    expect(env.lastMeta()?.forkedMidTurn).toBe(parentRunning || undefined)
+    expect(env.lastMeta()?.forkedMidTurn).toBe(true)
     expect(env.binding.session.cancel).not.toHaveBeenCalled()
     expect(env.binding.session.prompt).not.toHaveBeenCalled()
   })

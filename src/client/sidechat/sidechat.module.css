@@ -8,18 +8,20 @@
 .root { color: var(--dsw-alias-label-primary); }
 .nativeConversation { flex: 1; }
 .chatView { display: flex; flex-direction: column; flex: 1 0 auto; min-width: 0; }
-.mainContext { flex: none; padding: 12px 24px 4px; min-width: 0; }
+/* Match the host's outer clearance followed by its centered content column. */
+.mainContext { box-sizing: border-box; width: 100%; flex: none; padding: 12px calc(var(--dsh-composer-side-clearance, 8px) + 16px) 4px; min-width: 0; }
+.contextColumn { width: 100%; max-width: var(--dsh-chat-content-width, 748px); margin-inline: auto; min-width: 0; }
 .historyToggle { display: flex; align-items: center; gap: 6px; }
 .contextHint { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
 .contextChevron { transform: rotate(-90deg); }
 .contextChevron, .contextChevronOpen { flex: none; }
-.progress { position: relative; margin: 12px 0; padding: 10px 0 10px 12px; border-left: 2px solid var(--dsw-alias-border-l1); }
-.progressHeading { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; color: var(--dsw-alias-label-tertiary); font-size: 12px; }
-.liveDot { width: 5px; height: 5px; border-radius: 50%; background: var(--dsw-alias-state-business-primary); animation: contextPulse 1.8s ease-in-out infinite; }
-.progressEntries { max-height: min(240px, 32vh); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; overflow-anchor: none; padding-right: 8px; }
+.progress { position: relative; margin: 12px 0; padding: 4px 0; container-type: inline-size; }
+/* Keep the scrollbar in the outer gutter without narrowing message bubbles. */
+.progressEntries { max-height: min(240px, 32vh); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; overflow-anchor: none; margin-inline-end: -16px; }
+.progressContent { width: 100cqw; }
 .progressEntries:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
-.progressDetail, .contextRequest { white-space: pre-wrap; }
-.progressEntry, .progressDetail { overflow-wrap: anywhere; font-size: 13px; line-height: 1.65; }
+.progressDetail, .contextBubble { white-space: pre-wrap; }
+.progressEntry, .progressDetail { overflow-wrap: anywhere; font-size: 14px; line-height: 1.65; }
 .contextImage { max-width: 100%; max-height: 160px; border-radius: 8px; margin: 8px 0; }
 .progressEntry { display: flow-root; margin: 0 0 12px; }
 .progressEntry:last-child { margin-bottom: 0; }
@@ -34,9 +36,6 @@
 .progressDetail { margin: 6px 0 12px 20px; color: var(--dsw-alias-label-secondary); }
 .progressLatest { position: absolute; bottom: 4px; right: 12px; display: flex; align-items: center; gap: 4px; padding: 5px 9px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 16px; background: var(--dsw-alias-button-floating-fill); color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; cursor: pointer; }
 .progressLatest:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-button-floating-hover); }
-@keyframes contextPulse { 50% { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { .liveDot { animation: none; } }
-.root [data-sidenote-progress-snapshot] { display: none; }
 .reflowAction { flex: none; order: 1; margin-left: auto; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
 .reflowAction:hover { color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-interactive-bg-hover); }
 .reflowAction:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
@@ -65,7 +64,7 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 .nativeAction:disabled { opacity: .5; cursor: default; }
-.historyToggle { margin: 0; text-align: left; }
+.historyToggle { margin: 0; margin-inline-start: -6px; text-align: left; }
 .stateScreen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 24px 16px; }
 .emptyIcon { color: var(--dsw-alias-label-tertiary); }
 .emptyTitle { font-size: 14px; font-weight: 600; }
@@ -77,3 +76,6 @@
 .headerSide:disabled { opacity: .4; cursor: default; }
 .visibilitySetting { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 0; }
 .visibilitySetting p { color: var(--dsw-alias-label-secondary); font-size: 13px; margin: 4px 0 0; }
+
+.contextUserRow { display: flex; align-items: flex-end; flex-direction: column; gap: 8px; margin: 16px 0 24px; }
+.contextBubble { max-width: 82%; padding: 10px 16px; border-radius: var(--dsw-radius-xl); background: var(--dsw-specific-bubble); color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; font-size: 14px; line-height: 1.65; }

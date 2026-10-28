@@ -85,8 +85,8 @@ export function cancelInputRollback(input: SessionInput): void { pendingRollback
 
 /** Detached native sends can restore their draft after promptError is published.
  * Watch that restoration once; a retry cancels this watch before adding its prefix. */
-export function rollbackInputPrefix(input: SessionInput, prefix: string): void {
-  if (prefix === '') return
+export function rollbackInputPrefix(input: SessionInput, prefix: string, onRollback?: () => void): void {
+  if (prefix === '' && !onRollback) return
   cancelInputRollback(input)
   let unsubscribe = (): void => {}
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -95,7 +95,12 @@ export function rollbackInputPrefix(input: SessionInput, prefix: string): void {
     if (timer !== undefined) clearTimeout(timer)
     if (pendingRollbacks.get(input) === dispose) pendingRollbacks.delete(input)
   }
-  const check = (): void => { if (stripInputPrefix(input, prefix)) dispose() }
+  const check = (): void => {
+    if (input.state.getSnapshot().phase === 'plain' && stripInputPrefix(input, prefix)) {
+      dispose()
+      onRollback?.()
+    }
+  }
   pendingRollbacks.set(input, dispose)
   unsubscribe = input.state.subscribe(check)
   timer = setTimeout(dispose, 15_000)

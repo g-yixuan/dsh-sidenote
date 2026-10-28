@@ -123,7 +123,7 @@ describe('snapshotEntriesOf（当前 turn 内容提取）', () => {
 
   it('includes in-flight reasoning and tools before a result or final answer exists', () => {
     const entries = snapshotEntriesOf([], { blocks: [{ kind: 'reasoning', text: 'Checking the directory' }] }, 10, [{ name: 'bash', argsRaw: '{"command":"pwd"}' }])
-    expect(entries).toEqual([{ kind: 'thinking', text: 'Checking the directory' }, { kind: 'tool', toolName: 'bash', text: '调用：{"command":"pwd"}\n（执行中）' }])
+    expect(entries).toEqual([{ kind: 'thinking', text: 'Checking the directory', unfinished: true }, { kind: 'tool', toolName: 'bash', text: '调用：{"command":"pwd"}', unfinished: true }])
   })
 
   it('无 user 节点（空历史）→ 空序列', () => {
@@ -154,4 +154,35 @@ describe('serializeSnapshot + splitSnapshotPrefix（协议块往返）', () => {
     expect(splitSnapshotPrefix('普通消息')).toBeNull()
     expect(splitSnapshotPrefix(`${SNAPSHOT_BLOCK_MARK} 未闭合的内容`)).toBeNull()
   })
+})
+
+it('persists a first-send cut and unfinished states without a perpetual live marker', () => {
+  const entries = snapshotEntriesOf([], { blocks: [{ kind: 'text', text: 'partial answer' }] }, 7, [{ name: 'bash', argsRaw: '{}' }])
+  const text = serializeSnapshot(entries, new Date(2026, 9, 28, 12), 7)
+  expect(splitSnapshotPrefix(text)?.boundarySeq).toBe(7)
+  expect(snapshotEntriesFromText(text)).toEqual(entries)
+  expect(text).not.toContain('（执行中）')
+  expect(snapshotEntriesFromText('<streaming>old partial\n（主线正在输出中）</streaming><tool-call name="bash">old call\n（执行中）</tool-call>')).toEqual([
+    { kind: 'streaming', text: 'old partial', unfinished: true },
+    { kind: 'tool', toolName: 'bash', text: 'old call', unfinished: true },
+  ])
+})
+
+it('round-trips quoted protocol tags and tool output without truncating the captured context', () => {
+  const entries = [{ kind: 'request' as const, text: '解释 </mainline-progress-snapshot> 与 &lt;reply&gt;' }, { kind: 'tool' as const, toolName: 'a"b', text: '<tool-call name="x">nested</tool-call> & result' }]
+  const block = serializeSnapshot(entries, new Date(), 4)
+  const split = splitSnapshotPrefix(block + '\n\nside question')!
+  expect(split.rest).toBe('side question')
+  expect(snapshotEntriesFromText(split.snapshot)).toEqual(entries)
+})
+
+
+it('freezes image-only and image-plus-text mainline increments without losing attachment identity', () => {
+  const attachment = { attachmentId: 'sha256:abc', mediaType: 'image/png', bytes: 100, width: 10, height: 10, name: 'x<y>"&.png' }
+  const entries = snapshotEntriesOf([
+    { kind: 'user', seq: 11, content: [{ type: 'image', attachment }] },
+    { kind: 'user', seq: 12, content: [{ type: 'image', attachment }, { type: 'text', text: 'new diagram' }] },
+  ], undefined, 10)
+  expect(entries).toEqual([{ kind: 'request', text: '', images: [attachment] }, { kind: 'request', text: 'new diagram', images: [attachment] }])
+  expect(snapshotEntriesFromText(serializeSnapshot(entries, new Date(), 10))).toEqual(entries)
 })

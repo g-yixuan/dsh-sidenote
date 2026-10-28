@@ -10,7 +10,9 @@ export function apply(ctx, config) {
     globalThis.fetch = async function (url, init) {
       if (!String(url).startsWith('https://api.deepseek.com/') || typeof init?.body !== 'string') return original.call(this, url, init)
       const body = JSON.parse(init.body)
-      const record = { model: body.model, thinking: body.thinking ?? null, reasoningEffort: body.reasoning_effort ?? null, reasoningCharacters: 0, toolDeltas: 0 }
+      const lastUser = body.messages?.findLast(message => message.role === 'user')
+      const lastUserImageCount = Array.isArray(lastUser?.content) ? lastUser.content.filter(block => block.type === 'image_url').length : 0
+      const record = { model: body.model, thinking: body.thinking ?? null, reasoningEffort: body.reasoning_effort ?? null, reasoningCharacters: 0, toolDeltas: 0, lastUserImageCount }
       records.push(record)
       const response = await original.call(this, url, init)
       record.status = response.status

@@ -33,9 +33,6 @@
 @keyframes contextAppear { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
 @media (hover: none) { .chipMain { padding-right: 32px; } .chipDismissShade { opacity: 1; } .chipDismiss { pointer-events: auto; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .contextPanel { animation: none; } .chip, .chipDismissShade, .chipDismiss, .contextItem, .contextAction { transition: none; } }
-.sentContext { color: var(--dsw-alias-label-secondary); font-size: 13px; margin: 8px 0; }
-.sentContext summary { cursor: pointer; }
-.sentContext pre, .sentContext blockquote { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
 
 .userContextHost { display: contents; }
 :global([data-sidenote-context-replaced]) { display: none !important; }

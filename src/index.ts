@@ -4,6 +4,7 @@
 import type { IncomingHttpHeaders } from 'node:http'
 import { createUserMessage } from '@deepseek-ai/dsh-llm/message'
 import { isTrustedApiRequest } from './trust-fence.ts'
+import { contextProjection } from './contextProjection.ts'
 
 declare module '@deepseek-ai/dsh-llm/message' {
   interface MessageSourceMap {
@@ -163,6 +164,10 @@ export function apply(ctx: unknown): void {
     console.warn('[dsh-sidenote] 宿主半包：ctx.inject 面缺席，reflow 路由未注册（客户端回落搭车）')
     return
   }
+  injectDyn.call(ctx, ['sessionProjections'], (injected) => {
+    const registry = injected.get('sessionProjections') as { register(definition: typeof contextProjection): () => void }
+    return registry.register(contextProjection)
+  })
   injectDyn.call(ctx, ['webServer'], (injected) => {
     const webServer = injected.get('webServer') as WebServerLike | undefined
     if (webServer === undefined || typeof webServer.register !== 'function') return

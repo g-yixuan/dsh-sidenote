@@ -31,8 +31,7 @@ export interface SideChatMetaRecord {
   readonly pendingDraft?: string
   /** 宿主实际 fork 切点；后续插话或回复不会推进它。 */
   readonly boundarySeq?: number
-  /** busy fork 标记（Delivery_04）：fork 时主线 turn 在飞，首条侧边消息
-   *  发送时拼接主线进展快照。 */
+  /** 首次发送仍需截取主线；沿用旧字段名以兼容已恢复的侧聊。 */
   readonly forkedMidTurn?: boolean
   /** 零完成轮兜底（Delivery_04）：主线首轮在飞无法 fork，create 出来的
    *  纯快照会话（无继承历史）。 */
