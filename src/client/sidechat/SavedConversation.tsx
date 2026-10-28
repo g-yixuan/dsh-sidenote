@@ -3,22 +3,25 @@ import type { Context } from '../host/contracts.ts'
 import { chatSourceOf, contextEventSource, loadInheritedContext } from '../host/chat.ts'
 import { contextImageLoader } from '../host/attachments.ts'
 import { contextEntriesOf, contextHistory, savedContextOf } from './context.ts'
-import { effectiveContextNodes, snapshotEntriesFromText } from './snapshot.ts'
+import { effectiveContextNodes, snapshotEntriesFromText, splitSnapshotPrefix } from './snapshot.ts'
 import { InheritedContext, type InheritedContextData } from './InheritedContext.tsx'
 import { t } from '../locales.ts'
 import css from './sidechat.module.css'
 
 interface Entry { kind: 'node' | 'group'; key: string }
-interface NodeSnapshot { anchorSeq: number; kind: string; location?: { turn?: { start?: { seq: number } } } }
+interface NodeSnapshot { data?: { content?: readonly { type: string; text?: string }[] }; anchorSeq: number; kind: string; location?: { turn?: { start?: { seq: number } } } }
 interface GroupedView { entries: readonly Entry[]; groupSource(key: string): { getSnapshot(): { members: readonly Entry[] } | undefined } }
 interface ViewSnapshot { views: { grouped(name: string): GroupedView | undefined } }
+interface NavigationItem { anchorKey: string; prompt: string }
+interface ChatState { nodes: { get(key: string): NodeSnapshot | undefined }; navigation?: { items(): readonly NavigationItem[] } }
 export interface ViewProps {
   sessionId: string
-  useChat<T>(select: (state: { nodes: { get(key: string): NodeSnapshot | undefined } }) => T): T
+  useChat<T>(select: (state: ChatState) => T): T
   useConversation<T>(select: (state: ViewSnapshot) => T): T
 }
 export function HistoryView({ Original, props, side }: { Original: ComponentType<ViewProps>; props: ViewProps; side: Pick<InheritedContextData, 'boundarySeq'> }) {
-  const nodes = props.useChat(state => state.nodes)
+  const chat = props.useChat(state => state)
+  const nodes = chat.nodes
   const snapshot = props.useConversation(state => state)
   const groups = snapshot.views.grouped('chat')
   const entries = groups?.entries ?? []
@@ -38,7 +41,16 @@ export function HistoryView({ Original, props, side }: { Original: ComponentType
   const visible = entries.filter(entry => !isInherited(entry))
   const projected = { ...snapshot, views: { ...snapshot.views, grouped: (name: string) => name === 'chat' && groups ? { ...groups, entries: visible } : snapshot.views.grouped(name) } }
   const useProjected = useCallback(<T,>(selector: (state: ViewSnapshot) => T): T => selector(projected), [projected])
-  return createElement(Original, { ...props, useConversation: useProjected })
+  // The main-view rail must target only visible local rows, and its prompt
+  // preview must not expose the protocol stripped from the corresponding bubble.
+  const navigation = chat.navigation?.items().filter(item => !isInherited({ kind: 'node', key: item.anchorKey })).map(item => {
+    const text = nodes.get(item.anchorKey)?.data?.content?.find(block => block.type === 'text')?.text
+    const saved = text ? splitSnapshotPrefix(text) : null
+    return saved ? { ...item, prompt: saved.rest.slice(0, 200) } : item
+  })
+  const projectedChat = navigation ? { ...chat, navigation: { ...chat.navigation, items: () => navigation } } : chat
+  const useProjectedChat = useCallback(<T,>(selector: (state: ChatState) => T): T => selector(projectedChat), [projectedChat])
+  return createElement(Original, { ...props, useConversation: useProjected, useChat: useProjectedChat })
 }
 
 
