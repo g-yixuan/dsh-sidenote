@@ -94,7 +94,7 @@ export function ContextProgress({ id, history, entries, live, loading, error, on
         follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 16
         setFollowing(follow.current)
       }}>
-      <div ref={content}>
+      <div ref={content} className={css.progressContent}>
         <div data-sidenote-context-history>{history.map(entry => <ProgressEntry key={entry.key} entry={entry} live={false} loadImage={loadImage} />)}</div>
         {entries.length > 0 && <div data-sidenote-context-increment>
           {entries.map((entry, index) => <ProgressEntry key={`progress:${index}:${entry.kind}`} entry={entry} live={live} />)}

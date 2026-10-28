@@ -8,13 +8,17 @@
 .root { color: var(--dsw-alias-label-primary); }
 .nativeConversation { flex: 1; }
 .chatView { display: flex; flex-direction: column; flex: 1 0 auto; min-width: 0; }
-.mainContext { box-sizing: border-box; width: 100%; max-width: var(--dsh-chat-content-width, 748px); margin-inline: auto; flex: none; padding: 12px 24px 4px; min-width: 0; }
+/* Match the host's outer clearance followed by its centered content column. */
+.mainContext { box-sizing: border-box; width: 100%; flex: none; padding: 12px calc(var(--dsh-composer-side-clearance, 8px) + 16px) 4px; min-width: 0; }
+.contextColumn { width: 100%; max-width: var(--dsh-chat-content-width, 748px); margin-inline: auto; min-width: 0; }
 .historyToggle { display: flex; align-items: center; gap: 6px; }
 .contextHint { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
 .contextChevron { transform: rotate(-90deg); }
 .contextChevron, .contextChevronOpen { flex: none; }
-.progress { position: relative; margin: 12px 0; padding: 4px 0; }
-.progressEntries { max-height: min(240px, 32vh); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; overflow-anchor: none; padding-right: 8px; }
+.progress { position: relative; margin: 12px 0; padding: 4px 0; container-type: inline-size; }
+/* Keep the scrollbar in the outer gutter without narrowing message bubbles. */
+.progressEntries { max-height: min(240px, 32vh); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; overflow-anchor: none; margin-inline-end: -16px; }
+.progressContent { width: 100cqw; }
 .progressEntries:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
 .progressDetail, .contextBubble { white-space: pre-wrap; }
 .progressEntry, .progressDetail { overflow-wrap: anywhere; font-size: 14px; line-height: 1.65; }
@@ -60,7 +64,7 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 .nativeAction:disabled { opacity: .5; cursor: default; }
-.historyToggle { margin: 0; text-align: left; }
+.historyToggle { margin: 0; margin-inline-start: -6px; text-align: left; }
 .stateScreen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 24px 16px; }
 .emptyIcon { color: var(--dsw-alias-label-tertiary); }
 .emptyTitle { font-size: 14px; font-weight: 600; }

@@ -35,11 +35,13 @@ export function InheritedContext({ context }: { context: InheritedContextData })
     })
     return () => { active = false }
   }, [expanded, context.loadContext, attempt])
-  return <div className={css.mainContext} data-sidenote-main-context>
+  return <div className={css.mainContext}>
+    <div className={css.contextColumn} data-sidenote-main-context>
       <button type="button" className={css.historyToggle} aria-expanded={expanded} aria-controls={contextId} onClick={() => { fold.toggle('inherited') }}>
         <IconChevronDownOutline14 size={12} className={expanded ? css.contextChevronOpen : css.contextChevron} />
         <span>{t('mainContext')}</span><span className={css.contextHint}>{context.contextPending ? t('contextAtSend') : context.progress?.takenAt ? t('contextAsOf', { time: context.progress.takenAt }) : t('contextInherited')}</span>
       </button>
       {expanded && <ContextProgress id={contextId} history={context.history} entries={context.progress?.entries ?? []} live={context.contextPending === true} loading={loading} error={error} onRetry={() => { setAttempt(value => value + 1) }} loadImage={context.loadImage} />}
     </div>
+  </div>
 }
