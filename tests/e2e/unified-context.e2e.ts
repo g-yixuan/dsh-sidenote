@@ -77,7 +77,7 @@ for (const real of [false, true]) for (const openIdle of [false, true]) test(`${
   if (openIdle) await expect.poll(() => promotedReader.locator('img').evaluate(el => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
   await expect(saved.locator('[data-chat-flow-kind="user"]')).toHaveCount(1)
   await expect(saved.locator('[data-chat-flow-kind="assistant-step"]:not([data-chat-group-part="reasoning"])')).toHaveCount(1)
-  await expect(saved.getByRole('button', { name: /^(Jump to turn|跳转到第)/ })).toHaveCount(1)
+  await expect(saved.getByRole('button', { name: /^(Jump to turn|Load and jump to turn|跳转到第|加载并跳转到第)/ })).toHaveCount(1)
   const promotedId = (await saved.getAttribute('data-conversation-session'))!
   await page.reload()
   await expect(saved).toHaveAttribute('data-conversation-session', promotedId)

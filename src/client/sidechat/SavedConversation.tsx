@@ -16,6 +16,7 @@ interface NavigationItem { anchorKey: string; prompt: string }
 interface ChatState { nodes: { get(key: string): NodeSnapshot | undefined }; navigation?: { items(): readonly NavigationItem[] } }
 export interface ViewProps {
   sessionId: string
+  useProjection?(key: string): unknown
   useChat<T>(select: (state: ChatState) => T): T
   useConversation<T>(select: (state: ViewSnapshot) => T): T
 }
@@ -50,7 +51,11 @@ export function HistoryView({ Original, props, side }: { Original: ComponentType
   })
   const projectedChat = navigation ? { ...chat, navigation: { ...chat.navigation, items: () => navigation } } : chat
   const useProjectedChat = useCallback(<T,>(selector: (state: ChatState) => T): T => selector(projectedChat), [projectedChat])
-  return createElement(Original, { ...props, useConversation: useProjected, useChat: useProjectedChat })
+  const useProjectedOutline = (key: string) => {
+    const value = props.useProjection?.(key)
+    return key === 'turnOutline' && Array.isArray(value) ? value.filter((item: { seq: number }) => item.seq > (side.boundarySeq ?? -1)).map(item => ({ ...item, prompt: typeof item.prompt === 'string' && item.prompt.startsWith('<mainline-progress-snapshot') ? '' : item.prompt })) : value
+  }
+  return createElement(Original, { ...props, useConversation: useProjected, useChat: useProjectedChat, ...(props.useProjection ? { useProjection: useProjectedOutline } : {}) })
 }
 
 
