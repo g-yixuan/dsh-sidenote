@@ -1,6 +1,6 @@
 {
   "name": "dsh-sidenote",
-  "version": "0.7.5",
+  "version": "0.7.6",
   "description": "Follow the tangent. Keep the thread. Annotate, explore on the side, and bring answers back to DeepSeek Harness. / 思路可以分岔，主线始终向前。划选注释、侧边追问，再把结论带回正在推进的任务。",
   "icon": "docs/assets/logo.svg",
   "type": "module",
