@@ -1,25 +1,11 @@
-/**
- * 主线进展快照构建器（Delivery_04 / WI-02，L0 纯逻辑 + L3 读取编排）。
- *
- * 背景：busy fork 的子会话只继承到「最后一个已完成 turn」——主线在飞 turn
- * 的内容（任务、思考、工具进展）不在继承历史里。本模块在侧边首条消息发送
- * 时把这部分内容现取（不是 fork 时刻——主线还在跑，发送时才最新）序列化为
- * 协议块，拼进首条侧边消息前缀。
- *
- * 读取面：chatSourceOf 的 legacy 投影——它是**模型可见投影**：压缩过的范围
- * 投影为摘要节点、被修剪的工具结果已移除。即「最后一个压缩点之后的内容」
- * 语义由投影天然实现，尺寸天然有界（= 主线模型此刻实际所见，主线装得下
- * 我们就装得下；超窗由宿主对子会话的压缩引擎兜底——不另设安全阀）。
- *
- * 缓存对齐：快照追加在 fork 继承历史（与主线前缀逐字一致）之后，不破坏
- * 前缀缓存命中。
- */
+/** Mainline progress after the actual fork cut. Chat retains an audit trail;
+ * committed compaction replacements determine the effective context instead. */
 import type { Context, ConversationSnapshot } from '../host/contracts.ts'
-import { chatSourceOf } from './lifecycle.ts'
+import { chatSourceOf, contextEventSource, loadInheritedContext, retainSession, type ContextEvent, type ContextEventWindow } from '../host/chat.ts'
 
 /** 快照里的一拍（当前 turn 的一段内容）。 */
 export interface SnapshotEntry {
-  kind: 'request' | 'reply' | 'thinking' | 'tool' | 'streaming'
+  kind: 'checkpoint' | 'request' | 'reply' | 'thinking' | 'tool' | 'streaming'
   text: string
   /** tool 拍携带工具名。 */
   toolName?: string
@@ -27,8 +13,8 @@ export interface SnapshotEntry {
 
 /** Read the plugin's persisted progress block as plain, expandable content. */
 export function snapshotEntriesFromText(text: string): SnapshotEntry[] {
-  const kinds = { 'user-request': 'request', reply: 'reply', thinking: 'thinking', 'tool-call': 'tool', streaming: 'streaming' } as const
-  return [...text.matchAll(/<(user-request|reply|thinking|tool-call|streaming)(?: name="([^"]*)")?>([\s\S]*?)<\/\1>/g)]
+  const kinds = { checkpoint: 'checkpoint', 'user-request': 'request', reply: 'reply', thinking: 'thinking', 'tool-call': 'tool', streaming: 'streaming' } as const
+  return [...text.matchAll(/<(checkpoint|user-request|reply|thinking|tool-call|streaming)(?: name="([^"]*)")?>([\s\S]*?)<\/\1>/g)]
     .map(match => ({ kind: kinds[match[1] as keyof typeof kinds], text: match[3]!.trim(), ...(match[2] ? { toolName: match[2] } : {}) }))
 }
 
@@ -50,26 +36,66 @@ function contentText(content: unknown): string {
   return blocksText(content, ['text'])
 }
 
-/**
- * 投影 nodes → 当前 turn 的快照拍序列。纯函数（node 可测）。
- *
- * 当前 turn 起点 = 最后一个 user 节点（在飞 turn 的任务消息）。注意：压缩
- * 摘要在投影里也是 user 形态节点（<compacted-summary> 框定的替换消息）——
- * 若最后一个 user 节点是摘要，从它取起同样正确（摘要即主线模型此刻的上下文
- * 头部）。起点之后：assistant 拆思考/正文两拍，tool-result 成拍，其余节点
- * （context 注入、系统面）不入快照。
- */
-export function snapshotEntriesOf(nodes: readonly unknown[], partial?: unknown): SnapshotEntry[] {
+/** Chat is an audit transcript, not the model surface. A committed checkpoint
+ * replaces explicit surface identities; its retained tail can have LOWER seqs
+ * than the checkpoint itself. Never truncate that tail by timestamp or max seq. */
+export function effectiveContextNodes(nodes: readonly unknown[], window: ContextEventWindow | undefined, throughSeq = Infinity): { nodes: readonly unknown[]; checkpointSeq?: number } {
+  const events = window?.entries.map(entry => entry.event).filter(event => event.seq <= throughSeq) ?? []
+  const checkpoint = events.findLast(event => event.type === 'user/message' && event.data.source?.kind === 'compact-checkpoint' && event.surfaceOp !== undefined && event.surfaceOp !== 'append')
+  const eligible = nodes.filter(node => (node as { seq: number }).seq <= throughSeq)
+  const shadowed = new Set<number>()
+  const pruned = new Map<number, ContextEvent>()
+  for (let i = 0; i < events.length - 1; i++) {
+    const event = events[i]!, next = events[i + 1]!
+    // A summary without its committed replacement (failed/in-flight compaction)
+    // cannot hide history. This adjacency is the host's shadow-price contract.
+    if (['compaction/summary', 'compaction/prune'].includes(event.type) && next.surfaceOp && next.surfaceOp !== 'append') {
+      for (const seq of event.data.shadowedSeqs ?? []) shadowed.add(seq)
+      if (event.type === 'compaction/prune' && next.type === 'tool/result' && next.data.message) {
+        for (const seq of event.data.shadowedSeqs ?? []) pruned.set(seq, next)
+      }
+    }
+  }
+  // Chat keeps the original tool/result for auditing and ignores replacement
+  // events. Replay just those committed replacements before removing shadows;
+  // otherwise a retained, pruned tool result either leaks its old body or vanishes.
+  const tail = eligible.map(node => {
+    let current = node as { seq: number; kind: string; content?: unknown }
+    if (current.kind !== 'tool-result') return current
+    for (let replacement = pruned.get(current.seq); replacement; replacement = pruned.get(current.seq)) {
+      current = { ...current, seq: replacement.seq, content: replacement.data.message!.content }
+    }
+    return current
+  }).filter(node => {
+    const n = node as { seq: number; kind: string }
+    return !shadowed.has(n.seq) && n.kind !== 'compaction' && n.seq !== checkpoint?.seq
+  })
+  if (!checkpoint) return { nodes: tail }
+  const summary = events.find(event => event.seq === checkpoint.seq - 1 && event.type === 'compaction/summary')
+  const content = summary?.data.summary ?? checkpoint.data.content ?? []
+  return { nodes: [{ kind: 'checkpoint', seq: checkpoint.seq, content }, ...tail], checkpointSeq: checkpoint.seq }
+}
+
+/** Effective context → readable snapshot entries. A new checkpoint carries its
+ * surviving tail; otherwise only nodes after the child's inherited cut are added. */
+export function snapshotEntriesOf(nodes: readonly unknown[], partial?: unknown, boundarySeq?: number, runningCalls: readonly unknown[] = []): SnapshotEntry[] {
   let start = -1
-  for (let i = nodes.length - 1; i >= 0; i -= 1) {
+  const checkpoint = nodes.findIndex(node => (node as { kind: string }).kind === 'checkpoint' && (node as { seq: number }).seq > (boundarySeq ?? -1))
+  if (checkpoint >= 0) start = checkpoint
+  else if (boundarySeq !== undefined) { nodes = nodes.filter(node => (node as { seq: number }).seq > boundarySeq); start = 0 }
+  else for (let i = nodes.length - 1; i >= 0; i -= 1) {
     const n = nodes[i] as Record<string, unknown>
     if (n?.kind === 'user' || n?.kind === 'steering') { start = i; break }
   }
-  if (start < 0) return []
   const entries: SnapshotEntry[] = []
-  for (const node of nodes.slice(start)) {
+  for (const node of start < 0 ? [] : nodes.slice(start)) {
     const n = node as Record<string, unknown>
     switch (n.kind) {
+      case 'checkpoint': {
+        const text = contentText(n.content)
+        if (text) entries.push({ kind: 'checkpoint', text })
+        break
+      }
       case 'user':
       case 'steering': {
         const text = contentText(n.content)
@@ -100,10 +126,16 @@ export function snapshotEntriesOf(nodes: readonly unknown[], partial?: unknown):
     }
   }
   // 在途流式输出（正在生成的 assistant 正文）——投影的 partial 面。
+  const thinking = blocksText((partial as { blocks?: unknown })?.blocks, ['reasoning'])
+  if (thinking) entries.push({ kind: 'thinking', text: thinking })
   const streaming = typeof partial === 'string'
     ? partial
     : contentText((partial as { blocks?: unknown })?.blocks)
   if (streaming !== '') entries.push({ kind: 'streaming', text: streaming })
+  for (const value of runningCalls) {
+    const call = value as { name?: string; argsRaw?: string }
+    if (call.name) entries.push({ kind: 'tool', toolName: call.name, text: `调用：${call.argsRaw ?? ''}\n（执行中）` })
+  }
   return entries
 }
 
@@ -113,6 +145,7 @@ export function serializeSnapshot(entries: readonly SnapshotEntry[], takenAt: Da
   const stamp = `${takenAt.getFullYear()}-${pad(takenAt.getMonth() + 1)}-${pad(takenAt.getDate())} ${pad(takenAt.getHours())}:${pad(takenAt.getMinutes())}`
   const body = entries.map((entry) => {
     switch (entry.kind) {
+      case 'checkpoint': return `<checkpoint>\n${entry.text}\n</checkpoint>`
       case 'request': return `<user-request>\n${entry.text}\n</user-request>`
       case 'reply': return `<reply>\n${entry.text}\n</reply>`
       case 'thinking': return `<thinking>\n${entry.text}\n</thinking>`
@@ -121,7 +154,7 @@ export function serializeSnapshot(entries: readonly SnapshotEntry[], takenAt: Da
     }
   }).join('\n\n')
   return `<mainline-progress-snapshot taken-at="${stamp}">
-你是从主线会话 fork 出的侧边会话。主线有一个任务正在执行中——它在你 fork 时正在进行，所以以「已中断」形态出现在上面的历史末尾（那只是快照切点，主线本体仍在正常运行）。以下是主线该任务截至此刻的实时进展（与主线模型当前可见的上下文一致）：
+你是从主线会话 fork 出的侧边会话。以下是截至首次发送时的主线进展。若包含 checkpoint，它是最新压缩摘要，并与后续条目一起替代此前的主线上下文；否则这些条目补充在继承历史之后。主线独立运行，请将这些内容作为上下文，不要替主线重复执行任务：
 
 ${body}
 </mainline-progress-snapshot>`
@@ -131,20 +164,38 @@ ${body}
 export const SNAPSHOT_BLOCK_MARK = '<mainline-progress-snapshot'
 
 /**
- * 现取主线当前 turn 的进展快照块。无任何在飞内容（主线恰在两轮之间等）
- * 返回 null（调用方跳过拼接）。
+ * 现取主线进展；即使当前没有文字进展也记录发送时间并消费首次快照。
+ * 只有主线投影尚不可读时返回 null。
  */
-export function buildMainlineSnapshot(ctx: Context, parentSessionId: string, now: Date = new Date()): string | null {
+export function buildMainlineSnapshot(ctx: Context, parentSessionId: string, now: Date = new Date(), boundarySeq?: number): string | null {
   try {
-    const source = chatSourceOf(ctx, ctx.sessions.binding(parentSessionId))
+    const binding = ctx.sessions.binding(parentSessionId)
+    const source = chatSourceOf(ctx, binding)
     const snap = source?.getLegacy() as (ConversationSnapshot & { partial?: unknown }) | null
     if (snap === undefined || snap === null) return null
-    const entries = snapshotEntriesOf(snap.nodes ?? [], snap.partial)
-    if (entries.length === 0) return null
+    const effective = effectiveContextNodes(snap.nodes ?? [], contextEventSource(binding?.session)?.getSnapshot())
+    const entries = snapshotEntriesOf(effective.nodes, snap.partial, boundarySeq, snap.runningCalls)
     return serializeSnapshot(entries, now)
   } catch {
     return null
   }
+}
+
+/** A cold parent may expose only its tail page. Do not permanently freeze that
+ * partial view into the first side prompt. A newer checkpoint needs its full
+ * retained surface (which can contain older seqs); replay it from shared history. */
+export async function loadMainlineSnapshot(ctx: Context, parentSessionId: string, boundarySeq: number): Promise<string> {
+  const retained = retainSession(ctx, parentSessionId)
+  try {
+    const binding = retained ? await retained.ready : ctx.sessions.binding(parentSessionId)
+    await loadInheritedContext(binding?.session, boundarySeq)
+    if (contextEventSource(binding?.session)?.getSnapshot().entries.some(({ event }) => event.seq > boundarySeq && event.type === 'user/message' && event.data.source?.kind === 'compact-checkpoint')) {
+      await loadInheritedContext(binding?.session, 0)
+    }
+    const text = buildMainlineSnapshot(ctx, parentSessionId, new Date(), boundarySeq)
+    if (text === null) throw new Error('主线上下文尚未就绪，内容已保留，请重新发送')
+    return text
+  } finally { retained?.release() }
 }
 
 export { splitSnapshotPrefix } from '../annotations/format.ts'

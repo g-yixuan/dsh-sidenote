@@ -3,7 +3,7 @@ import { act, createElement, type ComponentType } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '../src/client/host/contracts.ts'
-import { injectedReflowPrefix, registerUserContext, sentContextRule } from '../src/client/annotations/NativeUserContext.tsx'
+import { ContextTextNode, LegacyPendingContexts, injectedReflowPrefix, registerUserContext, sentContextRule } from '../src/client/annotations/NativeUserContext.tsx'
 import { buildProtocolBlock } from '../src/client/annotations/format.ts'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -36,6 +36,7 @@ function mount(text: string, modern: boolean, key = 'user', injected = '', image
   }
   const entry = { component: Original as ComponentType<Props>, options: { key } }
   const ctx = {
+    effect: () => {}, // Legacy pending DOM projection is exercised separately below.
     get: () => modern ? { userText: { register(value: typeof sentContextRule) { rule = value; return offRule } } } : {},
     inject: (_keys: unknown, callback: () => void) => { callback() },
     slots: {
@@ -119,11 +120,87 @@ it('does not attach another producer or cross an intervening response/input', ()
   expect(injectedReflowPrefix([{ ...context, source: { kind: 'another-plugin' } }, { kind: 'user', seq: 2 }], 2)).toBe('')
 })
 
-it('matches only the protocol range after a progress snapshot', () => {
+it('consumes snapshot and annotation prefixes while leaving the pending question visible', () => {
   const snapshot = '<mainline-progress-snapshot taken-at="2026-10-24 20:00">进展</mainline-progress-snapshot>\n\n'
   const text = snapshot + annotation + '\n\n正文'
   const node = sentContextRule.match(text, 0)!
-  expect(node.start).toBe(snapshot.length)
+  expect(node.start).toBe(0)
   expect(text.slice(node.end)).toBe('正文')
   expect(sentContextRule.match(text, node.end)).toBeUndefined()
+})
+
+it.each(['data-pending-steering', 'data-submission-echo', 'data-queue-dock', 'inert'])('enables read-only previews only on message surfaces: %s', surface => {
+  const host = document.createElement('div')
+  if (surface !== 'inert') host.setAttribute(surface, '')
+  document.body.append(host)
+  const root = createRoot(host)
+  act(() => { root.render(<ContextTextNode node={{ data: sentContextRule.match(reflow, 0)!.data }} interactive={false} />) })
+  const button = host.querySelector('button')
+  expect(button !== null).toBe(surface !== 'inert')
+  if (button) {
+    act(() => { button.click() })
+    expect(document.querySelector('[data-sidenote-sent-preview]')?.textContent).toContain('完整回答')
+  }
+  cleanup.push(() => { act(() => { root.unmount() }); host.remove() })
+})
+
+it('keeps previews inert inside another interactive control even in a queue', () => {
+  const host = document.createElement('div')
+  host.dataset.queueDock = ''
+  const parent = document.createElement('button')
+  host.append(parent); document.body.append(host)
+  const root = createRoot(parent)
+  act(() => { root.render(<ContextTextNode node={{ data: sentContextRule.match(reflow, 0)!.data }} interactive={false} />) })
+  expect(parent.querySelector('button')).toBeNull()
+  cleanup.push(() => { act(() => { root.unmount() }); host.remove() })
+})
+
+it.each(['data-pending-steering', 'data-submission-echo'])('projects legacy %s without replacing native children and restores them on cleanup', async surface => {
+  const host = document.createElement('div')
+  host.setAttribute(surface, '')
+  const bubble = document.createElement('div')
+  bubble.className = 'native_bubble'
+  const wire = reflow + '\n\n' + annotation + '\n\n正文 '
+  const text = document.createTextNode(wire)
+  const nativeReference = document.createElement('span')
+  nativeReference.textContent = '@原生引用'
+  bubble.append(text, nativeReference); host.append(bubble); document.body.append(host)
+  const root = createRoot(document.createElement('div'))
+  act(() => { root.render(<LegacyPendingContexts />) })
+  expect(bubble.querySelectorAll('[data-dsh-sidenote-bubble] button')).toHaveLength(2)
+  expect(text.data).toBe('正文 ')
+  expect(bubble.contains(nativeReference)).toBe(true)
+  act(() => { bubble.querySelector<HTMLButtonElement>('button')!.click() })
+  expect(document.querySelector('[data-sidenote-sent-preview]')?.textContent).toContain('引用原文')
+  await act(async () => {
+    text.data = reflow + '\n\n修改后的正文 '
+    await new Promise(resolve => setTimeout(resolve, 40))
+  })
+  expect(bubble.querySelectorAll('[data-dsh-sidenote-bubble] button')).toHaveLength(1)
+  expect(text.data).toBe('修改后的正文 ')
+  act(() => { root.unmount() })
+  expect(text.data).toBe(reflow + '\n\n修改后的正文 ')
+  expect(bubble.querySelector('[data-sidenote-pending-seat]')).toBeNull()
+  host.remove()
+})
+
+it('reads legacy queue details from full content instead of its flattened, truncated preview', () => {
+  const host = document.createElement('div')
+  host.dataset.queueDock = ''
+  const row = document.createElement('li'), preview = document.createElement('span')
+  preview.className = 'native_preview'
+  const wire = reflow + '\n\n' + annotation + '\n\n正文 @引用'
+  const truncated = wire.replace(/\s+/g, ' ').slice(0, 60) + '…'
+  preview.textContent = truncated; row.append(preview); host.append(row); document.body.append(host)
+  const root = createRoot(document.createElement('div'))
+  act(() => { root.render(<LegacyPendingContexts queue={{ root: host, texts: [wire] }} />) })
+  expect(preview.textContent).toContain('正文 @引用')
+  expect(preview.textContent).not.toContain('<reflow')
+  const chips = preview.querySelectorAll<HTMLButtonElement>('button')
+  expect(chips).toHaveLength(2)
+  act(() => { chips[1]!.click() })
+  expect(document.querySelector('[data-sidenote-sent-preview]')?.textContent).toContain('完整回答')
+  act(() => { root.unmount() })
+  expect(preview.textContent).toBe(truncated)
+  host.remove()
 })

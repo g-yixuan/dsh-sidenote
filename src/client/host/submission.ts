@@ -1,4 +1,4 @@
-import type { Context, ObservableSnapshot, SessionBinding, SessionInput } from './contracts.ts'
+import type { Context, ObservableSnapshot, RpcResult, SessionBinding, SessionInput } from './contracts.ts'
 import { chatSourceOf, retainSession } from './chat.ts'
 
 interface Message { seq?: number; id?: string; messageId?: string; kind?: string; content?: unknown }
@@ -26,6 +26,20 @@ function queuedMessages(binding: SessionBinding, inbox: ObservableSnapshot<Inbox
     return [...(state?.['next-turn'] ?? []), ...(state?.['next-step'] ?? [])]
   }
   return []
+}
+
+/** Only call before publishing a newly forked child. Pending Inbox occurrences
+ * belong to the parent task; remove the copies before accepting any side input.
+ * Never cancel a turn or remove/replay messages from an already usable child. */
+export async function clearForkQueue(binding: SessionBinding): Promise<void> {
+  const items = queuedMessages(binding, inboxFaceOf(binding))
+  const session = binding.session as typeof binding.session & { updateQueue?: (id: string, action: { kind: 'remove' }) => Promise<RpcResult<unknown>> }
+  for (const item of items) {
+    const id = item.id ?? item.messageId
+    if (!id || !session.updateQueue) throw new Error('无法隔离侧聊继承的主线队列')
+    const result = await session.updateQueue(id, { kind: 'remove' })
+    if (!result.ok) throw new Error(result.error.message ?? '清理侧聊队列副本失败')
+  }
 }
 
 export interface SubmissionReceipt {

@@ -1,182 +1,44 @@
-/**
- * busy-fork 编排与遗传 turn 监护（Delivery_04）单测。
- *
- * 守护的事故形态（2026-09-22 真机实证）：主线 turn 在飞时 fork，宿主把在飞
- * 消息以未认领 inbox splice 遗传给子会话——子会话 boot 后替主线执行该任务，
- * 用户真正的侧边消息排进不可见队列。修法：立即 fork（子会话休眠）+ 监护订阅
- * 在 meta 登记（触发开窗 boot）之前就位 + 遗传 turn 开跑即 cancel（文本判别
- * 防误伤用户自己的首个 turn）。
- */
 import { describe, expect, it, vi } from 'vitest'
-import { armInheritedTurnPurge, forkAndRegister, isPurgingInheritedTurn, retainSession, sessionBusyOf } from '../src/client/sidechat/lifecycle.ts'
-import type { Context } from '../src/client/host/contracts.ts'
+import { forkAndRegister, retainSession, sessionBusyOf } from '../src/client/sidechat/lifecycle.ts'
+import { inheritedBoundarySource, unfinishedCompactionCut } from '../src/client/host/chat.ts'
+import { clearForkQueue } from '../src/client/host/submission.ts'
+import type { Context, SessionBinding, SessionFace } from '../src/client/host/contracts.ts'
 
-interface Env {
-  ctx: Context
-  fork: ReturnType<typeof vi.fn>
-  create: ReturnType<typeof vi.fn>
-  cancel: ReturnType<typeof vi.fn>
-  updateTab: ReturnType<typeof vi.fn>
-  childUpdateQueue: ReturnType<typeof vi.fn>
-  childPrompt: ReturnType<typeof vi.fn>
-  retain: ReturnType<typeof vi.fn>
-  retainedCount: () => number
-  /** 子会话队列现状（剔除路径的观测口）。 */
-  childQueue: () => readonly { id: string }[]
-  /** 翻转子会话 running 并通知订阅者（模拟遗传 turn 开跑）。 */
-  flipChildRunning: () => void
-  /** 设置子会话投影的最后一条用户消息文本（文本判别的输入）。 */
-  setChildUserText: (text: string) => void
-  /** 登记进 meta 的最新值（legacy 腿经 betterSidebar.updateTab）。 */
-  lastMeta: () => Record<string, unknown> | undefined
-}
-
-/** 每个测试用唯一 childId——purgingChildren 是模块级状态，不复用防串测。 */
 let childSeq = 0
-
-function makeEnv(opts: {
-  parentRunning: boolean
-  forkFails?: 'unavailable' | 'other'
-  /** 父会话投影的在飞用户消息（监护判别的前缀来源）。 */
-  parentInflightText?: string
-  /** 父会话投影的完整节点（覆盖 parentInflightText 的单节点默认形态——
-   *  用于 busy 边界语义：已完成轮节点 + 在飞 user 节点共存）。 */
-  parentNodes?: unknown[]
-  /** 子会话投影里既有的继承节点（freshUserText 须跳过 seq ≤ 边界的它们）。 */
-  childInheritedNodes?: unknown[]
-  /** 子会话队列里既有的 pending 项（模拟遗传的泄漏消息；QueuedMessage 形态）。 */
-  childQueue?: Array<{ id: string; text: string }>
-  /** 模拟 0.1.7：child binding 仅在显式 retain 后存在。 */
-  retainRequired?: boolean
-  /** 模拟 retain 成功但初始 open 失败。 */
-  retainReadyRejects?: boolean
-  /** 模拟 0.1.7：workspaces 带 unarchiveSession（ArchivedSessionGate 判据）。 */
-  hasUnarchive?: boolean
-}): Env {
-  childSeq += 1
-  const childId = `child-${childSeq}`
-  const createdId = `${childId}-created`
-  const parent = { running: opts.parentRunning }
-  const childState = { running: false, userText: '', queue: [...(opts.childQueue ?? [])] }
-  const childListeners = new Set<() => void>()
-  const cancel = vi.fn(async () => {
-    // cancel 落定 = turn 中止：running 回落（和解等的正是这个信号）。
-    childState.running = false
-    return { ok: true }
+function currentChildId(): string { return `child-${childSeq}` }
+function makeEnv(opts: { parentRunning: boolean; endSeq?: number; forkFails?: string; retainRequired?: boolean }) {
+  childSeq++
+  const child = currentChildId()
+  let retained = 0
+  let meta: Record<string, unknown> | undefined
+  const parent = { session: { getSnapshot: () => ({ running: opts.parentRunning }), subscribe: () => () => {} } }
+  const binding = { session: {
+    getSnapshot: () => ({ running: false }), cancel: vi.fn(), prompt: vi.fn(), subscribe: () => () => {},
+    eventSource: { subscribe: () => () => {}, getSnapshot: () => ({ entries: opts.endSeq === undefined ? [] : [{ event: { type: 'session/end-seed', seq: opts.endSeq + 1 } }] }) },
+  } }
+  const fork = vi.fn(async () => {
+    if (opts.forkFails) throw new Error(opts.forkFails)
+    return child
   })
-  const fork = opts.forkFails === undefined
-    ? vi.fn(async () => childId)
-    : vi.fn(async () => {
-        throw new Error(opts.forkFails === 'unavailable'
-          ? `session/fork-unavailable: session "parent-1" has no completed turn to fork from`
-          : 'session/not-found: boom')
-      })
-  const create = vi.fn(async () => createdId)
-  let lastMeta: Record<string, unknown> | undefined
-  const updateTab = vi.fn((_id: string, patch: { meta: unknown }) => { lastMeta = patch.meta as Record<string, unknown> })
-  const parentNodes = opts.parentNodes ?? (opts.parentInflightText === undefined
-    ? []
-    : [{ kind: 'user', seq: 1, content: [{ type: 'text', text: opts.parentInflightText }] }])
-  const parentSession = {
-    getSnapshot: () => ({ running: parent.running, pending: [], nodes: parentNodes }),
+  const create = vi.fn(async () => child)
+  const retain = vi.fn(() => { retained++; return { binding, ready: Promise.resolve(binding), release: () => { retained-- } } })
+  const target = {
     subscribe: () => () => {},
-  }
-  const childSession = {
-    getSnapshot: () => ({
-      running: childState.running,
-      queue: [...childState.queue],
-      nodes: [
-        ...(opts.childInheritedNodes ?? []),
-        // fork 后新增的 user 节点：seq 恒大于继承区（freshUserText 的判别输入）。
-        ...(childState.userText === ''
-          ? []
-          : [{ kind: 'user', seq: 99, content: [{ type: 'text', text: childState.userText }] }]),
-      ],
-    }),
-    subscribe: (fn: () => void) => {
-      childListeners.add(fn)
-      return () => { childListeners.delete(fn) }
-    },
-    cancel,
-    // updateQueue 面（off-face 探测）：remove 即从模拟队列里删掉。
-    updateQueue: vi.fn(async (itemId: string, action: { kind: string }) => {
-      if (action.kind === 'remove') {
-        childState.queue = childState.queue.filter(q => q.id !== itemId)
-      }
-      return { ok: true, value: { accepted: true } }
-    }),
-    // prompt 面（和解重投用）。
-    prompt: vi.fn(async () => ({ ok: true, value: { accepted: true } })),
-  }
-  const childBinding = { session: childSession }
-  let retainedCount = 0
-  const retain = vi.fn((id: string) => {
-    if (id !== childId && id !== createdId) throw new Error(`unknown session: ${id}`)
-    retainedCount += 1
-    let released = false
-    return {
-      binding: childBinding,
-      ready: opts.retainReadyRejects === true
-        ? Promise.reject(new Error('open failed'))
-        : Promise.resolve(childBinding),
-      release: () => {
-        if (released) return
-        released = true
-        retainedCount -= 1
-      },
-    }
-  })
-  const betterSidebar = {
-    version: '0.18.0',
-    updateTab,
-    getSnapshot: () => ({ sessionId: 'parent-1', state: undefined }),
+    getSnapshot: () => ({ legacy: { nodes: [] }, timeline: { turnOrder: [0], turns: new Map([[0, {
+      end: opts.endSeq === undefined ? undefined : { seq: opts.endSeq, data: { reason: { kind: 'completed' } } },
+    }]]) } }),
   }
   const ctx = {
-    get: (name: string) => (name === 'betterSidebar' ? betterSidebar : undefined),
-    sessions: {
-      ...(opts.retainRequired === true ? { retain } : {}),
-      binding: (id: string) => {
-        if (id === 'parent-1') return { session: parentSession }
-        if (id === childId || id === createdId) {
-          return opts.retainRequired === true && retainedCount === 0 ? undefined : childBinding
-        }
-        return undefined
-      },
-      fork,
-      create,
-      list: { getSnapshot: () => ({ current: 'parent-1', byId: {} }), subscribe: () => () => {} },
+    get: (key: string) => {
+      if (key === 'uiConversation') return { binding: () => ({ target: () => target }) }
+      if (key === 'betterSidebar') return { version: '0.18.0', getSnapshot: () => ({}), updateTab: (_id: string, patch: { meta: Record<string, unknown> }) => { meta = patch.meta } }
+      return undefined
     },
-    workspaces: {
-      archiveSession: vi.fn(async () => undefined),
-      ...(opts.hasUnarchive === true ? { unarchiveSession: vi.fn(async () => undefined) } : {}),
-    },
-    connection: { api: { sessions: {
-      models: vi.fn(async () => ({ result: { ok: false } })),
-      selectModel: vi.fn(async () => ({ result: { ok: false } })),
-    } } },
+    sessions: { binding: (id: string) => id === 'parent-1' ? parent : binding, fork, create, ...(opts.retainRequired ? { retain } : {}), list: { getSnapshot: () => ({ byId: {} }), subscribe: () => () => {} } },
+    workspaces: { unarchiveSession: vi.fn(), archiveSession: vi.fn() },
   } as unknown as Context
-  return {
-    ctx,
-    fork,
-    create,
-    cancel,
-    updateTab,
-    childUpdateQueue: childSession.updateQueue,
-    childPrompt: childSession.prompt,
-    retain,
-    retainedCount: () => retainedCount,
-    childQueue: () => childState.queue,
-    flipChildRunning: () => {
-      childState.running = true
-      for (const fn of [...childListeners]) fn()
-    },
-    setChildUserText: (text: string) => { childState.userText = text },
-    lastMeta: () => lastMeta,
-  }
+  return { ctx, fork, create, retain, retainedCount: () => retained, lastMeta: () => meta, binding }
 }
-
-/** 当前 env 的子会话 id（childSeq 递增，取最近一次 makeEnv 的值）。 */
-function currentChildId(): string { return `child-${childSeq}` }
 
 describe('sessionBusyOf（主线忙碌判定）', () => {
   it('running=true → busy；running=false 且无 pending → idle', () => {
@@ -210,228 +72,53 @@ describe('retainSession（0.1.7 显式 generation 所有权）', () => {
   })
 })
 
-describe('forkAndRegister：busy fork 路径', () => {
-  it('主线空闲 → 直接 fork，无 forkedMidTurn 标记，无监护', async () => {
-    const env = makeEnv({ parentRunning: false })
-    await expect(forkAndRegister(env.ctx, 'parent-1', 'tab1')).resolves.toBe(currentChildId())
+describe('fork cut and history ownership', () => {
+  it('cuts before an unfinished standalone compression lock, including its failed-close boundary', () => {
+    const entries = [{ event: { type: 'command/run', seq: 12, data: { commandId: 'compact-1' } } }, { event: { type: 'compaction/start', seq: 13, data: { turn: null, sourceCommandId: 'compact-1' } } }]
+    const session = { eventSource: { getSnapshot: () => ({ entries }) } } as unknown as SessionFace
+    expect(unfinishedCompactionCut(session)).toBe(11)
+    entries.push({ event: { type: 'compaction/end', seq: 14, data: { turn: null, sourceCommandId: 'compact-1' } } })
+    expect(unfinishedCompactionCut(session)).toBeUndefined()
+  })
+  it('removes only a fresh fork’s pending copies and refuses to proceed on rejection', async () => {
+    const updateQueue = vi.fn(async () => ({ ok: true as boolean, error: { message: 'queue rejected' } }))
+    const binding = { session: { getSnapshot: () => ({}), updateQueue, projections: { faceOf: () => ({ getSnapshot: () => ({ 'next-turn': [{ id: 'queued' }], 'next-step': [{ id: 'steering' }] }) }) } } } as unknown as SessionBinding
+    await clearForkQueue(binding)
+    expect(updateQueue.mock.calls).toEqual([['queued', { kind: 'remove' }], ['steering', { kind: 'remove' }]])
+    updateQueue.mockResolvedValueOnce({ ok: false, error: { message: 'queue rejected' } })
+    await expect(clearForkQueue(binding)).rejects.toThrow('queue rejected')
+  })
+  it.each([false, true])('reads the actual inherited cut after native fork (busy=%s)', async parentRunning => {
+    const env = makeEnv({ parentRunning, endSeq: 12 })
+    await forkAndRegister(env.ctx, 'parent-1', 'tab1')
     expect(env.fork).toHaveBeenCalledWith({ sessionId: 'parent-1' })
+    expect(env.lastMeta()).toMatchObject({ childId: currentChildId(), boundarySeq: 12 })
+    expect(env.lastMeta()?.forkedMidTurn).toBe(parentRunning || undefined)
+    expect(env.binding.session.cancel).not.toHaveBeenCalled()
+    expect(env.binding.session.prompt).not.toHaveBeenCalled()
+  })
+  it('uses a snapshot-only child with no inherited rows when no turn has completed', async () => {
+    const env = makeEnv({ parentRunning: true, forkFails: 'session/fork-unavailable: no completed turn' })
+    await forkAndRegister(env.ctx, 'parent-1', 'tab1')
+    expect(env.create).toHaveBeenCalledOnce()
+    expect(env.lastMeta()).toMatchObject({ boundarySeq: -1, forkedMidTurn: true, snapshotOnly: true })
+  })
+  it('does not disguise other fork errors as empty history', async () => {
+    const env = makeEnv({ parentRunning: true, forkFails: 'session/not-found' })
+    await expect(forkAndRegister(env.ctx, 'parent-1', 'tab1')).rejects.toThrow('not-found')
     expect(env.create).not.toHaveBeenCalled()
-    expect(env.lastMeta()?.childId).toBe(currentChildId())
-    expect(env.lastMeta()?.forkedMidTurn).toBeUndefined()
-    expect(isPurgingInheritedTurn(currentChildId())).toBe(false)
   })
-
-  it('归档判据：0.1.5（无 unarchiveSession）归档隐藏；0.1.7（有）跳过归档避免 gate block', async () => {
-    const legacy = makeEnv({ parentRunning: false })
-    await forkAndRegister(legacy.ctx, 'parent-1', 'tab1')
-    expect(legacy.ctx.workspaces.archiveSession).toHaveBeenCalledTimes(1)
-
-    const gated = makeEnv({ parentRunning: false, hasUnarchive: true })
-    await forkAndRegister(gated.ctx, 'parent-1', 'tab1')
-    expect(gated.ctx.workspaces.archiveSession).not.toHaveBeenCalled()
-  })
-
-  it('主线忙碌 → 立即 fork（不等待）+ meta 打 forkedMidTurn + 监护就位', async () => {
-    const env = makeEnv({ parentRunning: true })
-    await expect(forkAndRegister(env.ctx, 'parent-1', 'tab1')).resolves.toBe(currentChildId())
-    expect(env.fork).toHaveBeenCalledTimes(1)
-    expect(env.lastMeta()?.forkedMidTurn).toBe(true)
-    // 监护已就位（等遗传 turn 开跑）。
-    expect(isPurgingInheritedTurn(currentChildId())).toBe(true)
-    expect(env.cancel).not.toHaveBeenCalled()
-  })
-
-  it('0.1.7 retain-only binding：监护自持引用，解除时释放', async () => {
-    const env = makeEnv({ parentRunning: true, parentInflightText: '主线任务', retainRequired: true })
-    await forkAndRegister(env.ctx, 'parent-1', 'tab1')
-    expect(env.retain).toHaveBeenCalledWith(currentChildId(), { source: 'dsh-sidenote' })
-    expect(env.retainedCount()).toBe(1)
-    expect(isPurgingInheritedTurn(currentChildId())).toBe(true)
-
-    env.setChildUserText('用户自己的侧边消息')
-    env.flipChildRunning()
-    expect(env.cancel).not.toHaveBeenCalled()
-    expect(isPurgingInheritedTurn(currentChildId())).toBe(false)
-    expect(env.retainedCount()).toBe(0)
-  })
-
-  it('0.1.7 监护 opening 失败时释放引用且不误标已清除', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      const env = makeEnv({ parentRunning: true, retainRequired: true, retainReadyRejects: true })
-      await forkAndRegister(env.ctx, 'parent-1', 'tab1')
-      await Promise.resolve()
-      expect(isPurgingInheritedTurn(currentChildId())).toBe(false)
-      expect(env.retainedCount()).toBe(0)
-      expect(env.lastMeta()?.inheritedPurged).toBeUndefined()
-      expect(warn).toHaveBeenCalledWith(
-        '[dsh-sidenote] 遗传 turn 监护打开子会话失败:',
-        currentChildId(),
-        expect.any(Error),
-      )
-    } finally {
-      warn.mockRestore()
-    }
-  })
-
-  it('0.1.7 cancel 路径：监护与两个异步收尾引用最终全部释放', async () => {
-    vi.useFakeTimers()
-    try {
-      const env = makeEnv({ parentRunning: true, parentInflightText: '主线任务', retainRequired: true })
-      await forkAndRegister(env.ctx, 'parent-1', 'tab1')
-      env.setChildUserText('主线任务（遗传）')
-      env.flipChildRunning()
-      await vi.runAllTimersAsync()
-      expect(env.cancel).toHaveBeenCalledTimes(1)
-      expect(isPurgingInheritedTurn(currentChildId())).toBe(false)
-      expect(env.retainedCount()).toBe(0)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('遗传 turn 开跑（running 翻 true）→ 立即 cancel 且监护一次性解除并标 inheritedPurged', async () => {
-    const env = makeEnv({ parentRunning: true })
-    await forkAndRegister(env.ctx, 'parent-1', 'tab1')
-    // 无前缀可判 → 纯时序判别：首个用户节点即遗传 turn（生产上 turn 开跑
-    // 必然带用户消息节点；无前缀时 inbox 里唯一可能自动开跑的就是它）。
-    env.setChildUserText('主线在飞任务（无前缀可判形态）')
-    env.flipChildRunning()
-    expect(env.cancel).toHaveBeenCalledTimes(1)
-    await new Promise(r => setTimeout(r, 10))
-    expect(isPurgingInheritedTurn(currentChildId())).toBe(false)
-    expect(env.lastMeta()?.inheritedPurged).toBe(true)
-    // 用户自己的 turn 不受监护：再次翻 running 不再 cancel。
-    env.flipChildRunning()
-    expect(env.cancel).toHaveBeenCalledTimes(1)
-  })
-
-  it('cancel 后队列和解：用户的孤儿消息（带快照前缀）被 remove + 原样重投', async () => {
-    const env = makeEnv({
-      parentRunning: true,
-      parentInflightText: '主线在飞任务全文',
-      childQueue: [
-        // cancel 保留 inbox 但不续跑（宿主语义）——用户的真实消息成为孤儿。
-        { id: 'user-1', text: '<mainline-progress-snapshot taken-at="x">…</mainline-progress-snapshot>\n\n你现在做到哪了？' },
-      ],
-    })
-    await forkAndRegister(env.ctx, 'parent-1', 'tab1')
-    env.setChildUserText('主线在飞任务全文（认领形态）')
-    env.flipChildRunning()
-    expect(env.cancel).toHaveBeenCalledTimes(1)
-    // 和解在 cancel 落定后 ~300ms 触发：孤儿消息 remove + 重投。
-    await new Promise(r => setTimeout(r, 500))
-    expect(env.childUpdateQueue).toHaveBeenCalledWith('user-1', { kind: 'remove' })
-    expect(env.childPrompt).toHaveBeenCalledTimes(1)
-  })
-
-  it('文本判别：子会话首个 turn 的消息未命中在飞前缀 → 不 cancel，fail-open 解除', async () => {
-    const env = makeEnv({ parentRunning: true, parentInflightText: '主线在飞任务全文' })
-    await forkAndRegister(env.ctx, 'parent-1', 'tab1')
-    expect(env.lastMeta()?.leakedPromptPrefix).toBe('主线在飞任务全文')
-    // 子会话起跑但消息不是遗传的那条（宿主已修好 cut 缺陷的形态）→ 解除。
-    env.setChildUserText('用户自己的首个侧边消息')
-    env.flipChildRunning()
-    expect(env.cancel).not.toHaveBeenCalled()
-    await new Promise(r => setTimeout(r, 10))
-    expect(isPurgingInheritedTurn(currentChildId())).toBe(false)
-    expect(env.lastMeta()?.inheritedPurged).toBe(true)
-  })
-
-  it('busy 边界排除在飞 turn 节点：继承区用户消息不触发误判（2026-09-23 真机回归）', async () => {
-    // 父：已完成轮 [user(1), assistant(2)] + 在飞 [user(3)] + 在飞工具节点(4)。
-    // fork 继承只到 seq 2——边界必须是 2，否则子会话里 seq 3+ 的遗传消息
-    // 被判成「继承内容」而漏 cancel。
-    const env = makeEnv({
-      parentRunning: true,
-      parentNodes: [
-        { kind: 'user', seq: 1, content: [{ type: 'text', text: '旧问题' }] },
-        { kind: 'assistant', seq: 2, blocks: [{ kind: 'text', text: '旧回答' }] },
-        { kind: 'user', seq: 3, content: [{ type: 'text', text: '在飞任务' }] },
-        { kind: 'tool-result', seq: 4, call: { name: 'bash' }, content: [{ type: 'text', text: '...' }] },
-      ],
-      // 子会话投影带着继承区的 user(1)——若边界错了，它会被当成新消息。
-      childInheritedNodes: [
-        { kind: 'user', seq: 1, content: [{ type: 'text', text: '旧问题' }] },
-        { kind: 'assistant', seq: 2, blocks: [{ kind: 'text', text: '旧回答' }] },
-      ],
-    })
-    await forkAndRegister(env.ctx, 'parent-1', 'tab1')
-    expect(env.lastMeta()?.boundarySeq).toBe(2)
-    expect(env.lastMeta()?.leakedPromptPrefix).toBe('在飞任务')
-    // 只有继承节点存在 → 不触发。
-    env.flipChildRunning()
-    expect(env.cancel).not.toHaveBeenCalled()
-    // 遗传消息落地（seq 99 > 边界 2）→ 命中前缀 → cancel。
-    env.setChildUserText('在飞任务')
-    env.flipChildRunning()
-    expect(env.cancel).toHaveBeenCalledTimes(1)
-  })
-
-  it('文本判别：命中在飞前缀 → cancel；running 时节点未至 → 等下一次翻牌再判', async () => {
-    const env = makeEnv({ parentRunning: true, parentInflightText: '主线在飞任务全文' })
-    await forkAndRegister(env.ctx, 'parent-1', 'tab1')
-    // running 先翻、用户消息节点未至 → 不 cancel，继续等。
-    env.flipChildRunning()
-    expect(env.cancel).not.toHaveBeenCalled()
-    // 节点到达（仍 running）→ 命中前缀 → cancel。
-    env.setChildUserText('主线在飞任务全文（后半略）')
-    env.flipChildRunning()
-    expect(env.cancel).toHaveBeenCalledTimes(1)
-  })
-
-  it('监护不设静置超时：子会话休眠期任意长，泄漏晚到也拦得住', async () => {
-    vi.useFakeTimers()
-    try {
-      const env = makeEnv({ parentRunning: true })
-      await forkAndRegister(env.ctx, 'parent-1', 'tab1')
-      const id = currentChildId()
-      expect(isPurgingInheritedTurn(id)).toBe(true)
-      // 真机实证：子会话直到用户首条消息才认领 inbox——泄漏可能晚到分钟级。
-      await vi.advanceTimersByTimeAsync(10 * 60_000)
-      expect(isPurgingInheritedTurn(id)).toBe(true)
-      env.setChildUserText('主线在飞任务（晚到）')
-      env.flipChildRunning()
-      expect(env.cancel).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('宿主修好 cut 缺陷的形态：用户首条消息（带快照前缀）到达 → 不误伤，监护解除', async () => {
-    const env = makeEnv({ parentRunning: true })
-    await forkAndRegister(env.ctx, 'parent-1', 'tab1')
-    const id = currentChildId()
-    env.setChildUserText('<mainline-progress-snapshot taken-at="x">…快照…</mainline-progress-snapshot>\n\n用户的问题')
-    env.flipChildRunning()
-    expect(env.cancel).not.toHaveBeenCalled()
-    expect(isPurgingInheritedTurn(id)).toBe(false)
-  })
-
-  it('监护幂等：同一子会话重复 arm 不叠加（面板重挂载补齐路径）', async () => {
-    const env = makeEnv({ parentRunning: true })
-    await forkAndRegister(env.ctx, 'parent-1', 'tab1')
-    const id = currentChildId()
-    // 面板重挂载 effect 的二次 arm（首开路径已 arm）→ 直接返回不叠加。
-    armInheritedTurnPurge(env.ctx, id, 'parent-1', 'tab1')
-    env.setChildUserText('遗传消息')
-    env.flipChildRunning()
-    expect(env.cancel).toHaveBeenCalledTimes(1)
-  })
-
-  it('主线忙碌 + fork 不可用（零完成轮）→ create 兜底 + snapshotOnly', async () => {
-    const env = makeEnv({ parentRunning: true, forkFails: 'unavailable' })
-    await expect(forkAndRegister(env.ctx, 'parent-1', 'tab1')).resolves.toBe(`${currentChildId()}-created`)
-    expect(env.create).toHaveBeenCalledTimes(1)
-    expect(env.lastMeta()?.snapshotOnly).toBe(true)
-    expect(env.lastMeta()?.forkedMidTurn).toBe(true)
-    // 纯快照会话无泄漏可跑——监护不启用。
-    expect(isPurgingInheritedTurn(`${currentChildId()}-created`)).toBe(false)
-  })
-
-  it('主线忙碌 + fork 因其他原因失败 → 原样抛错（不兜底）', async () => {
-    const env = makeEnv({ parentRunning: true, forkFails: 'other' })
-    await expect(forkAndRegister(env.ctx, 'parent-1', 'tab1')).rejects.toThrow('session/not-found')
-    expect(env.create).not.toHaveBeenCalled()
+  it('recovers the actual child cut from the last seed, not a later user/steering node', () => {
+    const subscribe = vi.fn(() => () => {})
+    const session = { eventSource: { subscribe, getSnapshot: () => ({ entries: [
+      { event: { type: 'session/end-seed', seq: 5 } },
+      { event: { type: 'session/end-seed', seq: 13 } },
+      { event: { type: 'user/steering', seq: 99 } },
+    ] }) } } as unknown as SessionFace
+    const source = inheritedBoundarySource(session)!
+    expect(source.getSnapshot()).toBe(12)
+    source.subscribe(() => {})
+    expect(subscribe).toHaveBeenCalledOnce()
+    expect(inheritedBoundarySource(undefined)).toBeUndefined()
   })
 })

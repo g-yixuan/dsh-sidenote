@@ -89,7 +89,7 @@ test('compatibility report is visible, observes real admission, and exports soft
   const input = sideChatOf(page).locator('[data-composer-input]')
   await input.fill('diagnostics ordinary body')
   // Add through the real toolbar; only selected quote data enters the model.
-  const body = sideChatOf(page).locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()
+  const body = sideChatOf(page).locator('[data-sidenote-quote-body]').filter({ hasText: 'full history snapshot' }).first()
   await dragText(page, body, 'full history snapshot')
   const overlay = page.locator('[data-dsh-sidenote]')
   await overlay.getByRole('button', { name: /^(Add to conversation|添加到对话)$/ }).click()
@@ -116,7 +116,7 @@ if (process.env.DSH_E2E_CAPABILITY_FAULT) test('missing side input is visible, r
   const side = sideChatOf(page)
   const input = side.locator('[data-composer-input]')
   await input.fill('body retained across missing input')
-  const body = side.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()
+  const body = side.locator('[data-sidenote-quote-body]').filter({ hasText: 'full history snapshot' }).first()
   await dragText(page, body, 'full history snapshot')
   const overlay = page.locator('[data-dsh-sidenote]')
   await overlay.getByText(/^(Add to conversation|添加到对话)$/).click()

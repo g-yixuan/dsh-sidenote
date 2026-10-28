@@ -1,6 +1,7 @@
 /** Extra context belongs to one mounted conversation; the native input still owns submission. */
 export interface SubmissionExtras {
-  firstSendPrefix(): string | null
+  needsFirstSend(): boolean
+  firstSendPrefix(): Promise<string | null>
   onAccepted(): void
   onSubmitText(body: string): void
 }

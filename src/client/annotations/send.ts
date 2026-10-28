@@ -4,7 +4,7 @@ import { prepareSubmission } from '../host/submission.ts'
 import type { Annotation, AnnotationStore } from './model.ts'
 import { buildProtocolBlock } from './format.ts'
 import { resolveInput, inputAttachmentIds } from '../host/input.ts'
-import { buildReflowBlock, tryInjectReflows, type ReflowStore } from '../reflow.ts'
+import { buildReflowBlock, type ReflowStore } from '../reflow.ts'
 import { submissionExtrasOf } from './submissionExtras.ts'
 import { t } from '../locales.ts'
 
@@ -62,19 +62,17 @@ export async function submitControlledInput(ctx: Context, store: AnnotationStore
   const reflows = reflow.list(sessionId)
   if (draft.draft.trim() === '' && inputAttachmentIds(input).length === 0 && active.length === 0 && reflows.length === 0) return false
   const extras = submissionExtrasOf(sessionId)
-  const prefix = extras?.firstSendPrefix()
   store.setSubmission(sessionId, { pending: true })
   try {
-    const { injectedIds } = await tryInjectReflows(sessionId, reflows)
-    for (const id of injectedIds) reflow.remove(id)
-    const hitchhikers = reflows.filter(item => !injectedIds.has(item.id))
-    if (active.length === 0 && hitchhikers.length === 0 && !prefix) {
-      if (input.state.getSnapshot().draft.trim() !== '' || inputAttachmentIds(input).length > 0) input.submit(mode)
-      return true
-    }
-    const accepted = await submitAnnotations({ ctx, store, sessionId, input, annotations: active, leadingBlocks: [...(prefix ? [prefix] : []), ...hitchhikers.map(buildReflowBlock)], mode })
+    const prefix = await extras?.firstSendPrefix()
+    const current = input.state.getSnapshot()
+    if (current.draft !== draft.draft || current.draftRev !== draft.draftRev) throw new Error('加载上下文期间草稿已改变；内容已保留，请重新发送')
+    // Context and body must share one host admission and delivery window.
+    // An independent inject can run before a queued message or be repeated
+    // when its acknowledgement arrives after the client timeout.
+    const accepted = await submitAnnotations({ ctx, store, sessionId, input, annotations: active, leadingBlocks: [...(prefix ? [prefix] : []), ...reflows.map(buildReflowBlock)], mode })
     if (accepted) {
-      for (const item of hitchhikers) reflow.remove(item.id)
+      for (const item of reflows) reflow.remove(item.id)
       extras?.onSubmitText(draft.draft)
       extras?.onAccepted()
     }

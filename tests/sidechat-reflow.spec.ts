@@ -31,7 +31,7 @@ describe('fork-local final answers', () => {
     expect(finalReplies([message('user', 'q', 3), message('assistant', 'completed final', 4)], 2, new Set([4]))).toHaveLength(1)
   })
   it('uses durable source identity and reflects removal without merging identical later answers', () => {
-    const side: SideConversation = { sessionId: 'child', parentSessionId: 'parent', title: 'Side', reflow: createReflowStore(() => 1, null) }
+    const side: SideConversation = { history: [], sessionId: 'child', parentSessionId: 'parent', title: 'Side', reflow: createReflowStore(() => 1, null) }
     const first = message('assistant', 'same answer', 4)
     addReply(side, first, 'same question'); addReply(side, first, 'same question')
     expect(side.reflow.list('parent')).toHaveLength(1)

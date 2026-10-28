@@ -89,20 +89,36 @@ export function conversationViewOf(node: Element): HTMLElement {
   return node.closest<HTMLElement>('[data-conversation-session], [data-sidenote-chat-session]') ?? document.body
 }
 
-/** Find the last rendered member of an explicit history range, not the side-chat tail. */
-export function lastConversationEntry(root: HTMLElement, keys: ReadonlySet<string>): HTMLElement | undefined {
-  return [...root.querySelectorAll<HTMLElement>('[data-chat-flow-key]')].reverse()
-    .find(row => keys.has(row.dataset.chatFlowKey ?? '') && row.getBoundingClientRect().height > 0)
+/** Only actual submitted/queued messages may enable a read-only context preview.
+ * Search results and other non-interactive UserText consumers stay inert. */
+export function isPendingContextSurface(node: Element): boolean {
+  return node.closest('[data-pending-steering], [data-submission-echo], [data-queue-dock]') !== null
+    && node.parentElement?.closest('button, a, [role="button"]') == null
 }
 
-/** Land above the native composer, without scrolling another pane or moving focus. */
-export function revealConversationEntryEnd(row: HTMLElement): void {
-  const scroller = row.closest<HTMLElement>('[data-conversation-scroll]')
-  if (!scroller) return
-  const clip = quoteClipOf(row, conversationViewOf(row))
-  scroller.scrollTop += row.getBoundingClientRect().bottom - clip.bottom + 12
+/** Previous hosts have no UserText extension for their pending/queue text. */
+export function pendingTextSurfaces(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>('[data-pending-steering] [class$="_bubble"], [data-submission-echo] [class$="_bubble"]')]
 }
 
+/** Row indices include an edited row whose preview is temporarily absent. */
+export function queuedTextSurfaces(root: HTMLElement): { element: HTMLElement; index: number }[] {
+  return [...root.querySelectorAll('[data-queue-dock] li')].flatMap((row, index) => {
+    const element = row.querySelector<HTMLElement>('[class$="_preview"]')
+    return element ? [{ element, index }] : []
+  })
+}
+
+/** Hide only the protocol text, without moving/deleting React-owned children.
+ * Attachments, native references, actions and the remaining body stay native. */
+export function pendingTextNodes(element: HTMLElement): Text[] {
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+    acceptNode: node => node.parentElement?.closest('[data-sidenote-pending-seat]') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+  })
+  const nodes: Text[] = []
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) nodes.push(node as Text)
+  return nodes
+}
 
 export function isMainComposerInput(target: EventTarget | null): boolean {
   return target instanceof HTMLElement
