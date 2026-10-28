@@ -123,28 +123,34 @@ test('running context follows history, tracks live progress, and respects reader
   await expect(progress).toHaveText(frozen!)
 })
 
-test('context expansion with empty progress falls back to the latest inherited message', async ({ page }) => {
+for (const imageOnly of [false, true]) test(`context expansion targets ${imageOnly ? 'the latest image-only progress' : 'the latest inherited message when progress is empty'}`, async ({ page }) => {
   await prepareSeedPage(page)
   const main = page.locator('[data-conversation-session]').first()
   await selectModel(page, main, 'Controlled E2E')
-  await send(main, 'Latest completed main turn before sending an image alone')
-  await main.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
-  await main.getByRole('button', { name: /^(Send message|发送消息)$/ }).click()
+  await send(main, 'Latest completed main turn before opening the context reader')
   const stop = main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })
-  await expect(stop).toBeVisible()
+  if (imageOnly) {
+    await main.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
+    await main.getByRole('button', { name: /^(Send message|发送消息)$/ }).click()
+    await expect(stop).toBeVisible()
+  }
   try {
     await openSideChat(page)
     const side = sideChatOf(page)
     await expect(side.locator('[data-sidenote-main-context]')).toContainText(/Updates on first send|发送时更新/)
-    await expect(side.locator('[data-sidenote-context-increment]')).toHaveCount(0)
-    const latest = side.locator('[data-sidenote-context-history] [data-context-kind="reply"]').last()
+    await expect(side.locator('[data-sidenote-context-increment]')).toHaveCount(imageOnly ? 1 : 0)
+    // Image-only input is real progress too; only a genuinely empty suffix
+    // should fall back to the latest inherited reply.
+    const latest = imageOnly ? side.locator('[data-sidenote-context-increment] img')
+      : side.locator('[data-sidenote-context-history] [data-context-kind="reply"]').last()
+    if (imageOnly) await expect.poll(() => latest.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
     await expect.poll(() => endIsVisible(latest)).toBe(true)
     const toggle = side.locator('[data-sidenote-main-context] > button')
     await toggle.press('Enter')
     await toggle.press('Enter')
     await expect.poll(() => endIsVisible(latest)).toBe(true)
-    await expect(stop).toBeVisible()
-    await page.screenshot({ path: 'test-results/context-empty-progress.png' })
+    if (imageOnly) await expect(stop).toBeVisible()
+    await page.screenshot({ path: `test-results/context-${imageOnly ? 'image-only' : 'empty'}-progress.png` })
   } finally {
     if (await stop.isVisible()) await stop.click()
   }

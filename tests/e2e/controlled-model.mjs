@@ -13,6 +13,13 @@ function holdResponse(signal, duration = 40_000) {
   })
 }
 
+// Match the human instruction separately from its inherited context, just as
+// the real-model lane must do. Keep the full messages for history assertions.
+function questionBody(text) {
+  const end = text.indexOf('</mainline-progress-snapshot>')
+  return text.startsWith('<mainline-progress-snapshot') && end >= 0 ? text.slice(end + '</mainline-progress-snapshot>'.length).trimStart() : text
+}
+
 export function apply(ctx) {
   const provider = 'sidenote-e2e'
   const model = { provider, id: 'controlled', name: 'Controlled E2E', inputModalities: ['text', 'image'], context: { contextWindow: 32768 }, defaultMaxTokens: 128 }
@@ -29,7 +36,7 @@ export function apply(ctx) {
       // Context producers also use role=user; only source=user is human input.
       const users = options.messages.filter(message => message.role === 'user' && message.source?.kind === 'user')
       const last = users.at(-1)?.content ?? []
-      const text = last.filter(block => block.type === 'text').map(block => block.text).join('\n')
+      const text = questionBody(last.filter(block => block.type === 'text').map(block => block.text).join('\n'))
       // An image-only request can have no textual progress before its first token.
       if (text.trim() === '' && last.some(block => block.type === 'image')) await holdResponse(options.signal)
       const lastHuman = options.messages.findLastIndex(message => message.role === 'user' && message.source?.kind === 'user')
@@ -50,7 +57,7 @@ export function apply(ctx) {
       if (text === '[e2e:reflow] Remember the conclusion code SIDENOTE_SIDE_BLUE.') {
         reply = 'Remembered SIDENOTE_SIDE_BLUE in this side conversation.'
       } else if (text === '[e2e:reflow] Return the remembered code as the final conclusion.') {
-        const remembered = users.some(message => message.content.some(block => block.type === 'text' && block.text === '[e2e:reflow] Remember the conclusion code SIDENOTE_SIDE_BLUE.'))
+        const remembered = users.some(message => message.content.some(block => block.type === 'text' && questionBody(block.text) === '[e2e:reflow] Remember the conclusion code SIDENOTE_SIDE_BLUE.'))
         const priorReply = options.messages.some(message => message.role === 'assistant' && message.content.some(block => block.type === 'text' && block.text === 'Remembered SIDENOTE_SIDE_BLUE in this side conversation.'))
         reply = remembered && priorReply ? 'Conclusion: SIDENOTE_SIDE_BLUE.' : 'The prior side-conversation context is missing.'
       } else if (text.endsWith('Use the returned side conclusion in this main conversation.')) {

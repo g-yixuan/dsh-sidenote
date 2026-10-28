@@ -1,5 +1,27 @@
 import type { Context, SessionInput } from './contracts.ts'
 import { addInputAttachments } from './input.ts'
+import { imageId } from '../../snapshotProtocol.ts'
+
+export interface ContextImages { sessionId: string; attachments: readonly unknown[] }
+
+/** Re-admit canonical host bytes through the native attachment transaction. */
+export async function prepareContextImages(ctx: Context, targetId: string, images: ContextImages) {
+  const load = contextImageLoader(ctx, images.sessionId)
+  const apis = resolveAttachmentApis(ctx, targetId)
+  if (!load || !apis) throw new Error('无法继承主线图片，内容已保留，请重试')
+  const unique = new Map(images.attachments.map(attachment => [imageId(attachment), attachment]))
+  const files = await Promise.all([...unique.values()].map(async (attachment, index) => {
+    const response = await fetch(await load(attachment))
+    if (!response.ok) throw new Error('加载主线图片失败，内容已保留，请重试')
+    const blob = await response.blob()
+    const ref = attachment as { name?: string; mediaType?: string }
+    return new File([blob], ref.name ?? `context-${index + 1}`, { type: ref.mediaType ?? blob.type })
+  }))
+  const drafts = apis.createDraftImages(files)
+  const release = () => { for (const draft of drafts) apis.releaseDraftImage(draft.id) }
+  if (drafts.length !== files.length) { release(); throw new Error('无法完整继承主线图片，内容已保留') }
+  return { ids: drafts.map(draft => draft.id), release }
+}
 
 interface Preview { readonly id: string; readonly previewUrl: string }
 interface Draft { readonly id: string; readonly kind: 'image' | 'file'; readonly previewUrl?: string }

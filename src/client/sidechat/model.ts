@@ -54,11 +54,10 @@ export interface SideChatMeta {
   pendingDraft?: string
   /** 宿主实际 fork 切点；仅 seq ≤ 它的节点属于继承历史。 */
   boundarySeq?: number
-  /** busy fork 标记（Delivery_04）：fork 时主线 turn 在飞——首条侧边消息
-   *  发送时拼接主线进展快照（WI-02/03）。 */
+  /** 首次发送仍需截取主线；沿用旧字段名以兼容已恢复的侧聊。 */
   forkedMidTurn?: boolean
   /** 零完成轮兜底（Delivery_04）：主线首轮在飞无法 fork，子会话是
-   *  create 出来的纯快照会话（无继承历史，折叠卡不渲染）。 */
+   *  create 出来的纯快照会话（无继承历史，折叠区显示首次发送时的快照）。 */
   snapshotOnly?: boolean
   /** 内容身份（Delivery_05）：首条用户消息摘要，sticky——只在首条
    *  发送时写入，之后不随对话漂移。 */
