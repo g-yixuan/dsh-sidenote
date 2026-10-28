@@ -77,7 +77,8 @@ for (const real of [false, true]) for (const openIdle of [false, true]) test(`${
   if (openIdle) await expect.poll(() => promotedReader.locator('img').evaluate(el => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
   await expect(saved.locator('[data-chat-flow-kind="user"]')).toHaveCount(1)
   await expect(saved.locator('[data-chat-flow-kind="assistant-step"]:not([data-chat-group-part="reasoning"])')).toHaveCount(1)
-  await expect(saved.getByRole('button', { name: /^(Jump to turn|Load and jump to turn|跳转到第|加载并跳转到第)/ })).toHaveCount(1)
+  // Native navigation is hidden when only one visible turn remains.
+  await expect(saved.getByRole('button', { name: /^(Jump to turn|Load and jump to turn|跳转到第|加载并跳转到第)/ })).toHaveCount(0)
   const promotedId = (await saved.getAttribute('data-conversation-session'))!
   await page.reload()
   await expect(saved).toHaveAttribute('data-conversation-session', promotedId)
@@ -97,6 +98,7 @@ for (const real of [false, true]) for (const openIdle of [false, true]) test(`${
     await expect(saved).toHaveAttribute('data-conversation-session', promotedId)
     await expect(await expand(saved)).toHaveText(frozen)
     await expect(saved.locator('[data-chat-flow-kind="user"]')).toHaveCount(31)
+    await expect(saved.getByRole('button', { name: /^(Jump to turn|Load and jump to turn|跳转到第|加载并跳转到第)/ })).toHaveCount(31)
   }
   await page.screenshot({ path: `test-results/unified-${real ? 'official' : 'native'}-${openIdle ? 'idle' : 'busy'}.png` })
 })
