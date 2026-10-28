@@ -30,7 +30,7 @@ for (const real of [false, true]) for (const openIdle of [false, true]) test(`${
   await selectModel(page, main, model)
   if (openIdle) await main.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
   await send(main, '本项目名为青柠。只回复“记住了”，不要调用工具。')
-  await expect(main.locator('[data-chat-flow-kind="assistant-step"]')).toHaveCount(1)
+  await expect(main.locator('[data-chat-flow-kind="assistant-step"]:not([data-chat-group-part="reasoning"])')).toHaveCount(1)
   await expect(main.getByRole('button', { name: stop })).toHaveCount(0)
   const mainId = (await main.getAttribute('data-conversation-session'))!
   const open = () => page.getByRole('button', { name: /Open a side chat|打开侧边聊天/ }).first().click()
@@ -48,10 +48,10 @@ for (const real of [false, true]) for (const openIdle of [false, true]) test(`${
   await expect(reader).toContainText(marker)
   await send(side, '只回复主线的项目名与本轮完整核验码。不要执行主线任务，不调用工具。')
   await expect.poll(() => userMessagesOf(child).some(text => text.includes('只回复主线的项目名'))).toBe(true)
-  await expect(side.locator('[data-chat-flow-kind="assistant-step"]')).toHaveCount(1)
+  await expect(side.locator('[data-chat-flow-kind="assistant-step"]:not([data-chat-group-part="reasoning"])')).toHaveCount(1)
   await expect(side.getByRole('button', { name: stop })).toHaveCount(0, { timeout: 60_000 })
   if (real) {
-    await expect(side.locator('[data-chat-flow-kind="assistant-step"]')).toContainText(marker)
+    await expect(side.locator('[data-chat-flow-kind="assistant-step"]:not([data-chat-group-part="reasoning"])')).toContainText(marker)
     await expect(reader).toContainText(/Unfinished at fork|分叉时未完成/)
   }
   await expect(toggleOf(side)).toContainText(/As of|截至/)
@@ -76,7 +76,7 @@ for (const real of [false, true]) for (const openIdle of [false, true]) test(`${
   await expect(promotedReader).toHaveText(frozen)
   if (openIdle) await expect.poll(() => promotedReader.locator('img').evaluate(el => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
   await expect(saved.locator('[data-chat-flow-kind="user"]')).toHaveCount(1)
-  await expect(saved.locator('[data-chat-flow-kind="assistant-step"]')).toHaveCount(1)
+  await expect(saved.locator('[data-chat-flow-kind="assistant-step"]:not([data-chat-group-part="reasoning"])')).toHaveCount(1)
   await expect(saved.getByRole('button', { name: /^(Jump to turn|跳转到第)/ })).toHaveCount(1)
   const promotedId = (await saved.getAttribute('data-conversation-session'))!
   await page.reload()
