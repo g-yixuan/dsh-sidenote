@@ -208,7 +208,7 @@ function LegacyContext({ Original, props, protocol }: { Original: ComponentType<
 }
 
 /** Keep contextual chips inside the native bubble on both main and side chat.
- * Only the progress snapshot remains outside its owning user message. */
+ * Inherited snapshots are rendered once by the shared context reader. */
 export function registerUserContext(ctx: Context): void {
   ctx.inject(['uiConversation'], () => {
     const ui = ctx.get('uiConversation') as UiConversationLike
@@ -266,7 +266,6 @@ export function registerUserContext(ctx: Context): void {
             const content = at < 0 ? [...blocks, { type: 'text', text: displayText }] : blocks.map((block, index) => index === at ? { ...block, text: displayText } : block)
             const projected = { ...props, node: { ...props.node, data: { ...props.node.data, content } } }
             return <>
-              {snapshot && <details className={css.sentContext} data-sidenote-progress-snapshot><summary>{t('snapshotContext')}</summary><pre>{snapshot.snapshot}</pre></details>}
               {protocol ? <LegacyContext Original={Original} props={projected} protocol={protocol} /> : createElement(Original, projected)}
             </>
           }

@@ -1,29 +1,20 @@
-import { createContext, createElement, useCallback, useContext, useEffect, useId, useMemo, useState, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
+import { createContext, createElement, useContext, useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
 import type { Context, SessionReference } from '../host/contracts.ts'
 import { transcriptOf, type ChatMessage } from '../chat/transcript.ts'
-import { createFoldStore } from '../chat/viewState.ts'
 import { completedReplySeqsOf, type ChatReplySnapshot } from '../host/chat.ts'
-import { IconCheckOutline16, IconChevronDownOutline14 } from '../host/icons.ts'
-import type { SnapshotEntry } from './snapshot.ts'
-import type { ContextEntry } from './context.ts'
-import { ContextProgress } from './ContextProgress.tsx'
+import { IconCheckOutline16 } from '../host/icons.ts'
+import { InheritedContext, type InheritedContextData } from './InheritedContext.tsx'
+import { SavedConversation, HistoryView, type ViewProps } from './SavedConversation.tsx'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { pairQuestions } from './model.ts'
 import type { ReflowStore } from '../reflow.ts'
 import { t } from '../locales.ts'
 import css from './sidechat.module.css'
 
-export interface SideConversation {
-  sessionId: string
+export interface SideConversation extends InheritedContextData {
   parentSessionId: string
   title: string
-  boundarySeq?: number
   reflow: ReflowStore
-  contextPending?: boolean
-  history: readonly ContextEntry[]
-  loadImage?: (attachment: unknown) => Promise<string>
-  progress?: { entries: SnapshotEntry[]; takenAt?: string | null }
-  loadContext?: () => Promise<void>
 }
 export interface ConversationRendererProps {
   SessionProvider: ComponentType<{ session: SessionReference; children?: ReactNode }>
@@ -40,30 +31,8 @@ interface ContentProps {
 }
 function ChatView(props: { renderSlot(name: 'conversation.session', owner: { view: 'chat' }): ReactNode }) {
   const side = useContext(SideContext)!
-  const fold = useMemo(() => createFoldStore(`dsh-sidenote:fold:v1:${side.sessionId}`), [side.sessionId])
-  useSyncExternalStore(fold.subscribe, fold.getSnapshot)
-  const expanded = fold.isOpen('inherited')
-  const contextId = useId()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string>()
-  const [attempt, setAttempt] = useState(0)
-  useEffect(() => {
-    if (!expanded) return
-    let active = true
-    setLoading(true); setError(undefined)
-    void Promise.resolve(side.loadContext?.()).then(() => { if (active) setLoading(false) }, reason => {
-      if (active) { setLoading(false); setError(String(reason instanceof Error ? reason.message : reason)) }
-    })
-    return () => { active = false }
-  }, [expanded, side.loadContext, attempt])
   return <div className={css.chatView}>
-    <div className={css.mainContext} data-sidenote-main-context>
-      <button type="button" className={css.historyToggle} aria-expanded={expanded} aria-controls={contextId} onClick={() => { fold.toggle('inherited') }}>
-        <IconChevronDownOutline14 size={12} className={expanded ? css.contextChevronOpen : css.contextChevron} />
-        <span>{t('mainContext')}</span><span className={css.contextHint}>{side.contextPending ? t('contextAtSend') : side.progress?.takenAt ? t('contextAsOf', { time: side.progress.takenAt }) : t('contextInherited')}</span>
-      </button>
-      {expanded && <ContextProgress id={contextId} history={side.history} entries={side.progress?.entries ?? []} live={side.contextPending === true} loading={loading} error={error} onRetry={() => { setAttempt(value => value + 1) }} loadImage={side.loadImage} />}
-    </div>
+    <InheritedContext context={side} />
     {props.renderSlot('conversation.session', { view: 'chat' })}
   </div>
 }
@@ -115,38 +84,6 @@ function ReplyAction({ side, messages, seq }: { side: SideConversation; messages
   </button></Tooltip>
 }
 
-interface Entry { kind: 'node' | 'group'; key: string }
-interface NodeSnapshot { anchorSeq: number; kind: string; location?: { turn?: { start?: { seq: number } } } }
-interface GroupedView { entries: readonly Entry[]; groupSource(key: string): { getSnapshot(): { members: readonly Entry[] } | undefined } }
-interface ViewSnapshot { views: { grouped(name: string): GroupedView | undefined } }
-interface ViewProps {
-  useChat<T>(select: (state: { nodes: { get(key: string): NodeSnapshot | undefined } }) => T): T
-  useConversation<T>(select: (state: ViewSnapshot) => T): T
-}
-function HistoryView({ Original, props, side }: { Original: ComponentType<ViewProps>; props: ViewProps; side: SideConversation }) {
-  const nodes = props.useChat(state => state.nodes)
-  const snapshot = props.useConversation(state => state)
-  const groups = snapshot.views.grouped('chat')
-  const entries = groups?.entries ?? []
-  const isInherited = (entry: Entry): boolean => {
-    if (entry.kind === 'node') {
-      const node = nodes.get(entry.key)
-      // A footer is anchored after turn/end, beyond the last legacy message.
-      // Classify it by its owning turn, including stopped or failed turns.
-      const seq = node?.kind === 'turn-tail' ? node.location?.turn?.start?.seq ?? node.anchorSeq : node?.anchorSeq
-      return seq !== undefined && seq <= (side.boundarySeq ?? -1)
-    }
-    const members = groups?.groupSource(entry.key).getSnapshot()?.members ?? []
-    return members.length > 0 && members.every(isInherited)
-  }
-  // The native conversation owns side messages only. Context has its own
-  // stable React region, including when the native session is still blank.
-  const visible = entries.filter(entry => !isInherited(entry))
-  const projected = { ...snapshot, views: { ...snapshot.views, grouped: (name: string) => name === 'chat' && groups ? { ...groups, entries: visible } : snapshot.views.grouped(name) } }
-  const useProjected = useCallback(<T,>(selector: (state: ViewSnapshot) => T): T => selector(projected), [projected])
-  return createElement(Original, { ...props, useConversation: useProjected })
-}
-
 /** Both admitted hosts publish the native chat View; only 0.2.1 adds a Flow slot. */
 function registerInheritedHistory(ctx: Context): void {
   type ViewEntry = { component: ComponentType<ViewProps>; options: { id?: string; priority?: number } }
@@ -159,7 +96,7 @@ function registerInheritedHistory(ctx: Context): void {
         const Original = entry.component
         function ScopedView(props: ViewProps) {
           const side = useContext(SideContext)
-          return side === null ? createElement(Original, props) : <HistoryView Original={Original} props={props} side={side} />
+          return side === null ? <SavedConversation ctx={ctx} Original={Original} props={props} /> : <HistoryView Original={Original} props={props} side={side} />
         }
         entry.component = ScopedView
         patched.set(entry, { original: Original, wrapped: ScopedView })

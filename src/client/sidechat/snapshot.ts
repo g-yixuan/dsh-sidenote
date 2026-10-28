@@ -9,13 +9,21 @@ export interface SnapshotEntry {
   text: string
   /** tool 拍携带工具名。 */
   toolName?: string
+  unfinished?: boolean
 }
 
 /** Read the plugin's persisted progress block as plain, expandable content. */
 export function snapshotEntriesFromText(text: string): SnapshotEntry[] {
   const kinds = { checkpoint: 'checkpoint', 'user-request': 'request', reply: 'reply', thinking: 'thinking', 'tool-call': 'tool', streaming: 'streaming' } as const
-  return [...text.matchAll(/<(checkpoint|user-request|reply|thinking|tool-call|streaming)(?: name="([^"]*)")?>([\s\S]*?)<\/\1>/g)]
-    .map(match => ({ kind: kinds[match[1] as keyof typeof kinds], text: match[3]!.trim(), ...(match[2] ? { toolName: match[2] } : {}) }))
+  const escaped = text.split('>')[0]!.includes('encoding="xml"')
+  const decode = (value: string) => escaped ? value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&') : value
+  return [...text.matchAll(/<(checkpoint|user-request|reply|thinking|tool-call|streaming)(?: name="([^"]*)")?( unfinished="true")?>([\s\S]*?)<\/\1>/g)].map(match => {
+    const kind = kinds[match[1] as keyof typeof kinds]
+    let body = match[4]!.trim()
+    const oldRunning = !escaped && ((kind === 'tool' && body.endsWith('\n（执行中）')) || (kind === 'streaming' && body.endsWith('\n（主线正在输出中）')))
+    if (oldRunning) body = body.slice(0, body.lastIndexOf('\n'))
+    return { kind, text: decode(body), ...(match[2] ? { toolName: decode(match[2]) } : {}), ...(match[3] || kind === 'streaming' || oldRunning ? { unfinished: true } : {}) }
+  })
 }
 
 interface LooseBlock { type?: unknown; kind?: unknown; text?: unknown }
@@ -127,34 +135,37 @@ export function snapshotEntriesOf(nodes: readonly unknown[], partial?: unknown, 
   }
   // 在途流式输出（正在生成的 assistant 正文）——投影的 partial 面。
   const thinking = blocksText((partial as { blocks?: unknown })?.blocks, ['reasoning'])
-  if (thinking) entries.push({ kind: 'thinking', text: thinking })
+  if (thinking) entries.push({ kind: 'thinking', text: thinking, unfinished: true })
   const streaming = typeof partial === 'string'
     ? partial
     : contentText((partial as { blocks?: unknown })?.blocks)
-  if (streaming !== '') entries.push({ kind: 'streaming', text: streaming })
+  if (streaming !== '') entries.push({ kind: 'streaming', text: streaming, unfinished: true })
   for (const value of runningCalls) {
     const call = value as { name?: string; argsRaw?: string }
-    if (call.name) entries.push({ kind: 'tool', toolName: call.name, text: `调用：${call.argsRaw ?? ''}\n（执行中）` })
+    if (call.name) entries.push({ kind: 'tool', toolName: call.name, text: `调用：${call.argsRaw ?? ''}`, unfinished: true })
   }
   return entries
 }
 
 /** 拍序列 → 协议块文本（拼进首条侧边消息前缀的形态）。 */
-export function serializeSnapshot(entries: readonly SnapshotEntry[], takenAt: Date): string {
+export function serializeSnapshot(entries: readonly SnapshotEntry[], takenAt: Date, boundarySeq?: number): string {
   const pad = (v: number): string => String(v).padStart(2, '0')
   const stamp = `${takenAt.getFullYear()}-${pad(takenAt.getMonth() + 1)}-${pad(takenAt.getDate())} ${pad(takenAt.getHours())}:${pad(takenAt.getMinutes())}`
+  const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const body = entries.map((entry) => {
+    const text = escape(entry.text)
+    const status = entry.unfinished || entry.kind === 'streaming' ? ' unfinished="true"' : ''
     switch (entry.kind) {
-      case 'checkpoint': return `<checkpoint>\n${entry.text}\n</checkpoint>`
-      case 'request': return `<user-request>\n${entry.text}\n</user-request>`
-      case 'reply': return `<reply>\n${entry.text}\n</reply>`
-      case 'thinking': return `<thinking>\n${entry.text}\n</thinking>`
-      case 'tool': return `<tool-call name="${entry.toolName ?? 'tool'}">\n${entry.text}\n</tool-call>`
-      case 'streaming': return `<streaming>\n${entry.text}\n（主线正在输出中）</streaming>`
+      case 'checkpoint': return `<checkpoint>\n${text}\n</checkpoint>`
+      case 'request': return `<user-request>\n${text}\n</user-request>`
+      case 'reply': return `<reply>\n${text}\n</reply>`
+      case 'thinking': return `<thinking${status}>\n${text}\n</thinking>`
+      case 'tool': return `<tool-call name="${escape(entry.toolName ?? 'tool').replace(/"/g, '&quot;')}"${status}>\n${text}\n</tool-call>`
+      case 'streaming': return `<streaming${status}>\n${text}\n</streaming>`
     }
   }).join('\n\n')
-  return `<mainline-progress-snapshot taken-at="${stamp}">
-你是从主线会话 fork 出的侧边会话。以下是截至首次发送时的主线进展。若包含 checkpoint，它是最新压缩摘要，并与后续条目一起替代此前的主线上下文；否则这些条目补充在继承历史之后。主线独立运行，请将这些内容作为上下文，不要替主线重复执行任务：
+  return `<mainline-progress-snapshot taken-at="${stamp}" encoding="xml"${boundarySeq === undefined ? '' : ` boundary-seq="${boundarySeq}"`}>
+你是从主线会话 fork 出的侧边会话。以下是截至首次发送时的主线进展。若包含 checkpoint，它是最新压缩摘要，并与后续条目一起替代此前的主线上下文；否则这些条目补充在继承历史之后。主线独立运行，请将这些内容作为上下文，不要替主线重复执行任务。标记 unfinished 的内容在分叉时尚未完成，之后不会补入主线的新内容：
 
 ${body}
 </mainline-progress-snapshot>`
@@ -175,7 +186,7 @@ export function buildMainlineSnapshot(ctx: Context, parentSessionId: string, now
     if (snap === undefined || snap === null) return null
     const effective = effectiveContextNodes(snap.nodes ?? [], contextEventSource(binding?.session)?.getSnapshot())
     const entries = snapshotEntriesOf(effective.nodes, snap.partial, boundarySeq, snap.runningCalls)
-    return serializeSnapshot(entries, now)
+    return serializeSnapshot(entries, now, boundarySeq)
   } catch {
     return null
   }

@@ -19,15 +19,10 @@ export function useMainContext(ctx: Context, parentSessionId: string, childId: s
   const childEvents = useMemo(() => contextEventSource(session), [session])
   const childWindow = useSyncExternalStore(useCallback(notify => childEvents?.subscribe(notify) ?? noop(), [childEvents]), () => childEvents?.getSnapshot())
   const messages = useMemo(() => transcriptOf(legacy), [legacy])
-  const parent = ctx.sessions.binding(parentSessionId)?.session
-  const parentChat = useMemo(() => chatSourceOf(ctx, ctx.sessions.binding(parentSessionId)), [ctx, parentSessionId, parent])
-  const parentLegacy = useSyncExternalStore(useCallback(notify => parentChat?.subscribe(notify) ?? noop(), [parentChat]), () => parentChat?.getLegacy() ?? null)
-  const parentEvents = useMemo(() => contextEventSource(parent), [parent])
-  const parentWindow = useSyncExternalStore(useCallback(notify => parentEvents?.subscribe(notify) ?? noop(), [parentEvents]), () => parentEvents?.getSnapshot())
   const sending = useRef<ReturnType<typeof splitSnapshotPrefix>>(null)
   const [accepted, setAccepted] = useState<ReturnType<typeof splitSnapshotPrefix>>(null)
   const pending = useRef(forkedMidTurn)
-  pending.current = forkedMidTurn
+  pending.current = forkedMidTurn && !accepted
   const firstSendPrefix = useCallback(async () => {
     if (!pending.current) return null
     if (!childId) throw new Error('侧聊上下文尚未就绪，请稍后重试')
@@ -38,6 +33,12 @@ export function useMainContext(ctx: Context, parentSessionId: string, childId: s
   }, [ctx, parentSessionId, childId, session, snapshotOnly])
   const accept = useCallback(() => { if (sending.current) setAccepted(sending.current) }, [])
   const saved = useMemo(() => boundarySeq === undefined ? undefined : messages.filter(message => message.role === 'user' && (message.seq ?? -1) > (boundarySeq ?? -1)).map(message => splitSnapshotPrefix(message.text)).find(Boolean), [messages, boundarySeq]) ?? accepted
+  const preview = forkedMidTurn && !saved
+  const parent = preview ? ctx.sessions.binding(parentSessionId)?.session : undefined
+  const parentChat = useMemo(() => preview ? chatSourceOf(ctx, ctx.sessions.binding(parentSessionId)) : undefined, [ctx, parentSessionId, parent, preview])
+  const parentLegacy = useSyncExternalStore(useCallback(notify => parentChat?.subscribe(notify) ?? noop(), [parentChat]), () => parentChat?.getLegacy() ?? null)
+  const parentEvents = useMemo(() => contextEventSource(parent), [parent])
+  const parentWindow = useSyncExternalStore(useCallback(notify => parentEvents?.subscribe(notify) ?? noop(), [parentEvents]), () => parentEvents?.getSnapshot())
   const progress = useMemo(() => saved ? { entries: snapshotEntriesFromText(saved.snapshot), takenAt: saved.takenAt }
     : forkedMidTurn && boundarySeq !== undefined ? { entries: snapshotEntriesOf(effectiveContextNodes(parentLegacy?.nodes ?? [], parentWindow).nodes, parentLegacy?.partial, boundarySeq, parentLegacy?.runningCalls) } : undefined, [saved, forkedMidTurn, parentLegacy, parentWindow, boundarySeq])
   const history = useMemo(() => contextHistory(contextEntriesOf(effectiveContextNodes(legacy?.nodes ?? [], childWindow, boundarySeq ?? -1).nodes), progress?.entries ?? []), [legacy, childWindow, boundarySeq, progress])

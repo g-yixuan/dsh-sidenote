@@ -149,12 +149,13 @@ export function splitProtocolPrefix(text: string): ProtocolPrefix | null {
   return { length: end, annotations, reflows }
 }
 
-export function splitSnapshotPrefix(text: string): { snapshot: string; takenAt: string | null; rest: string } | null {
+export function splitSnapshotPrefix(text: string): { snapshot: string; takenAt: string | null; boundarySeq?: number; rest: string } | null {
   if (!text.startsWith('<mainline-progress-snapshot')) return null
   const closeMark = '</mainline-progress-snapshot>'
   const close = text.indexOf(closeMark)
   if (close < 0) return null
   const block = text.slice(0, close + closeMark.length)
   const takenAt = /taken-at="([^"]*)"/.exec(block)?.[1] ?? null
-  return { snapshot: block, takenAt, rest: text.slice(close + closeMark.length).trimStart() }
+  const boundary = /\bboundary-seq="(-?\d+)"/.exec(block.split('>')[0]!)?.[1]
+  return { snapshot: block, takenAt, ...(boundary === undefined ? {} : { boundarySeq: Number(boundary) }), rest: text.slice(close + closeMark.length).trimStart() }
 }

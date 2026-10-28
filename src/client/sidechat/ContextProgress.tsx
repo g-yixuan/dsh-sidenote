@@ -2,6 +2,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'rea
 import { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconChevronDownOutline14, IconCodeOutline16, IconThinkOutline16 } from '../host/icons.ts'
 import { t } from '../locales.ts'
+import { conversationViewOf } from '../host/dom.ts'
 import { SentContext, sentContextRule } from '../annotations/NativeUserContext.tsx'
 import type { SnapshotEntry } from './snapshot.ts'
 import type { ContextEntry } from './context.ts'
@@ -19,24 +20,30 @@ function ContextImage({ attachment, load }: { attachment: unknown; load?: (attac
     : <span className={css.contextHint}>{t(failed ? 'contextImageFailed' : 'imagePlaceholder')}</span>
 }
 
-const ProgressEntry = memo(function ProgressEntry({ entry, loadImage }: { entry: SnapshotEntry & Partial<ContextEntry>; loadImage?: (attachment: unknown) => Promise<string> }) {
+const ProgressEntry = memo(function ProgressEntry({ entry, live, loadImage }: { entry: SnapshotEntry & Partial<ContextEntry>; live: boolean; loadImage?: (attachment: unknown) => Promise<string> }) {
   const protocol = entry.kind === 'request' ? sentContextRule.match(entry.text, 0) : undefined
   const process = entry.kind === 'thinking' || entry.kind === 'tool'
-  const label = entry.kind === 'tool' ? entry.toolName : t(`context${entry.kind}`)
   const labels = useMemo(() => ({ code: { copyLabel: t('contextCopy'), copiedLabel: t('contextCopied') }, footnotes: t('contextFootnotes') }), [t('contextCopy')])
+  const unfinished = entry.unfinished || entry.kind === 'streaming'
+  const status = unfinished ? <span className={css.contextHint}>{t(live ? 'contextstreaming' : 'contextUnfinished')}</span> : null
+  if (entry.kind === 'request') return <div className={css.contextUserRow} data-context-kind="request" data-context-key={entry.key}>
+    {entry.images?.map((image, index) => <ContextImage key={index} attachment={image} load={loadImage} />)}
+    {(entry.text || protocol) && <div className={css.contextBubble}>{protocol && <SentContext protocol={protocol.data} />}<span>{entry.text.slice(protocol?.end ?? 0)}</span></div>}
+  </div>
   if (!process) return <div className={css.progressEntry} data-context-kind={entry.kind} data-context-key={entry.key}>
-    <span className={css.contextHint}>{label}</span>
-    <div data-sidenote-quote-body={entry.messageKey ? '' : undefined} data-sidenote-message-role={entry.messageKey ? 'assistant' : undefined} data-sidenote-message-key={entry.messageKey} data-sidenote-streaming="false">
-      {entry.kind === 'request' ? <div className={css.contextRequest}>{protocol && <SentContext protocol={protocol.data} />}<span>{entry.text.slice(protocol?.end ?? 0)}</span></div> : <MarkdownText text={entry.text} streaming={entry.kind === 'streaming'} labels={labels} />}
+    {entry.kind === 'checkpoint' && <span className={css.contextHint}>{t('contextcheckpoint')}</span>}
+    <div data-sidenote-quote-body={entry.messageKey ? '' : undefined} data-sidenote-message-role={entry.messageKey ? 'assistant' : undefined} data-sidenote-message-key={entry.messageKey} data-sidenote-streaming={live && unfinished ? 'true' : 'false'}>
+      <MarkdownText text={entry.text} streaming={live && unfinished} labels={labels} />
     </div>
+    {status}
     {entry.images?.map((image, index) => <ContextImage key={index} attachment={image} load={loadImage} />)}
   </div>
   return <details className={css.progressProcess} data-context-kind={entry.kind} data-context-key={entry.key}>
     <summary>{entry.kind === 'tool' ? <IconCodeOutline16 size={14} /> : <IconThinkOutline16 size={14} />}
-      <span>{label}</span><span className={css.progressPreview}>{entry.text}</span>
+      <span>{entry.kind === 'tool' ? entry.toolName : t('contextthinking')}</span><span className={css.progressPreview}>{entry.text}</span>{status}
       <IconChevronDownOutline14 size={12} />
     </summary>
-    <div className={css.progressDetail}>{entry.text}</div>
+    <div className={css.progressDetail}>{entry.kind === 'thinking' ? <MarkdownText text={entry.text} streaming={live && unfinished} labels={labels} /> : entry.text}</div>
   </details>
 })
 
@@ -64,7 +71,7 @@ export function ContextProgress({ id, history, entries, live, loading, error, on
     updateAffordance()
   }, [history, entries, loading])
   useEffect(() => {
-    const view = root.current?.closest('[data-sidenote-chat-session]')
+    const view = root.current ? conversationViewOf(root.current) : undefined
     const newerIntent = (event: Event) => { if (!root.current?.contains(event.target as Node)) pause() }
     for (const type of ['wheel', 'pointerdown', 'keydown']) view?.addEventListener(type, newerIntent, true)
     return () => { for (const type of ['wheel', 'pointerdown', 'keydown']) view?.removeEventListener(type, newerIntent, true) }
@@ -88,10 +95,9 @@ export function ContextProgress({ id, history, entries, live, loading, error, on
         setFollowing(follow.current)
       }}>
       <div ref={content}>
-        <div data-sidenote-context-history>{history.map(entry => <ProgressEntry key={entry.key} entry={entry} loadImage={loadImage} />)}</div>
+        <div data-sidenote-context-history>{history.map(entry => <ProgressEntry key={entry.key} entry={entry} live={false} loadImage={loadImage} />)}</div>
         {entries.length > 0 && <div data-sidenote-context-increment>
-          <div className={css.progressHeading}><span>{t(live ? 'contextLive' : 'contextProgress')}</span>{live && <span className={css.liveDot} aria-hidden="true" />}</div>
-          {entries.map((entry, index) => <ProgressEntry key={`progress:${index}:${entry.kind}`} entry={entry} />)}
+          {entries.map((entry, index) => <ProgressEntry key={`progress:${index}:${entry.kind}`} entry={entry} live={live} />)}
         </div>}
         {loading && <div className={css.contextHint} role="status">{t('contextLoading')}</div>}
         {error && <div className={css.stateDetail} role="alert">{error} <button type="button" className={css.nativeAction} onClick={onRetry}>{t('contextRetry')}</button></div>}

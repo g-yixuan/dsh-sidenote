@@ -73,7 +73,7 @@ async function createSideSession(ctx: Context, parentSessionId: string): Promise
  * 旧宿主归档（best-effort）→ 模型跟随主会话（best-effort）。
  * fork 失败抛错（面板组件转错误态）；后两步失败只告警不阻断。
  *
- * 主线在飞时，首条侧边消息补充切点之后的进展快照；
+ * 首条侧边消息固定发送时的上下文，补充实际切点之后的进展；
  * 主线零完成轮（fork-unavailable）退化为 create 纯快照会话（snapshotOnly）。
  * @returns fork/创建出的子会话 id。
  */
@@ -126,7 +126,7 @@ export async function forkAndRegister(ctx: Context, parentSessionId: string, tab
     childId: forked,
     parentSessionId,
     boundarySeq: snapshotOnly ? -1 : boundarySeq,
-    ...(busy ? { forkedMidTurn: true } : {}),
+    forkedMidTurn: true,
     ...(snapshotOnly ? { snapshotOnly: true } : {}),
   }))
   // 归档隐藏出会话列表——但 0.1.7 起 ArchivedSessionGate 把「已归档」当作

@@ -1,3 +1,4 @@
+import { splitSnapshotPrefix } from '../../src/client/annotations/format'
 import { expect, test } from '@playwright/test'
 import { writeFileSync } from 'node:fs'
 import { openSideChat, prepareSeedPage, registerSeedWorkspace, selectModel, sessionEventsOf, sideChatOf, userMessagesOf } from './journey'
@@ -85,7 +86,7 @@ test('shared host journey: multi-turn side context and an explicit conclusion re
   await input.fill(second); await input.press('Enter')
   await expect(side.getByText('Conclusion: SIDENOTE_SIDE_BLUE.', { exact: true })).toBeVisible()
   await expect.poll(() => completed(child)).toBe(childEnded + 2)
-  expect(userMessagesOf(child).filter(text => text === first || text === second)).toEqual([first, second])
+  expect(userMessagesOf(child).map(text => splitSnapshotPrefix(text)?.rest ?? text).filter(text => text === first || text === second)).toEqual([first, second])
   expect(userMessagesOf(parent)).toEqual(parentBefore)
 
   const sideBefore = userMessagesOf(child)
