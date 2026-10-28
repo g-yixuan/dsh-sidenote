@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import { snapshotEntriesOf, snapshotEntriesFromText, serializeSnapshot } from '../src/client/sidechat/snapshot.ts'
 import { contextEntriesOf, contextHistory, savedContextOf } from '../src/client/sidechat/context.ts'
 
 it('keeps rich history identities and image-only requests independent of native side rows', () => {
@@ -40,4 +41,28 @@ it('keeps embedded inherited progress when opening another side chat from a save
     { kind: 'assistant', seq: 11, blocks: [{ kind: 'text', text: 'side answer' }] },
   ]
   expect(contextEntriesOf(nodes).map(entry => entry.text)).toEqual(['retained summary', 'inherited progress', 'side question', 'side answer'])
+})
+
+
+it('keeps the real checkpoint ahead of a retained user snapshot from before that compaction', () => {
+  const nodes = [
+    { kind: 'checkpoint', seq: 100, content: [{ type: 'text', text: 'current summary' }] },
+    { kind: 'user', seq: 50, content: [{ type: 'text', text: '<mainline-progress-snapshot><checkpoint>obsolete summary</checkpoint><reply>old progress</reply></mainline-progress-snapshot>retained question' }] },
+    { kind: 'assistant', seq: 55, blocks: [{ kind: 'text', text: 'retained answer' }] },
+  ]
+  expect(contextEntriesOf(nodes).map(entry => entry.text)).toEqual(['current summary', 'retained question', 'retained answer'])
+})
+
+
+it('normalizes the same retained snapshot when compaction happens after opening but before first send', () => {
+  const old = serializeSnapshot([{ kind: 'checkpoint', text: 'obsolete summary' }], new Date(), 1)
+  const nodes = [
+    { kind: 'checkpoint', seq: 100, content: [{ type: 'text', text: 'current summary' }] },
+    { kind: 'user', seq: 50, content: [{ type: 'text', text: old + 'retained question' }] },
+  ]
+  const entries = snapshotEntriesOf(nodes, undefined, 30)
+  expect(entries.map(entry => entry.text)).toEqual(['current summary', 'retained question'])
+  expect(snapshotEntriesFromText(serializeSnapshot(entries, new Date(), 30)).map(entry => entry.text)).toEqual(['current summary', 'retained question'])
+  const legacyWire = serializeSnapshot([{ kind: 'checkpoint', text: 'current summary' }, { kind: 'request', text: old + 'retained question' }], new Date(), 30)
+  expect(snapshotEntriesFromText(legacyWire).map(entry => entry.text)).toEqual(['current summary', 'retained question'])
 })

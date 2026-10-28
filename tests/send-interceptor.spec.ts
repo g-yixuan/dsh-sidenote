@@ -126,7 +126,7 @@ describe('native composer context submission', () => {
     let resolve!: (text: string) => void, reject!: (error: Error) => void
     const ready = new Promise<string>((yes, no) => { resolve = yes; reject = no })
     const accepted = vi.fn()
-    const off = registerSubmissionExtras(SESSION, { needsFirstSend: () => true, firstSendPrefix: () => ready, onAccepted: accepted, onSubmitText: () => {} })
+    const off = registerSubmissionExtras(SESSION, { needsFirstSend: () => true, firstSendPrefix: () => ready.then(text => ({ text })), onAccepted: accepted, onSubmitText: () => {} })
     try {
       harness.send(); harness.send()
       expect(harness.submitted).toEqual([])

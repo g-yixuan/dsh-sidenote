@@ -6,6 +6,7 @@ import { conversationViewOf, isPendingContextSurface, mountUserBubbleAddon, pend
 import { IconChevronDownOutline14, IconListPenOutline16, IconShareOutline16 } from '../host/icons.ts'
 import { flattenReflowContent, splitProtocolPrefix, splitSnapshotPrefix, type ProtocolPrefix } from './format.ts'
 import { t } from '../locales.ts'
+import { withoutSnapshotImages } from '../../snapshotProtocol.ts'
 import { useLocaleTick } from '../locale-tick.ts'
 import css from './annotations.module.css'
 
@@ -263,7 +264,8 @@ export function registerUserContext(ctx: Context): void {
             // Retain the native bubble for an annotation-only message; this
             // presentation-only word joiner never enters the durable content.
             const displayText = body || (protocol ? '\u2060' : '')
-            const content = at < 0 ? [...blocks, { type: 'text', text: displayText }] : blocks.map((block, index) => index === at ? { ...block, text: displayText } : block)
+            const shown = snapshot ? withoutSnapshotImages(blocks, snapshot.snapshot) : blocks
+            const content = at < 0 ? [...shown, { type: 'text', text: displayText }] : shown.map(block => block === blocks[at] ? { ...block, text: displayText } : block)
             const projected = { ...props, node: { ...props.node, data: { ...props.node.data, content } } }
             return <>
               {protocol ? <LegacyContext Original={Original} props={projected} protocol={protocol} /> : createElement(Original, projected)}

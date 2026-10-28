@@ -4,6 +4,7 @@ import { chatSourceOf, contextEventSource, inheritedBoundarySource, loadForkBoun
 import { contextImageLoader } from '../host/attachments.ts'
 import { transcriptOf } from '../chat/transcript.ts'
 import { contextEntriesOf, contextHistory } from './context.ts'
+import { snapshotImages, type ImageBlock } from '../../snapshotProtocol.ts'
 import { effectiveContextNodes, loadMainlineSnapshot, snapshotEntriesFromText, snapshotEntriesOf, splitSnapshotPrefix } from './snapshot.ts'
 
 const noop = () => () => {}
@@ -20,7 +21,7 @@ export function useMainContext(ctx: Context, parentSessionId: string, childId: s
   const childWindow = useSyncExternalStore(useCallback(notify => childEvents?.subscribe(notify) ?? noop(), [childEvents]), () => childEvents?.getSnapshot())
   const messages = useMemo(() => transcriptOf(legacy), [legacy])
   const sending = useRef<ReturnType<typeof splitSnapshotPrefix>>(null)
-  const [accepted, setAccepted] = useState<ReturnType<typeof splitSnapshotPrefix>>(null)
+  const [accepted, setAccepted] = useState<(NonNullable<ReturnType<typeof splitSnapshotPrefix>> & { content?: readonly ImageBlock[] }) | null>(null)
   const pending = useRef(forkedMidTurn)
   pending.current = forkedMidTurn && !accepted
   const firstSendPrefix = useCallback(async () => {
@@ -29,17 +30,23 @@ export function useMainContext(ctx: Context, parentSessionId: string, childId: s
     const boundary = snapshotOnly ? -1 : await loadForkBoundary(session)
     const text = await loadMainlineSnapshot(ctx, parentSessionId, boundary)
     sending.current = splitSnapshotPrefix(text)
-    return text
+    const attachments = snapshotImages(text)
+    return { text, ...(attachments.length ? { images: { sessionId: parentSessionId, attachments } } : {}) }
   }, [ctx, parentSessionId, childId, session, snapshotOnly])
   const accept = useCallback(() => { if (sending.current) setAccepted(sending.current) }, [])
-  const saved = useMemo(() => boundarySeq === undefined ? undefined : messages.filter(message => message.role === 'user' && (message.seq ?? -1) > (boundarySeq ?? -1)).map(message => splitSnapshotPrefix(message.text)).find(Boolean), [messages, boundarySeq]) ?? accepted
+  const saved = useMemo(() => boundarySeq === undefined ? undefined : (legacy?.nodes ?? []).flatMap(value => {
+    const node = value as { kind: string; seq: number; content?: readonly { type: string; text?: string; attachment?: unknown }[] }
+    if (!['user', 'steering'].includes(node.kind) || node.seq <= boundarySeq) return []
+    const prefix = splitSnapshotPrefix(node.content?.find(block => block.type === 'text')?.text ?? '')
+    return prefix ? [{ ...prefix, content: node.content }] : []
+  })[0], [legacy, boundarySeq]) ?? accepted
   const preview = forkedMidTurn && !saved
   const parent = preview ? ctx.sessions.binding(parentSessionId)?.session : undefined
   const parentChat = useMemo(() => preview ? chatSourceOf(ctx, ctx.sessions.binding(parentSessionId)) : undefined, [ctx, parentSessionId, parent, preview])
   const parentLegacy = useSyncExternalStore(useCallback(notify => parentChat?.subscribe(notify) ?? noop(), [parentChat]), () => parentChat?.getLegacy() ?? null)
   const parentEvents = useMemo(() => contextEventSource(parent), [parent])
   const parentWindow = useSyncExternalStore(useCallback(notify => parentEvents?.subscribe(notify) ?? noop(), [parentEvents]), () => parentEvents?.getSnapshot())
-  const progress = useMemo(() => saved ? { entries: snapshotEntriesFromText(saved.snapshot), takenAt: saved.takenAt }
+  const progress = useMemo(() => saved ? { entries: snapshotEntriesFromText(saved.snapshot, saved.content), takenAt: saved.takenAt }
     : forkedMidTurn && boundarySeq !== undefined ? { entries: snapshotEntriesOf(effectiveContextNodes(parentLegacy?.nodes ?? [], parentWindow).nodes, parentLegacy?.partial, boundarySeq, parentLegacy?.runningCalls) } : undefined, [saved, forkedMidTurn, parentLegacy, parentWindow, boundarySeq])
   const history = useMemo(() => contextHistory(contextEntriesOf(effectiveContextNodes(legacy?.nodes ?? [], childWindow, boundarySeq ?? -1).nodes), progress?.entries ?? []), [legacy, childWindow, boundarySeq, progress])
   const loadContext = useCallback(async () => {
@@ -48,5 +55,6 @@ export function useMainContext(ctx: Context, parentSessionId: string, childId: s
     await loadInheritedContext(session, 0)
   }, [session, snapshotOnly])
   const loadImage = useMemo(() => childId ? contextImageLoader(ctx, childId) : undefined, [ctx, childId])
-  return { boundarySeq, childChat, messages, history, progress, loadContext, loadImage, firstSendPrefix, accept, contextPending: forkedMidTurn && !saved }
+  const loadProgressImage = useMemo(() => preview ? contextImageLoader(ctx, parentSessionId) : loadImage, [ctx, parentSessionId, preview, loadImage])
+  return { boundarySeq, childChat, messages, history, progress, loadContext, loadImage, loadProgressImage, firstSendPrefix, accept, contextPending: forkedMidTurn && !saved }
 }

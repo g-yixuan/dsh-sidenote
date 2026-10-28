@@ -175,3 +175,14 @@ it('round-trips quoted protocol tags and tool output without truncating the capt
   expect(split.rest).toBe('side question')
   expect(snapshotEntriesFromText(split.snapshot)).toEqual(entries)
 })
+
+
+it('freezes image-only and image-plus-text mainline increments without losing attachment identity', () => {
+  const attachment = { attachmentId: 'sha256:abc', mediaType: 'image/png', bytes: 100, width: 10, height: 10, name: 'x<y>"&.png' }
+  const entries = snapshotEntriesOf([
+    { kind: 'user', seq: 11, content: [{ type: 'image', attachment }] },
+    { kind: 'user', seq: 12, content: [{ type: 'image', attachment }, { type: 'text', text: 'new diagram' }] },
+  ], undefined, 10)
+  expect(entries).toEqual([{ kind: 'request', text: '', images: [attachment] }, { kind: 'request', text: 'new diagram', images: [attachment] }])
+  expect(snapshotEntriesFromText(serializeSnapshot(entries, new Date(), 10))).toEqual(entries)
+})

@@ -49,9 +49,9 @@ const ProgressEntry = memo(function ProgressEntry({ entry, live, loadImage }: { 
 
 /** This region alone owns context scrolling. It never moves the native side
  * conversation, and it mounts even before that conversation has any messages. */
-export function ContextProgress({ id, history, entries, live, loading, error, onRetry, loadImage }: {
+export function ContextProgress({ id, history, entries, live, loading, error, onRetry, loadImage, loadProgressImage }: {
   id: string; history: readonly ContextEntry[]; entries: readonly SnapshotEntry[]; live: boolean
-  loading: boolean; error?: string; onRetry: () => void; loadImage?: (attachment: unknown) => Promise<string>
+  loading: boolean; error?: string; onRetry: () => void; loadImage?: (attachment: unknown) => Promise<string>; loadProgressImage?: (attachment: unknown) => Promise<string>
 }) {
   const root = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
@@ -97,7 +97,7 @@ export function ContextProgress({ id, history, entries, live, loading, error, on
       <div ref={content} className={css.progressContent}>
         <div data-sidenote-context-history>{history.map(entry => <ProgressEntry key={entry.key} entry={entry} live={false} loadImage={loadImage} />)}</div>
         {entries.length > 0 && <div data-sidenote-context-increment>
-          {entries.map((entry, index) => <ProgressEntry key={`progress:${index}:${entry.kind}`} entry={entry} live={live} />)}
+          {entries.map((entry, index) => <ProgressEntry key={`progress:${index}:${entry.kind}`} entry={entry} live={live} loadImage={loadProgressImage ?? loadImage} />)}
         </div>}
         {loading && <div className={css.contextHint} role="status">{t('contextLoading')}</div>}
         {error && <div className={css.stateDetail} role="alert">{error} <button type="button" className={css.nativeAction} onClick={onRetry}>{t('contextRetry')}</button></div>}

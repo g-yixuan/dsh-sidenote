@@ -69,20 +69,18 @@ export function SavedConversation({ ctx, Original, props }: { ctx: Context; Orig
   const source = useMemo(() => contextEventSource(session), [session])
   const window = useSyncExternalStore(useCallback(notify => source?.subscribe(notify) ?? (() => {}), [source]), () => source?.getSnapshot())
   const saved = useMemo(() => savedContextOf(legacy?.nodes ?? [], window?.entries ?? [], window?.hasMore), [legacy, window])
-  const catalog = useSyncExternalStore(useCallback(notify => ctx.sessions.list.subscribe(notify), [ctx]), () => ctx.sessions.list.getSnapshot())
-  const parentId = (catalog.byId?.[props.sessionId] as { parentId?: string } | undefined)?.parentId
-  const seeded = !!parentId || window?.entries.some(({ event }) => event.type === 'session/end-seed') === true
+  const markerSeq = props.useProjection?.('sidenoteContext')
   const [error, setError] = useState<string>()
   const loadContext = useCallback(() => loadInheritedContext(session, 0), [session])
-  // A promoted transcript may be paged beyond its first input. Its final seed
-  // identifies a copied history; reuse the host cache to discover that input.
+  // Only an indexed plugin marker justifies paging; ordinary native forks
+  // retain the host's lazy history window. The marker survives promotion.
   useEffect(() => {
-    if (!seeded || saved) return
+    if (typeof markerSeq !== 'number' || saved) return
     let active = true
-    void loadContext().catch(reason => { if (active) setError(String(reason instanceof Error ? reason.message : reason)) })
+    void loadInheritedContext(session, markerSeq).catch(reason => { if (active) setError(String(reason instanceof Error ? reason.message : reason)) })
     return () => { active = false }
-  }, [seeded, !!saved, loadContext])
-  const progress = useMemo(() => saved ? { entries: snapshotEntriesFromText(saved.snapshot), takenAt: saved.takenAt } : undefined, [saved])
+  }, [markerSeq, !!saved, session])
+  const progress = useMemo(() => saved ? { entries: snapshotEntriesFromText(saved.snapshot, saved.content), takenAt: saved.takenAt } : undefined, [saved])
   const history = useMemo(() => contextHistory(contextEntriesOf(effectiveContextNodes(legacy?.nodes ?? [], window, saved?.boundarySeq ?? -1).nodes), progress?.entries ?? []), [legacy, window, saved, progress])
   const loadImage = useMemo(() => contextImageLoader(ctx, props.sessionId), [ctx, props.sessionId])
   if (!saved) return <>{error && <div role="alert" className={css.errorRow}>{error}<button type="button" className={css.nativeAction} onClick={() => { void loadContext().then(() => setError(undefined), reason => setError(String(reason))) }}>{t('contextRetry')}</button></div>}{createElement(Original, props)}</>

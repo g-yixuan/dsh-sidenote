@@ -13,6 +13,7 @@ export interface InheritedContextData {
   contextPending?: boolean
   history: readonly ContextEntry[]
   loadImage?: (attachment: unknown) => Promise<string>
+  loadProgressImage?: (attachment: unknown) => Promise<string>
   progress?: { entries: SnapshotEntry[]; takenAt?: string | null }
   loadContext?: () => Promise<void>
 }
@@ -41,7 +42,7 @@ export function InheritedContext({ context }: { context: InheritedContextData })
         <IconChevronDownOutline14 size={12} className={expanded ? css.contextChevronOpen : css.contextChevron} />
         <span>{t('mainContext')}</span><span className={css.contextHint}>{context.contextPending ? t('contextAtSend') : context.progress?.takenAt ? t('contextAsOf', { time: context.progress.takenAt }) : t('contextInherited')}</span>
       </button>
-      {expanded && <ContextProgress id={contextId} history={context.history} entries={context.progress?.entries ?? []} live={context.contextPending === true} loading={loading} error={error} onRetry={() => { setAttempt(value => value + 1) }} loadImage={context.loadImage} />}
+      {expanded && <ContextProgress id={contextId} history={context.history} entries={context.progress?.entries ?? []} live={context.contextPending === true} loading={loading} error={error} onRetry={() => { setAttempt(value => value + 1) }} loadImage={context.loadImage} loadProgressImage={context.loadProgressImage} />}
     </div>
   </div>
 }

@@ -154,12 +154,14 @@ fi
 # Outside the repository package boundary: this loose module has no dsh.client.
 cp "$SCRIPT_DIR/../tests/e2e/runtime-inventory.mjs" "$SCRATCH/runtime-inventory.mjs"
 cp "$SCRIPT_DIR/../tests/e2e/controlled-model.mjs" "$SCRATCH/controlled-model.mjs"
+cp "$SCRIPT_DIR/../tests/e2e/retained-compaction.mjs" "$SCRATCH/retained-compaction.mjs"
 node - "$PROFILE_DIR/cordis.patch.yml" "$SCRATCH/runtime-inventory.mjs" "$SCRATCH/runtime-inventory.json" <<'JS'
 const fs = require('node:fs')
 const [file, fixture, output] = process.argv.slice(2)
 const old = fs.readFileSync(file, 'utf8')
 fs.writeFileSync(file, (old.trim() === '[]' ? '' : old) + '\n- insert:\n  - id: sidenote-e2e-inventory\n    name: ' + JSON.stringify(fixture) + '\n    config:\n      output: ' + JSON.stringify(output) + '\n')
 fs.appendFileSync(file, '- insert:\n  - id: sidenote-e2e-model\n    name: ' + JSON.stringify(require('node:path').join(require('node:path').dirname(fixture), 'controlled-model.mjs')) + '\n')
+fs.appendFileSync(file, '- insert:\n  - id: sidenote-e2e-retained-compaction\n    name: ' + JSON.stringify(require('node:path').join(require('node:path').dirname(fixture), 'retained-compaction.mjs')) + '\n')
 JS
 
 # Optional real-provider lane. Only the server inherits the credential; the
@@ -271,7 +273,7 @@ assert_inventory
 # 步骤 5：Playwright 无头渲染 lane（无-BS 档跑直连冒烟，BS 档跑全量 journey）
 say "运行 Playwright 无头渲染 lane..."
 DSH_E2E_URL="$URL" DSH_E2E_WORKSPACE="$WORKSPACE_DIR" DSH_E2E_SEED_SESSION="$SEED_SESSION_ID" DSH_E2E_HOME="$DSH_HOME" \
-  pnpm exec playwright test mount-direct.e2e.ts annotations.e2e.ts core.e2e.ts running.e2e.ts side-selection.e2e.ts diagnostics.e2e.ts visibility.e2e.ts parity.e2e.ts interaction.e2e.ts context-reading.e2e.ts context-lifecycle.e2e.ts unified-context.e2e.ts context-submission.e2e.ts compaction.e2e.ts official-model.e2e.ts ${GREP_FILTER:+--grep "$GREP_FILTER"}
+  pnpm exec playwright test mount-direct.e2e.ts annotations.e2e.ts core.e2e.ts running.e2e.ts side-selection.e2e.ts diagnostics.e2e.ts visibility.e2e.ts parity.e2e.ts interaction.e2e.ts context-reading.e2e.ts context-lifecycle.e2e.ts unified-context.e2e.ts review-boundaries.e2e.ts context-submission.e2e.ts compaction.e2e.ts official-model.e2e.ts ${GREP_FILTER:+--grep "$GREP_FILTER"}
 
 assert_inventory
 
