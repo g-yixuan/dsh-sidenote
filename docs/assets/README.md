@@ -1,8 +1,8 @@
 # README and storefront media / 首页与商店素材
 
-Captured on **2026-10-25** with the published **dsh-sidenote 0.7.2** package (source: `0d55fcd`) and **DSH 0.2.1-rc.2**, using native Conversation and the native right sidebar. The mounted plugin's version and bundle digest, plus the host's active conversation, composer, and sidebar packages, were checked before capture.
+Chinese media was captured on **2026-10-25** with the published **dsh-sidenote 0.7.2** package (source: `0d55fcd`). English media was captured on **2026-10-29** with published **dsh-sidenote 0.7.6** (source: `3f0de44`), with both the interface and conversation in English. Both use **DSH 0.2.1-rc.2**, native Conversation, and the native right sidebar. The mounted plugin's version and bundle digest, plus the host's active conversation, composer, and sidebar packages, were checked before capture.
 
-素材于 **2026-10-25** 重新录制，使用已发布的 **dsh-sidenote 0.7.2**（源码 `0d55fcd`）与 **DSH 0.2.1-rc.2** 原生对话和右侧栏。录制前核对了实际挂载的插件版本与构建摘要，以及宿主正在运行的对话、输入框和侧栏组件版本。
+中文素材于 **2026-10-25** 录制，使用已发布的 **dsh-sidenote 0.7.2**（源码 `0d55fcd`）。英文素材于 **2026-10-29** 录制，使用已发布的 **dsh-sidenote 0.7.6**（源码 `3f0de44`），界面和对话内容均为英文。两套素材均使用 **DSH 0.2.1-rc.2** 原生对话和右侧栏。录制前核对了实际挂载的插件版本与构建摘要，以及宿主正在运行的对话、输入框和侧栏组件版本。
 
 ## Real model responses / 真实模型回答
 
@@ -16,18 +16,19 @@ The recording starts with the real main-chat answer already visible. It then sho
 
 ## Assets / 文件
 
-- `workflow.jpg`: a follow-up capture showing the selection toolbar's two destinations, a real side-chat answer, pending annotation and handback chips, and context bubbles in sent messages / 补拍主图：同屏展示划选菜单的两种去向、真实侧聊回答、待发送的批注与回流标签，以及已发送消息中的上下文气泡。
-- `context-preview.jpg`: a compact preview with the selected passage, editable note, and horizontal context chips / 紧凑悬浮层中的原文、可编辑注解与横向标签。
-- `selection.jpg`: selected text and the two annotation destinations, taken from the recording / 从录屏提取的划选画面与两种批注去向。
-- `sidechat.jpg`: a real side-chat answer and the hovered reply-toolbar handback icon / 真实侧聊回答与悬停中的回流图标。
-- `demo.gif`, `demo.mp4`: the same approximately **43-second** continuous workflow / 同一段约 **43 秒**的连续操作。
+- `workflow.jpg` / `workflow-en.jpg`: Chinese / English follow-up captures showing the selection toolbar's two destinations, a real side-chat answer, pending annotation and handback chips, and context bubbles in sent messages / 中文与英文补拍主图：同屏展示划选菜单的两种去向、真实侧聊回答、待发送的批注与回流标签，以及已发送消息中的上下文气泡。
+- `context-preview.jpg` / `context-preview-en.jpg`: Chinese / English compact previews with the selected passage, editable note, and horizontal context chips / 中文与英文的紧凑悬浮层，展示原文、可编辑注解与横向标签。
+- `selection.jpg` / `selection-en.jpg`: Chinese / English selected text and the two annotation destinations, captured during each recording / 分别在中文与英文录制中采集的划选画面与两种批注去向。
+- `sidechat.jpg` / `sidechat-en.jpg`: Chinese / English real side-chat answers and the hovered reply-toolbar handback icon / 中文与英文的真实侧聊回答与悬停中的回流图标。
+- `demo.gif`, `demo.mp4`: the same approximately **43-second** continuous Chinese workflow / 同一段约 **43 秒**的中文连续操作。
+- `demo-en.gif`, `demo-en.mp4`: the same approximately **38-second** continuous English workflow / 同一段约 **38 秒**的英文连续操作。
 - `hero.svg`, `hero-en.svg` and their `-compact.svg` variants: vector brand covers; regenerate with `python3 scripts/build-brand-assets.py` / 品牌矢量封面，可用该命令重新生成。
 
 ## Capture and distribution / 录制与展示
 
-The real interface uses the host's **light theme** and **18 px** conversation font. The hero uses a **1440 × 780** viewport and is exported at 2160 × 1170 so the selection menu and both composers fit together. Other stills use a **1440 × 900** viewport, captured at 2× pixel density and exported at 2160 × 1350; the selection still is a native 1440 × 900 recording frame. MP4 is 1440 × 900 at 30 fps; GIF is 1120 × 700 at 12 fps. Encoding preserves the browser's frame timing without speeding up responses. A small pointer overlay follows actual mouse events in the recording; product controls and model replies are not redrawn or substituted.
+The real interface uses the host's **light theme** and **18 px** conversation font. The Chinese hero uses a **1440 × 780** viewport and is exported at 2160 × 1170; the English hero uses **1440 × 840**, exported at 2160 × 1260, so the selection menu, sent-message labels, and both composers fit together. Other stills use a **1440 × 900** viewport, captured at 2× pixel density and exported at 2160 × 1350; the Chinese selection still is a native 1440 × 900 recording frame. MP4 is 1440 × 900 at 30 fps; GIF is 1120 × 700 at 12 fps. Encoding preserves the browser's frame timing without speeding up responses. A small pointer overlay follows actual mouse events in the recording; product controls and model replies are not redrawn or substituted.
 
-真实界面使用宿主的**浅色主题**和 **18 px** 会话字号。主图以 **1440 × 780** 视口补拍，导出为 2160 × 1170，让划选菜单和两侧输入框完整同屏。其余静态截图使用 **1440 × 900** 视口，按 2 倍像素密度采集后导出为 2160 × 1350；划选截图直接取自 1440 × 900 的录屏帧。MP4 为 1440 × 900 / 30 fps，GIF 为 1120 × 700 / 12 fps，均按浏览器帧时间编码，没有加速模型响应。录屏中仅添加跟随真实鼠标事件的小光标辅助层，没有重绘产品控件或替换模型回答。
+真实界面使用宿主的**浅色主题**和 **18 px** 会话字号。中文主图以 **1440 × 780** 视口补拍，导出为 2160 × 1170；英文主图使用 **1440 × 840** 视口，导出为 2160 × 1260，让划选菜单、已发送消息中的标签和两侧输入框完整同屏。其余静态截图使用 **1440 × 900** 视口，按 2 倍像素密度采集后导出为 2160 × 1350；中文划选截图直接取自 1440 × 900 的录屏帧。MP4 为 1440 × 900 / 30 fps，GIF 为 1120 × 700 / 12 fps，均按浏览器帧时间编码，没有加速模型响应。录屏中仅添加跟随真实鼠标事件的小光标辅助层，没有重绘产品控件或替换模型回答。
 
 [`screenshots.json`](../../screenshots.json) declares the storefront gallery. The [catalog's screenshot convention](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/blob/main/contributing.md#screenshots--截图optional-recommended--可选推荐) resolves those paths from this repository, and the next catalog build refreshes the gallery. Existing screenshot paths remain available for cached catalogs.
 

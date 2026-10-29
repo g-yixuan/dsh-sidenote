@@ -23,9 +23,9 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-60708E" alt="MIT license"></a>
 </p>
 
-![Selected text offers Add to conversation or Ask in side chat, alongside a side-chat answer, pending annotation and handback chips, and context bubbles in sent messages](docs/assets/workflow.jpg)
+![Selected text offers Add to conversation or Ask in side chat, alongside a side-chat answer, pending annotation and handback chips, and context bubbles in sent messages](docs/assets/workflow-en.jpg)
 
-<p align="center"><sub>dsh-sidenote 0.7.2 · DSH 0.2.1-rc.2 · DeepSeek V4.1 Flash · Recorded live</sub></p>
+<p align="center"><sub>dsh-sidenote 0.7.6 · DSH 0.2.1-rc.2 · DeepSeek V4.1 Flash · Recorded live</sub></p>
 
 ## Install
 
@@ -51,7 +51,7 @@ Side chats support multiple turns, tool cards, model and permission switching, i
 
 Select part of a reply in the main conversation or a side chat, then add a question or comment. **The original passage and your note stay together.** Collect several notes, preview or remove them before sending, and keep writing in the composer.
 
-For example, select the suggestion to show “Not found” and recommend broader filters, then ask for an empty state ready to use.
+For example, select the suggestion to show “No notes found” and ask for ready-to-use empty-state copy.
 
 ### Bring useful answers back
 
@@ -61,11 +61,11 @@ Click the **Bring back to main conversation** icon on the right of a side reply�
 
 **Select a passage → explore it with context → bring the answer back.**
 
-![Live Flash demo: select and annotate, preview and edit on hover, ask in a side chat, return the answer, and inspect context in the sent message](docs/assets/demo.gif)
+![Live Flash demo: select and annotate, preview and edit on hover, ask in a side chat, return the answer, and inspect context in the sent message](docs/assets/demo-en.gif)
 
-[Watch the full-resolution MP4](docs/assets/demo.mp4) · [View the still screenshot](docs/assets/workflow.jpg)
+[Watch the full-resolution MP4](docs/assets/demo-en.mp4) · [View the still screenshot](docs/assets/workflow-en.jpg)
 
-<sub>Recorded on 2026-10-25 with dsh-sidenote 0.7.2 / DSH 0.2.1-rc.2. This Chinese-language note-search design example uses real responses from the official DeepSeek V4.1 Flash API. The approximately 43-second recording shows the real interactions and complete model responses. <a href="docs/assets/README.md">About the media</a></sub>
+<sub>Recorded on 2026-10-29 with dsh-sidenote 0.7.6 / DSH 0.2.1-rc.2. This English-language note-search design example uses real responses from the official DeepSeek V4.1 Flash API. The approximately 38-second recording shows the real interactions and complete model responses. <a href="docs/assets/README.md">About the media</a></sub>
 
 ## Details that keep work moving
 

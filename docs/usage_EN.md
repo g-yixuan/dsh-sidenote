@@ -20,7 +20,7 @@ If the main conversation continues for many turns and the page reloads before th
 
 After main-session compaction, **Main conversation context** starts with the latest committed summary, followed by the tail retained by the host and subsequent progress. Repeated compactions use only the latest summary; failed or uncommitted attempts do not hide content. Retained tail messages may predate the compaction event and are still included. Pruned tool outputs use the host’s retained result without reintroducing the original full text or dropping the surviving content. The original session history is not deleted. Pending main-session tasks stay on the main session; the new side chat does not execute copies of that queue.
 
-![An independent conversation in the native sidebar](assets/sidechat.jpg)
+![An independent conversation in the native sidebar](assets/sidechat-en.jpg)
 
 After closing a side chat, reopen the original child through the recently closed options in `/side`. Normal entries focus an existing tab. Native page kinds allow one tab per pane, with multiple panes through splitting. Only admitted native hosts are maintained; outside-window hosts pin plugin 0.6.5; see the [compatibility policy](compatibility_EN.md).
 
@@ -37,9 +37,9 @@ On supported hosts, hidden side chats remain runnable. To find older side chats,
 3. Click outside the editor or press `Enter` to save a new note; press `Esc` to cancel.
 4. Annotation and side-chat reflow chips sit side by side above the composer. Hover to read complete quotes, notes, or returned questions and answers; move into the card to keep reading. Click a chip to keep it open, then press Escape or click outside to close. The compact card scrolls internally for long content. Hovering a chip gently reveals an × button that clears that category of annotations or reflows without affecting the other category or the message body. Edit notes in place: leaving the field saves, Escape cancels. Remove individual entries or clear the batch.
 
-![Select a passage, then add it to the conversation or ask in a side chat](assets/selection.jpg)
+![Select a passage, then add it to the conversation or ask in a side chat](assets/selection-en.jpg)
 
-![Annotation and handback chips in one row, with a compact preview for reading the original text and editing the note](assets/context-preview.jpg)
+![Annotation and handback chips in one row, with a compact preview for reading the original text and editing the note](assets/context-preview-en.jpg)
 
 Quotes and notes stay complete without being inserted into the body draft. Send a quote on its own, or together with text, images, and `@` references. Repeated selections accumulate annotations; numbered badges at the source help you find each passage.
 
@@ -70,7 +70,7 @@ Reflows, quotes, annotations, body text, and attachments are submitted as one na
 
 The saved session keeps the same layout: collapsible inherited context first, followed by its own side-chat messages. Reloads retain the original first-send cut instead of exposing raw protocol text or folding the side conversation into its inherited history. If the saved session is compacted again before another side chat is opened, the latest committed summary takes precedence over snapshots embedded in older messages. Recovery uses the marker position indexed by the host and does not automatically load all history for ordinary native forks.
 
-![A side-chat finding ready to accompany the main-thread draft](assets/workflow.jpg)
+![A side-chat finding ready to accompany the main-thread draft](assets/workflow-en.jpg)
 
 ## Installation and troubleshooting
 
