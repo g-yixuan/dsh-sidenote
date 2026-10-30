@@ -44,15 +44,15 @@ pnpm test
 
 ```bash
 pnpm exec playwright install chromium
-BS_VERSION=none DSH_EXPECTED_VERSION=0.2.1-rc.2 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.1-rc.2 dsh" pnpm test:mount
+BS_VERSION=none DSH_EXPECTED_VERSION=0.2.1-rc.5 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.1-rc.5 dsh" pnpm test:mount
 ```
 
-脚本使用临时 DSH_HOME；[CI](.github/workflows/ci.yml) 从 package.json 的 dshSupport 生成精确矩阵，验收当前、过渡及可选已准入预览宿主。所有矩阵任务都必须通过 host-compatibility 汇总门槛；窗口外用户固定最后兼容插件，不再为每次修改回测旧宿主。角色与退役规则见[兼容政策](docs/compatibility.md)。
+脚本使用临时 DSH_HOME；[CI](.github/workflows/ci.yml) 从 package.json 的 dshSupport 生成当前系列最低版与最新已验证版的精确矩阵，所有任务必须通过 host-compatibility 汇总。每日探测新增 RC，每周及手动 canary 回归窗口内全部已发布版本。允许安装与已验证版本分别记录；窗口外用户固定最后兼容插件。见[兼容政策](docs/compatibility.md)。
 
 无模型凭证的 E2E 验证交互与挂载，不验证模型回答。涉及主线运行中开侧聊、取消、队列或进展快照时，请额外说明真实运行场景和验证结果；没有验证的范围也应明确写出。
 
 
-`pnpm test:compat` 使用隔离 profile 安装精确 0.6.5，再用本地不兼容测试包验证更新拒绝和旧包恢复。真实模型单独运行：`DSH_E2E_REAL_KEY_FILE=/path/to/private-key-file pnpm test:mount --grep "official Flash"`（同时设置上例的精确 DSH_CMD / DSH_EXPECTED_VERSION）。Key 文件只由服务进程读取，不进入 profile、浏览器或产物；CI 默认不调用外部付费模型。此 lane 直连官方 api.deepseek.com / deepseek-flash，验证主侧工具、多轮、图片及实际推理等级请求，保存不含正文或鉴权信息的请求元数据。
+`pnpm test:compat` 使用隔离 profile 安装当前打包构建，再验证不兼容更新被拒绝和原包恢复。退役系列通过 `DSH_COMPAT_BASELINE` 与 `DSH_COMPAT_REJECTED` 检查旧包钉版和真实新构建拒装，命令见[兼容政策](docs/compatibility.md)。真实模型单独运行：`DSH_E2E_REAL_KEY_FILE=/path/to/private-key-file pnpm test:mount --grep "official Flash"`（同时设置上例的精确 DSH_CMD / DSH_EXPECTED_VERSION）。Key 文件只由服务进程读取，不进入 profile、浏览器或产物；CI 默认不调用外部付费模型。此 lane 直连官方 api.deepseek.com / deepseek-flash，验证主侧工具、多轮、图片及实际推理等级请求，保存不含正文或鉴权信息的请求元数据。
 
 ## 代码与测试
 

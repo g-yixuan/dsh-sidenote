@@ -53,6 +53,13 @@ export function apply(ctx) {
         yield { type: 'finish', reason: { kind: 'tool-calls' } }
         return
       }
+      const textIndex = text.includes('[e2e:signed-thinking]') ? 1 : 0
+      if (textIndex) {
+        const thinking = '<signature>SIDENOTE_SIGNATURE_METADATA</signature>\n\nVisible reasoning from the host.'
+        yield { type: 'block-start', index: 0, blockType: 'reasoning' }
+        yield { type: 'reasoning-delta', index: 0, text: thinking }
+        yield { type: 'block-end', index: 0, block: { type: 'reasoning', text: thinking } }
+      }
       let reply = 'Controlled E2E reply. This complete assistant response supports quote selection.\n\nSecond paragraph preserves the full selected text.'
       if (text === '[e2e:reflow] Remember the conclusion code SIDENOTE_SIDE_BLUE.') {
         reply = 'Remembered SIDENOTE_SIDE_BLUE in this side conversation.'
@@ -64,18 +71,18 @@ export function apply(ctx) {
         const returned = options.messages.some(message => message.role === 'user' && message.source?.kind === 'user' && message.content.some(block => block.type === 'text' && block.text.includes('<答>Conclusion: SIDENOTE_SIDE_BLUE.</答>')))
         reply = returned ? 'Main received SIDENOTE_SIDE_BLUE.' : 'The returned side-conversation context is missing.'
       }
-      yield { type: 'block-start', index: 0, blockType: 'text' }
-      yield { type: 'text-delta', index: 0, text: reply }
+      yield { type: 'block-start', index: textIndex, blockType: 'text' }
+      yield { type: 'text-delta', index: textIndex, text: reply }
       if (text.trimEnd().endsWith('[e2e:progress-stream]')) for (let i = 1; i <= 40; i++) {
         await holdResponse(options.signal, 600)
         const delta = `\n\nLive progress ${i}: a new step in the running main conversation.`
         reply += delta
-        yield { type: 'text-delta', index: 0, text: delta }
+        yield { type: 'text-delta', index: textIndex, text: delta }
       }
       if (text.trimEnd().endsWith('[e2e:steer-window]')) await holdResponse(options.signal, 4_000)
       if (text.trimEnd().endsWith('[e2e:hold]')) await holdResponse(options.signal)
       options.signal?.throwIfAborted()
-      yield { type: 'block-end', index: 0, block: { type: 'text', text: reply } }
+      yield { type: 'block-end', index: textIndex, block: { type: 'text', text: reply } }
       yield { type: 'finish', reason: { kind: 'stop' } }
     },
   }

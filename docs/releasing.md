@@ -37,4 +37,4 @@
 
 ## 兼容窗口变更
 
-发布前运行 `node scripts/host-window.mjs`，核对 current / previous / 可选 preview 与两处 DSH engines、UI primitives peer 一致；全部生成的宿主任务和固定 ci + host-compatibility 必须成功，实际 ruleset 也必须要求这两个检查。预览支持仍需完整准入，不能只修改安装范围。常规窗口滚动无需替换 required check 名称；门槛结构变更时同步并回读 ruleset。退出宿主保留最后兼容插件与精确安装命令，本轮 0.1 系列固定 0.6.5，不需要重新发布。新版本只包含共用原生实现，不向旧包回补每个功能。npm latest / dist-tag 不按宿主选版本；旧用户使用 `dsh plugin --profile web add --save-exact dsh-sidenote@0.6.5`。支持窗口及退役说明见[兼容政策](compatibility.md)。
+发布前运行 `node scripts/host-window.mjs` 核对当前系列的最低版、verified 清单与三处安装范围一致；所有边界宿主任务和固定 ci + host-compatibility 必须成功，实际 ruleset 也必须要求这两个检查。新增 verified 记录要有完整功能、相关真实模型及可见浏览器验收证据；范围覆盖未来 RC 不代表已验收。系列滚动经 PR 和插件发布生效，同系列 RC 更新不淘汰旧 RC。退出系列记录最后兼容插件和精确安装命令；0.2.0-rc.2 固定 0.7.6，历史 0.1 系列仍固定 0.6.5。新规则不追溯修改历史包，npm 标签不按宿主选版本。详见[兼容政策](compatibility.md)。
