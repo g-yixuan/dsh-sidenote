@@ -149,7 +149,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   if (phase === 'fork-error') return <StateScreen title={t('forkErrorTitle')} detail={forkError ?? undefined} hint={t('forkErrorHint')} />
   if (phase === 'missing') return <StateScreen title={t('missingTitle')} detail={t('missingDetail')} hint={t('missingHint')} />
   if (phase !== 'chat' || !reference || !childId) return <StateScreen title={t('preparing')} />
-  const side: SideConversation = { sessionId: childId, parentSessionId: meta.parentSessionId ?? scope.sessionId, title: tab.title, boundarySeq, reflow: props.reflow, history, loadImage, progress, loadContext, loadProgressImage: context.loadProgressImage, contextPending: context.contextPending }
+  const side: SideConversation = { sessionId: childId, parentSessionId: meta.parentSessionId ?? scope.sessionId, title: tab.title, boundarySeq, reflow: props.reflow, history, loadImage, progress, loadContext, loadError: boundaryError, loadProgressImage: context.loadProgressImage, contextPending: context.contextPending }
   const replies = finalReplies(messages, boundarySeq, new Set(chat?.getCompletedReplySeqs?.() ?? []))
   const questions = pairQuestions(messages)
   const allAdded = replies.length > 0 && replies.every(reply => isReplyAdded(side, reply, questions.get(reply.key)))
@@ -163,7 +163,6 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
         <button type="button" className={css.nativeAction} disabled={running || composer.pending || hasDraft || saving} title={t(running || composer.pending ? 'promoteBusy' : hasDraft ? 'promoteDraftBusy' : 'promoteTitle')} onClick={() => { void promote() }}>{t('promote')}</button>
       </span>
     </div>
-    {boundaryError && <div className={css.errorRow} role="alert">{boundaryError}<button type="button" className={css.nativeAction} onClick={() => { void loadContext().then(() => setBoundaryError(undefined), error => setBoundaryError(String(error))) }}>{t('contextRetry')}</button></div>}
     {saveError && <div className={css.errorRow} role="alert">{saveError}</div>}
     <div className={css.nativeConversation} data-sidenote-transcript>{props.renderConversation(reference, side)}</div>
   </div>
