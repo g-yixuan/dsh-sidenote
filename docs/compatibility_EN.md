@@ -10,7 +10,7 @@ Installation eligibility and evidence are separate: **an installable version is 
 |---|---|---|---|
 | Current: 0.2.1 | 0.2.1-rc.2 | rc.2, rc.3, rc.4, rc.5 | 0.2.1-rc.2, 0.2.1-rc.5 |
 
-This table describes the development branch. The updated range ships with a plugin release containing this change; it does not retroactively change published 0.7.6 or other historical packages. Public installation follows each Release and package declaration. Future RCs in the same series are allowed by default but enter `verified` only after validation.
+This table describes the main branch's support range starting with dsh-sidenote 0.8.0; it does not retroactively change published 0.7.6 or other historical packages. Public installation follows each Release and package declaration. Future RCs in the same series are allowed by default but enter `verified` only after validation.
 
 | Retired host | Installation to retain |
 |---|---|

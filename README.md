@@ -37,7 +37,7 @@ dsh plugin --profile web add dsh-sidenote
 
 打开 DSH Web，点击会话顶栏的 **「侧边」**，或划选一段回复开始。也可输入 `/side` 打开侧聊，用 `Alt+S` 切换主、侧输入焦点。
 
-当前主线维护 DSH **0.2.1 系列（rc.2 起）**，允许同系列后续 RC 及正式版安装，无需 `dsh-better-sidebar`。已验证版本为 0.2.1-rc.2／rc.3／rc.4／rc.5；未来 RC 允许安装不等于已经验证。新范围随后续插件版本发布，历史包声明不变。DSH 0.2.0-rc.2 固定 `dsh-sidenote@0.7.6`，更早宿主固定各自最后兼容包，详见[兼容政策](docs/compatibility.md)。
+自 dsh-sidenote **0.8.0** 起，主线维护 DSH **0.2.1 系列（rc.2 起）**，允许同系列后续 RC 及正式版安装，无需 `dsh-better-sidebar`。已验证版本为 0.2.1-rc.2／rc.3／rc.4／rc.5；未来 RC 允许安装不等于已经验证，历史包声明不变。DSH 0.2.0-rc.2 固定 `dsh-sidenote@0.7.6`，更早宿主固定各自最后兼容包，详见[兼容政策](docs/compatibility.md)。
 
 ## 一个任务，容得下更多思路
 
