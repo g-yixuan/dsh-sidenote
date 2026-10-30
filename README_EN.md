@@ -37,7 +37,7 @@ dsh plugin --profile web add dsh-sidenote
 
 Open DSH Web and click **Side** in the session header, or select a passage in a reply. You can also open a side chat with `/side` and switch focus between main and side inputs with `Alt+S`.
 
-The current branch maintains **DSH 0.2.1 (from rc.2)**, allowing later RCs and the unsuffixed release within the current series, without dsh-better-sidebar. Verified hosts are 0.2.1-rc.2 / rc.3 / rc.4 / rc.5; future installable RCs are not automatically verified. The updated range ships in a subsequent plugin release; historical declarations remain unchanged. DSH 0.2.0-rc.2 pins dsh-sidenote@0.7.6; earlier hosts retain their own last compatible package. See the [compatibility policy](docs/compatibility_EN.md).
+Starting with dsh-sidenote **0.8.0**, the main branch maintains **DSH 0.2.1 (from rc.2)**, allowing later RCs and the unsuffixed release within the current series, without dsh-better-sidebar. Verified hosts are 0.2.1-rc.2 / rc.3 / rc.4 / rc.5; future installable RCs are not automatically verified, and historical declarations remain unchanged. DSH 0.2.0-rc.2 pins dsh-sidenote@0.7.6; earlier hosts retain their own last compatible package. See the [compatibility policy](docs/compatibility_EN.md).
 
 ## One task. Room to explore.
 
