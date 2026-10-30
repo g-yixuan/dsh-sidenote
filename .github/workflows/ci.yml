@@ -59,7 +59,7 @@ jobs:
     name: plugin-mount (${{ matrix.dsh-version }}, ${{ matrix.bs-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Minimum and latest verified host of each series, deduplicated.
+    # Minimum and latest verified host of the current series, deduplicated.
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.ci.outputs.host-matrix) }}
@@ -94,12 +94,6 @@ jobs:
         run: pnpm test:mount
 
       - name: Reject incompatible updates and retain the current compatible build
-        run: pnpm test:compat
-
-      - name: Retain the pinned legacy release on its supported hosts
-        if: matrix.dsh-version == '0.2.0-rc.2' || matrix.dsh-version == '0.2.1-rc.2'
-        env:
-          DSH_COMPAT_BASELINE: dsh-sidenote@0.6.5
         run: pnpm test:compat
 
       - name: Upload host inventory and journey evidence

@@ -21,7 +21,7 @@
   },
   "engines": {
     "node": ">=20",
-    "dsh": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.2 <0.2.2-0"
+    "dsh": ">=0.2.1-rc.2 <0.2.2-0"
   },
   "dsh": {
     "bundle": {
@@ -37,18 +37,17 @@
       "platform": "web"
     },
     "engines": {
-      "dsh": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.2 <0.2.2-0"
+      "dsh": ">=0.2.1-rc.2 <0.2.2-0"
     }
   },
   "dshSupport": {
-    "current": {
-      "minimum": "0.2.1-rc.2",
-      "verified": ["0.2.1-rc.2", "0.2.1-rc.3", "0.2.1-rc.4", "0.2.1-rc.5"]
-    },
-    "previous": {
-      "minimum": "0.2.0-rc.2",
-      "verified": ["0.2.0-rc.2"]
-    }
+    "minimum": "0.2.1-rc.2",
+    "verified": [
+      "0.2.1-rc.2",
+      "0.2.1-rc.3",
+      "0.2.1-rc.4",
+      "0.2.1-rc.5"
+    ]
   },
   "files": [
     "lib/index.js",
@@ -72,7 +71,7 @@
     "check:arch": "node scripts/check-arch.mjs"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-client-ui-primitives": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.2 <0.2.2-0",
+    "@deepseek-ai/dsh-client-ui-primitives": ">=0.2.1-rc.2 <0.2.2-0",
     "cordis": "^4.0.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"

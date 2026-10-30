@@ -23,15 +23,15 @@ const hosts = (result: ReturnType<typeof resolve>) => {
   return (output.matrix ?? output).include.map((row: { 'dsh-version': string }) => row['dsh-version'])
 }
 
-describe('two-series native host window', () => {
+describe('single-series native host window', () => {
   it('bounds required PR checks while retaining the full verified inventory', () => {
-    expect(hosts(resolve())).toEqual(['0.2.0-rc.2', '0.2.1-rc.2', '0.2.1-rc.5'])
-    expect(hosts(resolve(manifest(), ['--all']))).toEqual(['0.2.0-rc.2', '0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5'])
+    expect(hosts(resolve())).toEqual(['0.2.1-rc.2', '0.2.1-rc.5'])
+    expect(hosts(resolve(manifest(), ['--all']))).toEqual(['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5'])
   })
 
   it.each([
-    ['0.2.0-rc.1', false, false], ['0.2.0-rc.2', true, true],
-    ['0.2.0-rc.99', true, false], ['0.2.0', true, false],
+    ['0.2.0-rc.1', false, false], ['0.2.0-rc.2', false, false],
+    ['0.2.0-rc.99', false, false], ['0.2.0', false, false],
     ['0.2.1-alpha.99', false, false], ['0.2.1-beta.99', false, false], ['0.2.1-rc.1', false, false],
     ['0.2.1-rc.3', true, true], ['0.2.1-rc.4', true, true], ['0.2.1-rc.5', true, true],
     ['0.2.1-rc.100', true, false], ['0.2.1', true, false],
@@ -45,35 +45,36 @@ describe('two-series native host window', () => {
   it('discovers every unseen RC even after tags advance, without admitting a new series', () => {
     const registry = { versions: ['0.2.0-rc.2', '0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.1-rc.6', '0.2.1-rc.7', '0.2.2-alpha.2'], 'dist-tags': { latest: '0.2.1-rc.7', next: '0.2.2-alpha.2' } }
     const result = resolve(manifest(), [], registry)
-    expect(hosts(result)).toEqual(['0.2.0-rc.2', '0.2.1-rc.6', '0.2.1-rc.7'])
+    expect(hosts(result)).toEqual(['0.2.1-rc.6', '0.2.1-rc.7'])
     const plan = JSON.parse(result.stdout)
     expect(plan.unverified).toEqual(['0.2.1-rc.6', '0.2.1-rc.7'])
     expect(plan.channels).toContainEqual({ channel: 'next', version: '0.2.2-alpha.2', eligible: false, verified: false })
-    expect(hosts(resolve(manifest(), ['--all'], registry))).toEqual(registry.versions.slice(0, -1))
+    expect(hosts(resolve(manifest(), ['--all'], registry))).toEqual(registry.versions.slice(1, -1))
   })
 
   it('deduplicates matching latest/next channels and rejects incomplete registry evidence', () => {
-    const registry = { versions: ['0.2.0-rc.2', '0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5'], 'dist-tags': { latest: '0.2.1-rc.5', next: '0.2.1-rc.5' } }
-    expect(hosts(resolve(manifest(), [], registry))).toEqual(['0.2.0-rc.2', '0.2.1-rc.5'])
+    const registry = { versions: ['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5'], 'dist-tags': { latest: '0.2.1-rc.5', next: '0.2.1-rc.5' } }
+    expect(hosts(resolve(manifest(), [], registry))).toEqual(['0.2.1-rc.5'])
     expect(resolve(manifest(), [], { ...registry, versions: [] }).status).not.toBe(0)
   })
 
-  it('can retire the previous series without extending the current upper bound', () => {
+  it('rolls the complete series while leaving the former series to historical packages', () => {
     const value = manifest()
-    value.dshSupport.previous = null
-    value.engines.dsh = value.dsh.engines.dsh = value.peerDependencies['@deepseek-ai/dsh-client-ui-primitives'] = '>=0.2.1-rc.2 <0.2.2-0'
-    expect(hosts(resolve(value))).toEqual(['0.2.1-rc.2', '0.2.1-rc.5'])
+    value.dshSupport = { minimum: '0.2.2-rc.1', verified: ['0.2.2-rc.1'] }
+    value.engines.dsh = value.dsh.engines.dsh = value.peerDependencies['@deepseek-ai/dsh-client-ui-primitives'] = '>=0.2.2-rc.1 <0.2.3-0'
+    expect(hosts(resolve(value))).toEqual(['0.2.2-rc.1'])
+    expect(JSON.parse(resolve(value, ['--candidate', '0.2.1-rc.99']).stdout).eligible).toBe(false)
+    expect(JSON.parse(resolve(value, ['--candidate', '0.2.2-rc.99']).stdout).eligible).toBe(true)
   })
 
-  it.each(['wrong-series', 'duplicate', 'unsorted', 'missing-floor', 'reversed-series', 'alpha-floor', 'extra-series'])('rejects invalid verification metadata: %s', fault => {
-    const value = manifest(), current = value.dshSupport.current
+  it.each(['wrong-series', 'duplicate', 'unsorted', 'missing-floor', 'alpha-floor', 'extra-series'])('rejects invalid verification metadata: %s', fault => {
+    const value = manifest(), current = value.dshSupport
     if (fault === 'wrong-series') current.verified.push('0.2.2-rc.1')
     if (fault === 'duplicate') current.verified.push('0.2.1-rc.5')
     if (fault === 'unsorted') current.verified.reverse()
     if (fault === 'missing-floor') current.verified.shift()
-    if (fault === 'reversed-series') value.dshSupport.previous = current
     if (fault === 'alpha-floor') current.minimum = '0.2.1-alpha.2'
-    if (fault === 'extra-series') value.dshSupport.preview = current
+    if (fault === 'extra-series') value.dshSupport.previous = { minimum: '0.2.0-rc.2', verified: ['0.2.0-rc.2'] }
     expect(resolve(value).status).not.toBe(0)
   })
 

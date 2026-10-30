@@ -37,7 +37,7 @@ dsh plugin --profile web add dsh-sidenote
 
 Open DSH Web and click **Side** in the session header, or select a passage in a reply. You can also open a side chat with `/side` and switch focus between main and side inputs with `Alt+S`.
 
-The current branch maintains **DSH 0.2.1 (from rc.2) and 0.2.0 (from rc.2)**, allowing later RCs and the unsuffixed release within each series, without dsh-better-sidebar. Verified hosts are 0.2.0-rc.2 and 0.2.1-rc.2 / rc.3 / rc.4 / rc.5; future installable RCs are not automatically verified. The broader range ships in a subsequent plugin release; historical declarations remain unchanged. Older hosts pin dsh-sidenote@0.6.5. See the [compatibility policy](docs/compatibility_EN.md).
+The current branch maintains **DSH 0.2.1 (from rc.2)**, allowing later RCs and the unsuffixed release within the current series, without dsh-better-sidebar. Verified hosts are 0.2.1-rc.2 / rc.3 / rc.4 / rc.5; future installable RCs are not automatically verified. The updated range ships in a subsequent plugin release; historical declarations remain unchanged. DSH 0.2.0-rc.2 pins dsh-sidenote@0.7.6; earlier hosts retain their own last compatible package. See the [compatibility policy](docs/compatibility_EN.md).
 
 ## One task. Room to explore.
 
@@ -82,7 +82,7 @@ See the [user guide](docs/usage_EN.md) for controls, recovery behavior, and sele
 
 ## Compatibility and help
 
-The rolling window maintains **the current series and the preceding series**, sharing native Conversation. RCs remain covered within each series; the oldest series retires only after a new series passes admission and ships in a plugin release. PRs test each series' minimum and latest verified hosts; daily discovery detects new hosts and weekly runs cover all in-window versions. Retired hosts retain their last compatible plugin. See the [compatibility and maintenance policy](docs/compatibility_EN.md); published installations follow their Release declarations.
+The rolling window maintains **the current base-version series only**, sharing native Conversation. RCs remain covered within the current series; the former series retires only after a new series passes admission and ships in a plugin release. PRs test the current series' minimum and latest verified hosts; daily discovery detects new hosts and weekly runs cover all in-window versions. Retired hosts retain their last compatible plugin. See the [compatibility and maintenance policy](docs/compatibility_EN.md); published installations follow their Release declarations.
 
 For troubleshooting, enable **Settings → General → dsh-sidenote diagnostic mode** to inspect and manually export the integration status. [Report a problem or suggest an improvement](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose).
 
