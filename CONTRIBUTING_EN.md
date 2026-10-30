@@ -54,6 +54,8 @@ Keyless E2E verifies interactions and mounting, not model answers. Changes to op
 
 `pnpm test:compat` installs the current packed build in an isolated profile, then verifies rejection of an incompatible update and restoration of the original package. Use `DSH_COMPAT_BASELINE` and `DSH_COMPAT_REJECTED` for retirement checks against a historical npm pin and the actual new build; see the [compatibility policy](docs/compatibility_EN.md). Run the real model separately with `DSH_E2E_REAL_KEY_FILE=/path/to/private-key-file pnpm test:mount --grep "official Flash"`, also setting the exact DSH_CMD / DSH_EXPECTED_VERSION above. Only the server reads the key file; it never enters the profile, browser or artifacts. CI does not call external paid models by default. The lane directly uses official api.deepseek.com / deepseek-flash for main/side tools, multiple turns, images and actual reasoning-level requests, saving request metadata without prompts or authentication.
 
+For native-account restart validation, prepare a DeepSeek login in an isolated `<scratch>/home`, then run `DSH_HOME_BASE=<scratch> DSH_E2E_ACCOUNT_MODEL="Flash name from the model picker" pnpm test:mount --grep "account Flash"` with the exact host version as above. This checks file reading, two process restarts, side-chat memory, mainline use of a returned answer, and another fork. Credentials stay in the isolated host; request evidence records only model, status and counts. Default CI skips this test without an account configuration.
+
 ## Code and tests
 
 - Follow neighboring code style. Keep unrelated formatting, refactors, and dependency upgrades out of a PR.

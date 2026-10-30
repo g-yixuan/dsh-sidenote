@@ -178,12 +178,16 @@ if [ -n "${DSH_E2E_REAL_KEY_FILE:-}" ]; then
   IFS= read -r DSH_E2E_OFFICIAL_KEY < "$DSH_E2E_REAL_KEY_FILE" || [ -n "${DSH_E2E_OFFICIAL_KEY:-}" ]
   [ -n "${DSH_E2E_OFFICIAL_KEY:-}" ] || die "Empty real-provider key file"
   export DSH_E2E_OFFICIAL_KEY DSH_E2E_REAL_MODEL=1
+fi
+if [ -n "${DSH_E2E_REAL_KEY_FILE:-}${DSH_E2E_ACCOUNT_MODEL:-}" ]; then
   cp "$ROOT/tests/e2e/official-wire.mjs" "$SCRATCH/official-wire.mjs"
   node - "$PROFILE_DIR/cordis.patch.yml" "$SCRATCH" <<'JS'
 const fs = require('node:fs')
 const [file, scratch] = process.argv.slice(2)
 fs.appendFileSync(file, '\n- insert:\n  - id: sidenote-e2e-official-wire\n    name: ' + JSON.stringify(scratch + '/official-wire.mjs') + '\n    config:\n      output: ' + JSON.stringify(scratch + '/official-wire.json') + '\n')
 JS
+fi
+if [ -n "${DSH_E2E_REAL_KEY_FILE:-}" ]; then
   cat >> "$PROFILE_DIR/cordis.patch.yml" <<'EOF'
 - id: llm-pi-ai
   config:
