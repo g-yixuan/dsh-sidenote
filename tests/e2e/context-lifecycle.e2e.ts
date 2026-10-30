@@ -121,6 +121,7 @@ test('inherited reasoning hides signature metadata while preserving the original
   await prepareSeedPage(page)
   await page.getByRole('button', { name: /^(New chat|New session|New conversation|新会话|新对话)$/ }).first().click()
   const main = page.locator('[data-conversation-session]').first()
+  await expect(main).not.toHaveAttribute('data-conversation-session', process.env.DSH_E2E_SEED_SESSION!)
   await selectModel(page, main, 'Controlled E2E')
   await main.locator('[data-composer-input]').fill('[e2e:signed-thinking] Explain the answer')
   await main.locator('[data-composer-input]').press('Enter')
