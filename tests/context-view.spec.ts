@@ -26,12 +26,33 @@ it('replaces the inherited prefix only when the progress carries a committed che
 
 it('recovers the original cut after saving and re-forking without hiding side messages', () => {
   const node = (seq: number, attrs = '') => ({ kind: 'user', seq, content: [{ type: 'text', text: `<mainline-progress-snapshot taken-at="now"${attrs}><reply>partial</reply></mainline-progress-snapshot>question` }] })
-  const events = [10, 50, 100].map(seq => ({ event: { type: 'session/end-seed', seq } }))
+  const events = [10, 50, 100].map(seq => ({ event: { type: 'session/end-seed', seq, data: { inherited: true } } }))
   expect(savedContextOf([node(20, ' boundary-seq="9"')], events)?.boundarySeq).toBe(9)
   expect(savedContextOf([node(20)], events)?.boundarySeq).toBe(9)
   expect(savedContextOf([node(5)], events)?.boundarySeq).toBe(-1)
   expect(savedContextOf([node(20, ' boundary-seq="25"')], events)).toBeUndefined()
   expect(savedContextOf([node(20), node(60, ' boundary-seq="49"')], events)?.boundarySeq).toBe(49)
+})
+
+it('保存副本保留原阅读边界，旧首发快照跳过其前面的恢复标记', () => {
+  const node = { kind: 'user', seq: 20, content: [{ type: 'text', text: '<mainline-progress-snapshot><reply>context</reply></mainline-progress-snapshot>question' }] }
+  const events = [
+    { event: { type: 'session/end-seed', seq: 10, data: { inherited: true } } },
+    { event: { type: 'session/end-seed', seq: 15, data: {} } },
+    { event: { type: 'session/end-seed', seq: 30, data: { inherited: true } } },
+    { event: { type: 'session/end-seed', seq: 40, data: {} } },
+  ]
+  expect(savedContextOf([node], events)?.boundarySeq).toBe(9)
+  expect(savedContextOf([node], events.slice(1), true)).toBeUndefined()
+  expect(savedContextOf([node], events, false, 29)).toBeUndefined()
+})
+
+it('当前侧聊冻结首条自有快照，不被后续快照或祖先快照覆盖', () => {
+  const node = (seq: number, boundary: number, text: string) => ({ kind: 'user', seq, content: [{ type: 'text', text: `<mainline-progress-snapshot boundary-seq="${boundary}"><reply>${text}</reply></mainline-progress-snapshot>question` }] })
+  const nodes = [node(20, 9, 'ancestor'), node(60, 49, 'first accepted'), node(70, 49, 'later')]
+  expect(savedContextOf(nodes, [], false, 49)?.snapshot).toContain('first accepted')
+  expect(savedContextOf(nodes, [])?.snapshot).toContain('later')
+  expect(savedContextOf([node(1, -1, 'snapshot only')], [], false, -1)?.boundarySeq).toBe(-1)
 })
 
 it('keeps embedded inherited progress when opening another side chat from a saved conversation', () => {

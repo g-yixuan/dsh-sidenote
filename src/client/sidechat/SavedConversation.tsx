@@ -77,9 +77,17 @@ export function SavedConversation({ ctx, Original, props }: { ctx: Context; Orig
   useEffect(() => {
     if (typeof markerSeq !== 'number' || saved) return
     let active = true
-    void loadInheritedContext(session, markerSeq).catch(reason => { if (active) setError(String(reason instanceof Error ? reason.message : reason)) })
+    void loadInheritedContext(session, markerSeq).then(async () => {
+      // Legacy snapshots omit the cut. Their inherited marker can be on an
+      // earlier page than the indexed input; resolve it before classifying rows.
+      const window = source?.getSnapshot()
+      const nodes = chat?.getLegacy()?.nodes ?? []
+      const marker = nodes.find(value => (value as { seq: number }).seq === markerSeq) as { content?: readonly { type: string; text?: string }[] } | undefined
+      const prefix = splitSnapshotPrefix(marker?.content?.find(block => block.type === 'text')?.text ?? '')
+      if (prefix && prefix.boundarySeq === undefined && !savedContextOf(nodes, window?.entries ?? [], window?.hasMore) && window?.hasMore) await loadInheritedContext(session, 0)
+    }).catch(reason => { if (active) setError(String(reason instanceof Error ? reason.message : reason)) })
     return () => { active = false }
-  }, [markerSeq, !!saved, session])
+  }, [markerSeq, !!saved, session, source, chat])
   const progress = useMemo(() => saved ? { entries: snapshotEntriesFromText(saved.snapshot, saved.content), takenAt: saved.takenAt } : undefined, [saved])
   const history = useMemo(() => contextHistory(contextEntriesOf(effectiveContextNodes(legacy?.nodes ?? [], window, saved?.boundarySeq ?? -1).nodes), progress?.entries ?? []), [legacy, window, saved, progress])
   const loadImage = useMemo(() => contextImageLoader(ctx, props.sessionId), [ctx, props.sessionId])

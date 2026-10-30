@@ -57,8 +57,12 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   useEffect(() => { openSessionWindow(session) }, [session])
   const context = useMainContext(ctx, meta.parentSessionId ?? scope.sessionId, childId, session, meta.snapshotOnly === true, meta.forkedMidTurn === true)
   const { boundarySeq, messages, history, progress, loadContext, loadImage, childChat: chat } = context
+  const [boundaryError, setBoundaryError] = useState<string>()
   useEffect(() => {
-    if (session && !meta.snapshotOnly && boundarySeq === undefined) void loadForkBoundary(session).catch(error => { console.warn('[dsh-sidenote] 恢复继承边界失败:', error) })
+    if (!session || meta.snapshotOnly || boundarySeq !== undefined) { setBoundaryError(undefined); return }
+    let active = true
+    void loadForkBoundary(session).catch(error => { if (active) setBoundaryError(String(error instanceof Error ? error.message : error)) })
+    return () => { active = false }
   }, [session, meta.snapshotOnly, boundarySeq])
   // Repair pre-fix tab metadata from the durable fork marker, without touching history.
   useEffect(() => {
@@ -84,7 +88,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   const composer = useComposer(ctx, session, childId)
   useEffect(() => childId === undefined ? undefined : registerSubmissionExtras(childId, extras), [childId, extras])
   useEffect(() => {
-    if (meta.topic !== undefined) return
+    if (meta.topic !== undefined || boundarySeq === undefined) return
     const first = messages.find(message => message.role === 'user' && (message.seq ?? -1) > (boundarySeq ?? -1))
     if (first) extras.onSubmitText(first.text)
   }, [messages, meta.topic, boundarySeq, extras])
@@ -155,10 +159,11 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
     <div className={css.nativeToolbar}>
       <button type="button" className={css.nativeAction} onClick={() => { openSession(ctx, side.parentSessionId) }}>{t(parentPending ? 'parentPending' : parentSnapshot?.running ? 'parentRunning' : 'parentIdle')}</button>
       <span className={css.nativeToolbarActions}>
-        <button type="button" className={css.nativeAction} disabled={running || replies.length === 0 || allAdded} aria-pressed={allAdded} onClick={() => { for (const reply of replies) addReply(side, reply, questions.get(reply.key)) }}>{t(allAdded ? 'reflowAllDone' : 'reflowAll')}</button>
+        <button type="button" className={css.nativeAction} disabled={running || replies.length === 0 || allAdded} title={t(boundarySeq === undefined ? 'reflowPending' : 'reflowAllTitle')} aria-pressed={allAdded} onClick={() => { for (const reply of replies) addReply(side, reply, questions.get(reply.key)) }}>{t(allAdded ? 'reflowAllDone' : 'reflowAll')}</button>
         <button type="button" className={css.nativeAction} disabled={running || composer.pending || hasDraft || saving} title={t(running || composer.pending ? 'promoteBusy' : hasDraft ? 'promoteDraftBusy' : 'promoteTitle')} onClick={() => { void promote() }}>{t('promote')}</button>
       </span>
     </div>
+    {boundaryError && <div className={css.errorRow} role="alert">{boundaryError}<button type="button" className={css.nativeAction} onClick={() => { void loadContext().then(() => setBoundaryError(undefined), error => setBoundaryError(String(error))) }}>{t('contextRetry')}</button></div>}
     {saveError && <div className={css.errorRow} role="alert">{saveError}</div>}
     <div className={css.nativeConversation} data-sidenote-transcript>{props.renderConversation(reference, side)}</div>
   </div>

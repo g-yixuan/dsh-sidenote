@@ -21,7 +21,9 @@
  *   is no longer claimed (404). The `{type:'client-request', rpcId,
  *   method, payload}` envelope is unchanged.
  */
-import { request, type APIRequestContext, type Page } from '@playwright/test'
+import { expect, request, type APIRequestContext, type Page } from '@playwright/test'
+import { closeSync, openSync, readFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 
 const envUrl = process.env.DSH_E2E_URL
 if (!envUrl) {
@@ -44,7 +46,10 @@ const TOKEN: string | undefined = LAUNCH.searchParams.get('token') ?? undefined
  * hence `redirect: 'manual'`). Once per process — the exchanged cookie
  * stays valid for the whole lane run. */
 async function exchangeLaunchCookie(): Promise<string> {
-  const res = await fetch(RAW_URL, { redirect: 'manual' })
+  const log = process.env.DSH_E2E_SERVER_LOG
+  const launch = log ? readFileSync(log, 'utf8').match(/^dsh web: (http:\/\/127\.0\.0\.1:\d+\S*)/m)?.[1] : RAW_URL
+  if (!launch || new URL(launch).origin !== ORIGIN) throw new Error('Isolated host launch URL is unavailable')
+  const res = await fetch(launch, { redirect: 'manual' })
   const setCookie = res.headers.get('set-cookie')
   if (setCookie === null) {
     throw new Error(
@@ -75,6 +80,33 @@ export async function gotoPage(page: Page): Promise<void> {
     }])
   }
   await page.goto(TOKEN === undefined ? RAW_URL : ORIGIN, { waitUntil: 'domcontentloaded' })
+}
+
+/** Restart the real isolated server on the same origin, preserving browser
+ * storage and session logs. No restore events or boundaries are fabricated. */
+export async function restartHost(page: Page): Promise<void> {
+  const testHome = process.env.DSH_E2E_HOME
+  const pidFile = process.env.DSH_E2E_SERVER_PID_FILE
+  const log = process.env.DSH_E2E_SERVER_LOG
+  const command = process.env.DSH_E2E_HOST_COMMAND?.trim().split(/\s+/)
+  if (!testHome || !pidFile || !log || !command?.length) throw new Error('Restart requires scripts/e2e-mount.sh isolation')
+  const previous = Number(readFileSync(pidFile, 'utf8'))
+  if (!Number.isSafeInteger(previous) || previous <= 1) throw new Error('Invalid isolated host PID')
+  process.kill(previous, 'SIGTERM')
+  await expect.poll(async () => {
+    try { await fetch(ORIGIN, { signal: AbortSignal.timeout(500) }); return false }
+    catch { return true }
+  }, { timeout: 15_000 }).toBe(true)
+  const output = openSync(log, 'w')
+  const server = spawn(command[0]!, [...command.slice(1), 'web', '--port', new URL(ORIGIN).port, '--no-open'], {
+    env: { ...process.env, DSH_HOME: testHome }, detached: true, stdio: ['ignore', output, output],
+  })
+  server.unref()
+  closeSync(output)
+  await expect.poll(() => /^dsh web: http:/m.test(readFileSync(log, 'utf8')), { timeout: 90_000 }).toBe(true)
+  expect(Number(readFileSync(pidFile, 'utf8'))).not.toBe(previous)
+  cookieHeader = undefined
+  await gotoPage(page)
 }
 
 /** Authenticated request context for host RPC seeding (cookie attached when

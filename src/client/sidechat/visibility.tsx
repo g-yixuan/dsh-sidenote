@@ -2,7 +2,7 @@ import { useId, useSyncExternalStore } from 'react'
 import type { Context } from '../host/contracts.ts'
 import { registerSessionListFilter } from '../host/sessionList.tsx'
 import { sessionVisibilityOf, type SessionVisibility } from '../host/sessionVisibility.ts'
-import { sideChatMetasAll } from './metaStore.ts'
+import { storedSideChatMetas } from './metaStore.ts'
 import { allClosedSideChats } from './recentClosed.ts'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
@@ -23,7 +23,7 @@ function VisibilitySetting({ visibility }: { visibility: SessionVisibility }) {
 /** Run before orphan-meta cleanup so previous live/closed children can migrate. */
 export function registerSideSessionVisibility(ctx: Context): void {
   const visibility = sessionVisibilityOf(ctx)
-  const ids = [...sideChatMetasAll(), ...allClosedSideChats()].flatMap(record => record.childId ? [record.childId] : [])
+  const ids = [...storedSideChatMetas(), ...allClosedSideChats()].flatMap(record => record.childId ? [record.childId] : [])
   visibility.hide(...ids)
   ctx.effect(() => visibility.watch(), 'dsh-sidenote: side session visibility')
   registerSessionListFilter(ctx, visibility)

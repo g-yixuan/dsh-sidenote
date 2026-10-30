@@ -57,6 +57,13 @@ say "scratch home: ${DSH_HOME}"
 SERVER_PID=""
 cleanup() {
   local code=$?
+  # A recovery test can replace the host. The fixture records the actual Node
+  # PID even when DSH_CMD starts through an npx wrapper.
+  if [ -f "$SCRATCH/server.pid" ]; then
+    local active_pid
+    active_pid="$(cat "$SCRATCH/server.pid")"
+    if [[ "$active_pid" =~ ^[0-9]+$ ]] && [ "$active_pid" -gt 1 ]; then kill "$active_pid" 2>/dev/null || true; fi
+  fi
   if [ -f "$SCRATCH/host-inventory.json" ]; then
     if ! node - "$SCRATCH/host-inventory.json" "$SCRATCH/runtime-inventory.json" <<'JS'
 const fs = require('node:fs')
@@ -159,7 +166,7 @@ node - "$PROFILE_DIR/cordis.patch.yml" "$SCRATCH/runtime-inventory.mjs" "$SCRATC
 const fs = require('node:fs')
 const [file, fixture, output] = process.argv.slice(2)
 const old = fs.readFileSync(file, 'utf8')
-fs.writeFileSync(file, (old.trim() === '[]' ? '' : old) + '\n- insert:\n  - id: sidenote-e2e-inventory\n    name: ' + JSON.stringify(fixture) + '\n    config:\n      output: ' + JSON.stringify(output) + '\n')
+fs.writeFileSync(file, (old.trim() === '[]' ? '' : old) + '\n- insert:\n  - id: sidenote-e2e-inventory\n    name: ' + JSON.stringify(fixture) + '\n    config:\n      output: ' + JSON.stringify(output) + '\n      pidFile: ' + JSON.stringify(require('node:path').join(require('node:path').dirname(output), 'server.pid')) + '\n')
 fs.appendFileSync(file, '- insert:\n  - id: sidenote-e2e-model\n    name: ' + JSON.stringify(require('node:path').join(require('node:path').dirname(fixture), 'controlled-model.mjs')) + '\n')
 fs.appendFileSync(file, '- insert:\n  - id: sidenote-e2e-retained-compaction\n    name: ' + JSON.stringify(require('node:path').join(require('node:path').dirname(fixture), 'retained-compaction.mjs')) + '\n')
 JS
@@ -273,7 +280,8 @@ assert_inventory
 # 步骤 5：Playwright 无头渲染 lane（无-BS 档跑直连冒烟，BS 档跑全量 journey）
 say "运行 Playwright 无头渲染 lane..."
 DSH_E2E_URL="$URL" DSH_E2E_WORKSPACE="$WORKSPACE_DIR" DSH_E2E_SEED_SESSION="$SEED_SESSION_ID" DSH_E2E_HOME="$DSH_HOME" \
-  pnpm exec playwright test mount-direct.e2e.ts annotations.e2e.ts core.e2e.ts running.e2e.ts side-selection.e2e.ts diagnostics.e2e.ts visibility.e2e.ts parity.e2e.ts interaction.e2e.ts context-reading.e2e.ts context-lifecycle.e2e.ts unified-context.e2e.ts review-boundaries.e2e.ts context-submission.e2e.ts compaction.e2e.ts official-model.e2e.ts ${GREP_FILTER:+--grep "$GREP_FILTER"}
+DSH_E2E_HOST_COMMAND="$DSH_CMD" DSH_E2E_SERVER_PID_FILE="$SCRATCH/server.pid" DSH_E2E_SERVER_LOG="$WEB_LOG" \
+  pnpm exec playwright test mount-direct.e2e.ts annotations.e2e.ts core.e2e.ts running.e2e.ts side-selection.e2e.ts diagnostics.e2e.ts visibility.e2e.ts parity.e2e.ts interaction.e2e.ts context-reading.e2e.ts context-lifecycle.e2e.ts unified-context.e2e.ts recovery.e2e.ts review-boundaries.e2e.ts context-submission.e2e.ts compaction.e2e.ts official-model.e2e.ts ${GREP_FILTER:+--grep "$GREP_FILTER"}
 
 assert_inventory
 

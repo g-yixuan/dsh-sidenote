@@ -3,7 +3,7 @@ import type { Context, SessionFace } from '../host/contracts.ts'
 import { chatSourceOf, contextEventSource, inheritedBoundarySource, loadForkBoundary, loadInheritedContext } from '../host/chat.ts'
 import { contextImageLoader } from '../host/attachments.ts'
 import { transcriptOf } from '../chat/transcript.ts'
-import { contextEntriesOf, contextHistory } from './context.ts'
+import { contextEntriesOf, contextHistory, savedContextOf } from './context.ts'
 import { snapshotImages, type ImageBlock } from '../../snapshotProtocol.ts'
 import { effectiveContextNodes, loadMainlineSnapshot, snapshotEntriesFromText, snapshotEntriesOf, splitSnapshotPrefix } from './snapshot.ts'
 
@@ -34,12 +34,7 @@ export function useMainContext(ctx: Context, parentSessionId: string, childId: s
     return { text, ...(attachments.length ? { images: { sessionId: parentSessionId, attachments } } : {}) }
   }, [ctx, parentSessionId, childId, session, snapshotOnly])
   const accept = useCallback(() => { if (sending.current) setAccepted(sending.current) }, [])
-  const saved = useMemo(() => boundarySeq === undefined ? undefined : (legacy?.nodes ?? []).flatMap(value => {
-    const node = value as { kind: string; seq: number; content?: readonly { type: string; text?: string; attachment?: unknown }[] }
-    if (!['user', 'steering'].includes(node.kind) || node.seq <= boundarySeq) return []
-    const prefix = splitSnapshotPrefix(node.content?.find(block => block.type === 'text')?.text ?? '')
-    return prefix ? [{ ...prefix, content: node.content }] : []
-  })[0], [legacy, boundarySeq]) ?? accepted
+  const saved = useMemo(() => boundarySeq === undefined ? undefined : savedContextOf(legacy?.nodes ?? [], childWindow?.entries ?? [], childWindow?.hasMore, boundarySeq), [legacy, childWindow, boundarySeq]) ?? accepted
   const preview = forkedMidTurn && !saved
   const parent = preview ? ctx.sessions.binding(parentSessionId)?.session : undefined
   const parentChat = useMemo(() => preview ? chatSourceOf(ctx, ctx.sessions.binding(parentSessionId)) : undefined, [ctx, parentSessionId, parent, preview])

@@ -33,9 +33,22 @@ function tabRecord(id: string, params?: unknown): NativeTabRecord {
 
 beforeEach(() => {
   localStorage.clear()
+  sessionStorage.clear()
+  sweepOrphanedSideChatMeta()
 })
 
 describe('metaStore', () => {
+  it('另一个窗口覆盖或清理共享记录时，本窗口保留原侧聊身份', () => {
+    const key = 'dsh-sidenote:side-meta:v1:s1:t1'
+    writeSideChatMeta(meta({ tabId: 't1', sessionId: 's1', childId: 'original' }))
+    const other = JSON.stringify(meta({ tabId: 't1', sessionId: 's1', childId: 'other', runId: 'other-window' }))
+    localStorage.setItem(key, other)
+    sweepOrphanedSideChatMeta()
+    expect(readSideChatMeta('s1', 't1')?.childId).toBe('original')
+    dropSideChatMeta('s1', 't1')
+    expect(localStorage.getItem(key)).toBe(other)
+    expect(readSideChatMeta('s1', 't1')).toBeUndefined()
+  })
   it('writes and reads back a record', () => {
     writeSideChatMeta(meta({ tabId: 't1', sessionId: 's1', childId: 'c1', boundarySeq: 7 }))
     expect(readSideChatMeta('s1', 't1')).toMatchObject({ tabId: 't1', sessionId: 's1', childId: 'c1', boundarySeq: 7, number: 1 })
@@ -74,6 +87,15 @@ describe('parseOpenParams', () => {
 })
 
 describe('reconcileMeta', () => {
+  it('刷新优先恢复本窗口身份，跨窗口副本仅作后备', () => {
+    const key = 'dsh-sidenote:side-meta:v1:s1:t1'
+    sessionStorage.setItem(key, JSON.stringify(meta({ tabId: 't1', sessionId: 's1', childId: 'original', runId: 'old-page' })))
+    localStorage.setItem(key, JSON.stringify(meta({ tabId: 't1', sessionId: 's1', childId: 'other', runId: 'other-window' })))
+    sweepOrphanedSideChatMeta()
+    const record = tabRecord('t1')
+    record.navigation.revision = 0
+    expect(reconcileMeta(record, 's1').meta.childId).toBe('original')
+  })
   it('manual reopen preserves inheritance and busy-fork state while explicit child/parent win', () => {
     const record = tabRecord('manual', { parentSessionId: 'right-parent', childId: 'right-child', savedMeta: { childId: 'stale-child', parentSessionId: 'stale-parent', boundarySeq: 44, forkedMidTurn: true, number: 3 } })
     record.navigation.revision = 1
@@ -155,7 +177,7 @@ describe('titleOf', () => {
 })
 
 describe('sweepOrphanedSideChatMeta（孤键清扫）', () => {
-  it('清掉 runId 不匹配的残留记录，保留本 run 的', async () => {
+  it('旧记录仅作为恢复候选，不删除其他窗口的持久记录', async () => {
     const { sweepOrphanedSideChatMeta, SIDENOTE_RUN_ID } = await import('../src/client/sidechat/metaStore.ts')
     // 上一页面生命周期的残留（runId 不同 + 无 runId 的旧版记录）
     writeSideChatMeta(meta({ tabId: 't1', sessionId: 's1', runId: 'old-run' }))
@@ -166,5 +188,6 @@ describe('sweepOrphanedSideChatMeta（孤键清扫）', () => {
     expect(readSideChatMeta('s1', 't1')).toBeUndefined()
     expect(readSideChatMeta('s1', 't2')).toBeUndefined()
     expect(readSideChatMeta('s1', 't3')).toBeDefined()
+    expect(localStorage.getItem('dsh-sidenote:side-meta:v1:s1:t1')).not.toBeNull()
   })
 })

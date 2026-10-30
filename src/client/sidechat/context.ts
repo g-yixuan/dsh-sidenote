@@ -1,4 +1,5 @@
 import { snapshotEntriesOf, splitSnapshotPrefix, type SnapshotEntry } from './snapshot.ts'
+import { inheritedBoundaryOf } from '../host/chat.ts'
 
 /** Read-only rows have event identities, independent of the native side flow. */
 export interface ContextEntry extends SnapshotEntry {
@@ -38,16 +39,19 @@ export function contextHistory(history: readonly ContextEntry[], progress: reado
   return progress.some(entry => entry.kind === 'checkpoint') ? [] : history
 }
 
-/** Saving adds a new end-seed; the first-send cut must NOT move to that seed.
- * Older snapshots lack an explicit cut, so use the seed preceding their input. */
-export function savedContextOf(nodes: readonly unknown[], events: readonly { event: { type: string; seq: number } }[], hasMore = false) {
-  for (const value of [...nodes].reverse()) {
+/** Saving preserves the latest side chat's reading cut. An active side chat
+ * freezes its first own snapshot after afterSeq. Restore markers never establish ownership. */
+export function savedContextOf(nodes: readonly unknown[], events: Parameters<typeof inheritedBoundaryOf>[0], hasMore = false, afterSeq?: number) {
+  for (const value of afterSeq === undefined ? [...nodes].reverse() : nodes) {
     const node = value as { kind: string; seq: number; content?: readonly { type?: string; text?: string; attachment?: unknown }[] }
-    if (node.kind !== 'user' && node.kind !== 'steering') continue
+    if (node.seq <= (afterSeq ?? -1) || node.kind !== 'user' && node.kind !== 'steering') continue
     const saved = splitSnapshotPrefix(node.content?.find(block => block.type === 'text')?.text ?? '')
     if (!saved) continue
-    if (saved.boundarySeq === undefined && hasMore && !events.some(({ event }) => event.type === 'session/end-seed' && event.seq < node.seq)) continue
-    const boundarySeq = saved.boundarySeq ?? ((events.findLast(({ event }) => event.type === 'session/end-seed' && event.seq < node.seq)?.event.seq ?? 0) - 1)
+    let boundarySeq = saved.boundarySeq ?? inheritedBoundaryOf(events, node.seq)
+    if (boundarySeq === undefined) {
+      if (hasMore || events.some(({ event }) => event.type === 'session/end-seed' && event.seq < node.seq)) continue
+      boundarySeq = -1
+    }
     if (!Number.isSafeInteger(boundarySeq) || boundarySeq < -1 || boundarySeq >= node.seq) continue
     return { ...saved, boundarySeq, content: node.content }
   }
