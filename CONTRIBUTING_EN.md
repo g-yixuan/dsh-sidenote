@@ -44,15 +44,15 @@ Interaction, session orchestration, and host compatibility changes need relevant
 
 ```bash
 pnpm exec playwright install chromium
-BS_VERSION=none DSH_EXPECTED_VERSION=0.2.1-rc.2 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.1-rc.2 dsh" pnpm test:mount
+BS_VERSION=none DSH_EXPECTED_VERSION=0.2.1-rc.5 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.1-rc.5 dsh" pnpm test:mount
 ```
 
-The script uses a temporary DSH_HOME. [CI](.github/workflows/ci.yml) generates its exact matrix from package.json's dshSupport: current, previous, and an optional admitted preview. Every matrix job must pass the host-compatibility summary gate. Outside-window users pin their last compatible plugin; ordinary changes do not retest retired hosts. See the [compatibility policy](docs/compatibility_EN.md) for roles and retirement.
+The script uses a temporary DSH_HOME. [CI](.github/workflows/ci.yml) derives exact minimum/latest verified hosts for the current and previous series from package.json's dshSupport; all must pass host-compatibility. Daily discovery detects new RCs; weekly and manual canaries test every published in-window version. Install eligibility and verified evidence are recorded separately; retired hosts pin their last compatible plugin. See the [compatibility policy](docs/compatibility_EN.md).
 
 Keyless E2E verifies interactions and mounting, not model answers. Changes to opening a side chat while the main session is running, cancellation, queues, or progress snapshots also need a real running-session scenario and explicit validation results. State any limits of your validation.
 
 
-`pnpm test:compat` installs exact 0.6.5 in an isolated profile, then verifies rejection and restoration with a local incompatible fixture. Run the real model separately with `DSH_E2E_REAL_KEY_FILE=/path/to/private-key-file pnpm test:mount --grep "official Flash"`, also setting the exact DSH_CMD / DSH_EXPECTED_VERSION above. Only the server reads the key file; it never enters the profile, browser or artifacts. CI does not call external paid models by default. The lane directly uses official api.deepseek.com / deepseek-flash for main/side tools, multiple turns, images and actual reasoning-level requests, saving request metadata without prompts or authentication.
+`pnpm test:compat` installs the current packed build in an isolated profile, then verifies rejection of an incompatible update and restoration of the original package. On an older supported host, use `DSH_COMPAT_BASELINE=dsh-sidenote@0.6.5 pnpm test:compat` to check the historical npm pin. Run the real model separately with `DSH_E2E_REAL_KEY_FILE=/path/to/private-key-file pnpm test:mount --grep "official Flash"`, also setting the exact DSH_CMD / DSH_EXPECTED_VERSION above. Only the server reads the key file; it never enters the profile, browser or artifacts. CI does not call external paid models by default. The lane directly uses official api.deepseek.com / deepseek-flash for main/side tools, multiple turns, images and actual reasoning-level requests, saving request metadata without prompts or authentication.
 
 ## Code and tests
 

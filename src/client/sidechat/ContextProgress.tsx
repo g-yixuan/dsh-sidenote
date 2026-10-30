@@ -3,6 +3,7 @@ import { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconChevronDownOutline14, IconCodeOutline16, IconThinkOutline16 } from '../host/icons.ts'
 import { t } from '../locales.ts'
 import { conversationViewOf } from '../host/dom.ts'
+import { reasoningDisplayText } from '../host/reasoning.ts'
 import { SentContext, sentContextRule } from '../annotations/NativeUserContext.tsx'
 import type { SnapshotEntry } from './snapshot.ts'
 import type { ContextEntry } from './context.ts'
@@ -24,6 +25,8 @@ const ProgressEntry = memo(function ProgressEntry({ entry, live, loadImage }: { 
   const protocol = entry.kind === 'request' ? sentContextRule.match(entry.text, 0) : undefined
   const process = entry.kind === 'thinking' || entry.kind === 'tool'
   const labels = useMemo(() => ({ code: { copyLabel: t('contextCopy'), copiedLabel: t('contextCopied') }, footnotes: t('contextFootnotes') }), [t('contextCopy')])
+  const text = entry.kind === 'thinking' ? reasoningDisplayText(entry.text) : entry.text
+  if (entry.kind === 'thinking' && text !== entry.text && text.trim() === '') return null
   const unfinished = entry.unfinished || entry.kind === 'streaming'
   const status = unfinished ? <span className={css.contextHint}>{t(live ? 'contextstreaming' : 'contextUnfinished')}</span> : null
   if (entry.kind === 'request') return <div className={css.contextUserRow} data-context-kind="request" data-context-key={entry.key}>
@@ -40,10 +43,10 @@ const ProgressEntry = memo(function ProgressEntry({ entry, live, loadImage }: { 
   </div>
   return <details className={css.progressProcess} data-context-kind={entry.kind} data-context-key={entry.key}>
     <summary>{entry.kind === 'tool' ? <IconCodeOutline16 size={14} /> : <IconThinkOutline16 size={14} />}
-      <span>{entry.kind === 'tool' ? entry.toolName : t('contextthinking')}</span><span className={css.progressPreview}>{entry.text}</span>{status}
+      <span>{entry.kind === 'tool' ? entry.toolName : t('contextthinking')}</span><span className={css.progressPreview}>{text}</span>{status}
       <IconChevronDownOutline14 size={12} />
     </summary>
-    <div className={css.progressDetail}>{entry.kind === 'thinking' ? <MarkdownText text={entry.text} streaming={live && unfinished} labels={labels} /> : entry.text}</div>
+    <div className={css.progressDetail}>{entry.kind === 'thinking' ? <MarkdownText text={text} streaming={live && unfinished} labels={labels} /> : text}</div>
   </details>
 })
 

@@ -7,12 +7,12 @@ on:
   workflow_dispatch:
     inputs:
       host-canary:
-        description: Probe the latest and next host channels
+        description: Probe all published hosts in the supported series
         type: boolean
         default: false
-  # Discover upstream channel changes without automatically admitting a host.
+  # Daily discovery; Monday and manual canaries cover every published in-window host.
   schedule:
-    - cron: '0 1 * * 1'
+    - cron: '0 1 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -35,7 +35,7 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Validate admitted roles and resolve the host matrix
+      - name: Validate series ranges and resolve the boundary host matrix
         id: hosts
         run: |
           matrix=$(node scripts/host-window.mjs)
@@ -59,7 +59,7 @@ jobs:
     name: plugin-mount (${{ matrix.dsh-version }}, ${{ matrix.bs-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Current + previous + optional admitted preview, all sharing native chat.
+    # Minimum and latest verified host of each series, deduplicated.
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.ci.outputs.host-matrix) }}
@@ -93,7 +93,13 @@ jobs:
       - name: Mount and run host journeys
         run: pnpm test:mount
 
-      - name: Reject incompatible updates and retain the pinned legacy release
+      - name: Reject incompatible updates and retain the current compatible build
+        run: pnpm test:compat
+
+      - name: Retain the pinned legacy release on its supported hosts
+        if: matrix.dsh-version == '0.2.0-rc.2' || matrix.dsh-version == '0.2.1-rc.2'
+        env:
+          DSH_COMPAT_BASELINE: dsh-sidenote@0.6.5
         run: pnpm test:compat
 
       - name: Upload host inventory and journey evidence
@@ -112,21 +118,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Require CI and every admitted host to succeed
+      - name: Require CI and every boundary host to succeed
         env:
           CI_RESULT: ${{ needs.ci.result }}
           HOST_RESULT: ${{ needs.plugin-mount.result }}
         run: test "$CI_RESULT" = success && test "$HOST_RESULT" = success
 
-  # Resolve each channel once. Unknown versions require admission, not a bypass.
-  host-canary:
+  host-discovery:
     if: github.event_name == 'schedule' || inputs.host-canary == true
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        channel: [latest, next]
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.hosts.outputs.matrix }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -134,56 +137,74 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Resolve the channel once
-        id: host
-        run: |
-          version=$(npm view @deepseek-ai/dsh dist-tags.${{ matrix.channel }})
-          if [ -z "$version" ]; then
-            test '${{ matrix.channel }}' = next
-            echo 'No next channel; no preview candidate.'
-            exit 0
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Canary host: $version"
-      - name: Record the candidate and require explicit admission
-        if: steps.host.outputs.version != ''
+      - run: pnpm install --frozen-lockfile
+      - name: Resolve published hosts once and select regression targets
+        id: hosts
         env:
-          DSH_CANDIDATE: ${{ steps.host.outputs.version }}
-          DSH_CHANNEL: ${{ matrix.channel }}
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           mkdir -p test-results
+          npm view @deepseek-ai/dsh versions dist-tags --json > test-results/host-registry.json
+          args=()
+          if [ "$MANUAL" = true ] || [ "$(date -u +%u)" = 1 ]; then args+=(--all); fi
+          node scripts/host-window.mjs --discover test-results/host-registry.json "${args[@]}" > test-results/host-candidates.json
           node --input-type=module <<'JS'
-          import { readFileSync, writeFileSync } from 'node:fs'
-          const support = JSON.parse(readFileSync('package.json', 'utf8')).dshSupport
-          const record = { channel: process.env.DSH_CHANNEL, version: process.env.DSH_CANDIDATE, admitted: Object.values(support).includes(process.env.DSH_CANDIDATE) }
-          writeFileSync('test-results/host-candidate.json', JSON.stringify(record, null, 2) + '\n')
-          if (!record.admitted) throw new Error('Candidate needs functional, real-model and visible-browser admission before support can expand')
+          import { readFileSync, appendFileSync } from 'node:fs'
+          const plan = JSON.parse(readFileSync('test-results/host-candidates.json', 'utf8'))
+          appendFileSync(process.env.GITHUB_OUTPUT, 'matrix=' + JSON.stringify(plan.matrix) + '\n')
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, '```json\n' + JSON.stringify(plan, null, 2) + '\n```\n')
           JS
-      - name: Install resolved dsh CLI
-        if: steps.host.outputs.version != ''
-        env:
-          DSH_CANDIDATE: ${{ steps.host.outputs.version }}
-        run: npm install -g "@deepseek-ai/dsh@$DSH_CANDIDATE"
-      - name: Build and pack the npm tarball
-        if: steps.host.outputs.version != ''
-        run: pnpm build && pnpm pack
+      - name: Report channels that require a new series admission
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync } from 'node:fs'
+          const plan = JSON.parse(readFileSync('test-results/host-candidates.json', 'utf8'))
+          const outside = plan.channels.filter(channel => !channel.eligible)
+          if (outside.length) throw new Error('Host series admission required: ' + outside.map(x => x.channel + '=' + x.version).join(', '))
+          JS
+      - name: Upload discovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-discovery
+          path: test-results/host-*.json
+          if-no-files-found: ignore
+
+  host-canary:
+    needs: host-discovery
+    # Still exercise in-window hosts when a channel points outside the window.
+    if: always() && needs.host-discovery.outputs.matrix != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.host-discovery.outputs.matrix) }}
+    env:
+      DSH_TELEMETRY_DISABLED: '1'
+      BS_VERSION: none
+      DSH_EXPECTED_VERSION: ${{ matrix.dsh-version }}
+      DSH_E2E_CAPABILITY_FAULT: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install exact candidate CLI
+        run: npm install -g @deepseek-ai/dsh@${{ matrix.dsh-version }}
       - name: Install Playwright Chromium
-        if: steps.host.outputs.version != ''
         run: pnpm exec playwright install --with-deps chromium
-      - name: Canary host journeys
-        if: steps.host.outputs.version != ''
-        env:
-          BS_VERSION: none
-          DSH_EXPECTED_VERSION: ${{ steps.host.outputs.version }}
-          DSH_E2E_CAPABILITY_FAULT: '1'
+      - name: Full host journeys (build and pack through pretest)
         run: pnpm test:mount
+      - name: Installer compatibility and rollback
+        run: pnpm test:compat
       - name: Upload canary evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: host-canary-evidence-${{ matrix.channel }}
+          name: host-canary-evidence-${{ matrix.dsh-version }}
           path: |
             playwright-report/
             test-results/

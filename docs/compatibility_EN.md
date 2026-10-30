@@ -2,24 +2,26 @@
 
 [中文](compatibility.md) · English
 
-The development branch maintains **a current regular host, a previous host, and at most one preview host**. Every host must pass admission and share native Conversation. Regular means DSH's `latest` channel, even if its version contains rc; previews come from `next`. Roles roll explicitly rather than mechanically selecting the latest three versions or following npm tags automatically.
+The development branch maintains **the current base-version series and the preceding series**, sharing native Conversation. A series is the complete version without its prerelease suffix, such as `0.2.1`, not all of `0.2.x`. Starting at each series' minimum compatible RC, later RCs and the unsuffixed release may be installed. Advancing an RC number does not retire supported hosts. Alpha, beta, and outside-window series are not admitted automatically.
 
-`package.json` contains the admitted `dshSupport` roles: `current` is the latest admitted regular host, `previous` is the preceding admitted regular host, and `preview` is an optional admitted preview. Versions must be exact and distinct; use null when no preview qualifies or next matches current. A PR may also set previous to null and document narrower support when native capabilities cannot be shared; never rebuild chat merely to fill a slot. Published installations follow their Release declarations; historical package ranges never change retroactively.
+Installation eligibility and evidence are separate: **an installable version is not necessarily verified**, and compatibility of unpublished RCs is not guaranteed. In `package.json`, `dshSupport.current` / `previous` each record a `minimum` and a sorted `verified` list. Ordinary PRs test each series' minimum and latest verified version, deduplicated; periodic canaries cover intermediate versions and new RCs. A PR may set `previous` to null with an explicit explanation of the narrower window.
 
-| Exact host | Current branch | Outside-window installation |
-|---|---|---|
-| DSH 0.2.1-rc.2, no BS | Current regular host; required CI | — |
-| DSH 0.2.0-rc.2, no BS | Previous host; required CI | — |
-| DSH 0.2.1-rc.3, no BS | Admitted preview; equally required CI | Native support starts with dsh-sidenote 0.7.1 |
-| DSH 0.1.7-rc.2 / 0.1.5-rc.2, no BS | Retired | Pin dsh-sidenote 0.6.5 |
-| DSH 0.1.1-rc.2 + BS 0.12.3 / 0.18.0 | Retired | Pin 0.6.5 and the original BS version |
-| DSH 0.1.2-rc.1 + BS 0.18.0 | Retired | Pin 0.6.5 and the original BS version |
+| Series | Minimum compatible host | Verified exact versions | Required hosts on ordinary PRs |
+|---|---|---|---|
+| Current: 0.2.1 | 0.2.1-rc.2 | rc.2, rc.3, rc.4, rc.5 | 0.2.1-rc.2, 0.2.1-rc.5 |
+| Previous: 0.2.0 | 0.2.0-rc.2 | rc.2 | 0.2.0-rc.2 |
 
-0.6.5 includes @lilongsky’s V4 reflow fix and the follow-up failure acknowledgements, retaining the previous UI and validated rc.3 compatibility. Native rc.3 admission is validated separately, not inferred from the old UI. Native support starts at 0.7.1; historical 0.7.0 still supports only the first two hosts. rc.3 users can run `dsh plugin --profile web add --save-exact dsh-sidenote@0.7.1`.
+This table describes the development branch. The broader range ships with a plugin release containing this change; it does not retroactively change published 0.7.6 or other historical packages. Public installation follows each Release and package declaration. Future RCs in the same series are allowed by default but enter `verified` only after validation.
 
-BS means dsh-better-sidebar. The current branch does not depend on it. Unlisted hosts, alpha releases and BS coexistence combinations are unverified.
+| Retired host | Installation to retain |
+|---|---|
+| DSH 0.1.7-rc.2 / 0.1.5-rc.2, no BS | Pin dsh-sidenote 0.6.5 |
+| DSH 0.1.1-rc.2 + BS 0.12.3 / 0.18.0 | Pin dsh-sidenote 0.6.5 and the original BS version |
+| DSH 0.1.2-rc.1 + BS 0.18.0 | Pin dsh-sidenote 0.6.5 and the original BS version |
 
-Outside the window, the current branch carries no separate chat UI or per-PR host matrix and does not backport features or routine fixes. Historical npm packages and Releases remain available. No long-lived branch per host is needed. A critical problem may warrant a separately scoped patch decision; this does not imply indefinite maintenance.
+0.6.5 includes @lilongsky's V4 reflow fix and subsequent failure acknowledgements, retaining the old interface and validated rc.3 compatibility. Native rc.3 support starts at 0.7.1; historical 0.7.0 does not support it. BS means dsh-better-sidebar; the current branch does not depend on it, and coexistence combinations are unverified.
+
+Outside the window, the current branch carries no separate chat interface or per-PR historical-host matrix and does not backport features or routine fixes. Historical npm packages and Releases remain available. Critical patches are scoped separately; no long-lived branch per host is needed.
 
 ## Keeping an older host compatible
 
@@ -29,15 +31,15 @@ Pin its last compatible plugin:
 dsh plugin --profile web add --save-exact dsh-sidenote@0.6.5
 ```
 
-This writes an exact profile dependency so ordinary range updates cannot cross the compatibility boundary. Explicitly choosing another version is a separate operation. After upgrading to an admitted host, install a compatible newer plugin.
+This writes an exact profile dependency so broad dependency updates cannot cross the compatibility boundary. After upgrading into the window, install a compatible newer plugin.
 
 Three layers enforce this policy:
 
-- **Repository:** maintain exact roles in `dshSupport`. `node scripts/host-window.mjs` checks both DSH engines and the UI primitives peer against those roles, failing on mismatches, then generates the CI matrix. The current range is `=0.2.0-rc.2 || =0.2.1-rc.2 || =0.2.1-rc.3`. DSH 0.2.0 checks DSH peers, so root engines alone is insufficient.
-- **npm:** retain historical packages and point `latest` at the current release. Dist-tags are aliases, not host-aware selection. Older packages need neither removal nor a new package name.
-- **DSH installer/market:** enforce compatibility. The 0.2.1 market can filter compatible releases if its index contains their metadata. Direct CLI installation rejects an incompatible target or restores the prior installation; it does not promise to search every historical npm version. Automatic fallback on earlier installers is unverified, hence the exact-version command above.
+- **Repository:** `dshSupport` records series floors and verified versions. `node scripts/host-window.mjs` checks both DSH engines and the UI primitives peer against the series ranges and generates an exact CI matrix; `--all` emits all verified versions. The current range is `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.2 <0.2.2-0`; each upper bound excludes every prerelease of the next series. DSH 0.2.0 checks DSH peers, so root engines alone is insufficient.
+- **npm:** retain historical packages and point `latest` at the current plugin release. Dist-tags are aliases, not host-aware selection; old packages need neither removal nor a new name.
+- **DSH installer/market:** enforce the declared range. The 0.2.1 market can select compatible releases from a complete index. Direct CLI installation rejects incompatible targets or restores the prior installation, without promising to search all historical npm versions. Automatic fallback on earlier installers is unverified.
 
-Before raising the host requirement, identify retiring hosts and their last compatible plugin. Update roles, all three ranges and bilingual guides in the same PR; CI consumes the role list automatically. Required GitHub checks stay ci + host-compatibility, so ruleset changes and readback are needed only when the gate structure changes. Retain the old npm package after publishing. Feature PRs do not bump the package version; releases use a separate PR.
+Before rolling the window, validate the new series with full functional, relevant real-model, and visible-browser journeys. Update the inventory, all three ranges, and bilingual guides through a PR, effective with the plugin release. Current becomes previous and the former previous retires; record its last compatible plugin and exact installation command. A new alpha or npm tag change never retires a series. Feature PRs keep the plugin version unchanged; releases use a separate PR.
 
 ## Native conversation reuse
 
@@ -59,8 +61,10 @@ Reports download only on request and are never uploaded automatically. They cont
 
 ## Validation and rolling admission
 
-Relevant PRs run `ci`, every `plugin-mount` generated from the roles, and the fixed `host-compatibility` summary. Admitted previews are equally required. Failure, cancellation or skipping of ci or any admitted host cannot pass the gate. Each host uses official installation, isolated DSH_HOME, runtime component versions and the current bundle digest for the same full journeys. A controlled model makes queue, stop, rejection and recovery repeatable; the separate official Flash lane validates external responses and real tools. Reports distinguish message acceptance from successful model replies.
+Relevant PRs run `ci`, every `plugin-mount` for the minimum and latest verified hosts of both series, and the fixed `host-compatibility` summary. Failed, cancelled, or skipped dependencies cannot pass. Required checks remain ci + host-compatibility. Window changes keep these names; gate-structure changes require updating and reading back the actual ruleset.
 
-Pin each candidate exactly and complete functional, relevant real-model and visible-browser validation before a PR changes the roles. A newly admitted next replaces only preview, preserving current / previous. After a new regular host passes admission and ships in a plugin release, current becomes previous and the former previous retires; clear preview if it matches the new current. Record the last compatible plugin and exact installation command for each retired host. Do not remove historical packages or backport every feature. These latest / next tags belong to DSH, not this plugin; a tag change alone never admits or retires a host.
+Daily canary reads npm's versions and latest / next tags once. Using the same series ranges, it deduplicates and runs full journeys for every published RC/release not yet in `verified`, each series' newest published version, and in-window channel targets. This also catches RCs whose tags advanced between probes. Every Monday, and when host-canary is enabled manually, it tests every published in-window RC/release, including intermediate versions. Outside-window latest / next targets are recorded and explicitly fail with an admission notice while in-window hosts still run; a missing next may be skipped.
 
-Weekly or manually enabled host-canary resolves latest / next once each and records exact candidates; a missing next channel may be skipped. An unadmitted candidate records an explicit admission failure rather than bypassing install declarations; admitted hosts run the full journey. Canary is outside the required PR gate, with visible failures but no automatic changes to roles, ranges or user environments. Enable host-canary in Actions workflow_dispatch to run it manually.
+Each host uses official installation, isolated DSH_HOME, actual component versions, and the current bundle digest. Controlled models cover queue, stop, rejection, recovery, and main/side isolation; the separate official Flash lane validates external responses and real tools. Reports distinguish message acceptance from successful model replies. After full functional, relevant real-model, and visible-browser validation, record a new version in `verified` through a PR. Canary does not write verification records, publish plugins, or upgrade user environments, and is outside the required per-PR gate.
+
+Future RCs within a series may be installed before validation completes. If an interface actually breaks, adapt it or narrow the declared range through a PR identifying the affected versions. Evidence covers only versions actually exercised; minimum/latest checks do not replace intermediate-version admission and periodic regression. `pnpm test:compat` verifies that an incompatible update restores the current compatible build. On hosts supported by the old release, `DSH_COMPAT_BASELINE=dsh-sidenote@0.6.5 pnpm test:compat` also verifies the exact historical npm pin.
