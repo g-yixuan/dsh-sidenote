@@ -57,6 +57,7 @@ function liveMeta(tabId: string, extra?: { childId?: string, number?: number, to
 
 beforeEach(() => {
   localStorage.clear()
+  sessionStorage.clear()
   clearNativeRuntime()
 })
 

@@ -14,7 +14,7 @@ function history() {
     eventSource: { getSnapshot: () => window },
   } as unknown as SessionFace
   return { session, loadThrough,
-    page: (seq: number, seed = false) => { window = { entries: [{ event: { type: seed ? 'session/end-seed' : 'user/message', seq, data: {} } }, ...window.entries], hasMore: seq > 0 } },
+    page: (seq: number, seed = false) => { window = { entries: [{ event: { type: seed ? 'session/end-seed' : 'user/message', seq, data: seed ? { inherited: true } : {} } }, ...window.entries], hasMore: seq > 0 } },
     busy: (value: boolean) => { loadingOlder = value; for (const fn of [...listeners]) fn() },
     listeners,
   }

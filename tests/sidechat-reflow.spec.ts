@@ -6,6 +6,14 @@ import { pairQuestions } from '../src/client/sidechat/model.ts'
 
 const message = (role: ChatMessage['role'], text: string, seq: number, extra: Partial<ChatMessage> = {}): ChatMessage => ({ role, text, seq, key: String(seq), ...extra })
 describe('fork-local final answers', () => {
+  it('归属未就绪时不能回流；明确无继承历史时允许回流', () => {
+    const messages = [message('user', 'q', 1), message('assistant', 'answer', 2)]
+    expect(finalReplies(messages, undefined, new Set([2]))).toEqual([])
+    expect(finalReplies(messages, -1, new Set([2]))).toHaveLength(1)
+    const side: SideConversation = { history: [], sessionId: 'child', parentSessionId: 'parent', title: 'Side', reflow: createReflowStore(() => 1, null) }
+    addReply(side, messages[1]!)
+    expect(side.reflow.list('parent')).toEqual([])
+  })
   it('reflows the question without duplicating a busy-fork progress snapshot', () => {
     const question = '<mainline-progress-snapshot taken-at="now">inherited progress</mainline-progress-snapshot>\n\nactual question'
     expect(pairQuestions([message('user', question, 3), message('assistant', 'final', 4)]).get('4')).toBe('actual question')
@@ -31,7 +39,7 @@ describe('fork-local final answers', () => {
     expect(finalReplies([message('user', 'q', 3), message('assistant', 'completed final', 4)], 2, new Set([4]))).toHaveLength(1)
   })
   it('uses durable source identity and reflects removal without merging identical later answers', () => {
-    const side: SideConversation = { history: [], sessionId: 'child', parentSessionId: 'parent', title: 'Side', reflow: createReflowStore(() => 1, null) }
+    const side: SideConversation = { history: [], sessionId: 'child', parentSessionId: 'parent', title: 'Side', boundarySeq: -1, reflow: createReflowStore(() => 1, null) }
     const first = message('assistant', 'same answer', 4)
     addReply(side, first, 'same question'); addReply(side, first, 'same question')
     expect(side.reflow.list('parent')).toHaveLength(1)

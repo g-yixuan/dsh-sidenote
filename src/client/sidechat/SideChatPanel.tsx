@@ -57,8 +57,12 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   useEffect(() => { openSessionWindow(session) }, [session])
   const context = useMainContext(ctx, meta.parentSessionId ?? scope.sessionId, childId, session, meta.snapshotOnly === true, meta.forkedMidTurn === true)
   const { boundarySeq, messages, history, progress, loadContext, loadImage, childChat: chat } = context
+  const [boundaryError, setBoundaryError] = useState<string>()
   useEffect(() => {
-    if (session && !meta.snapshotOnly && boundarySeq === undefined) void loadForkBoundary(session).catch(error => { console.warn('[dsh-sidenote] 恢复继承边界失败:', error) })
+    if (!session || meta.snapshotOnly || boundarySeq !== undefined) { setBoundaryError(undefined); return }
+    let active = true
+    void loadForkBoundary(session).catch(error => { if (active) setBoundaryError(String(error instanceof Error ? error.message : error)) })
+    return () => { active = false }
   }, [session, meta.snapshotOnly, boundarySeq])
   // Repair pre-fix tab metadata from the durable fork marker, without touching history.
   useEffect(() => {
@@ -84,7 +88,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   const composer = useComposer(ctx, session, childId)
   useEffect(() => childId === undefined ? undefined : registerSubmissionExtras(childId, extras), [childId, extras])
   useEffect(() => {
-    if (meta.topic !== undefined) return
+    if (meta.topic !== undefined || boundarySeq === undefined) return
     const first = messages.find(message => message.role === 'user' && (message.seq ?? -1) > (boundarySeq ?? -1))
     if (first) extras.onSubmitText(first.text)
   }, [messages, meta.topic, boundarySeq, extras])
@@ -145,7 +149,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   if (phase === 'fork-error') return <StateScreen title={t('forkErrorTitle')} detail={forkError ?? undefined} hint={t('forkErrorHint')} />
   if (phase === 'missing') return <StateScreen title={t('missingTitle')} detail={t('missingDetail')} hint={t('missingHint')} />
   if (phase !== 'chat' || !reference || !childId) return <StateScreen title={t('preparing')} />
-  const side: SideConversation = { sessionId: childId, parentSessionId: meta.parentSessionId ?? scope.sessionId, title: tab.title, boundarySeq, reflow: props.reflow, history, loadImage, progress, loadContext, loadProgressImage: context.loadProgressImage, contextPending: context.contextPending }
+  const side: SideConversation = { sessionId: childId, parentSessionId: meta.parentSessionId ?? scope.sessionId, title: tab.title, boundarySeq, reflow: props.reflow, history, loadImage, progress, loadContext, loadError: boundaryError, loadProgressImage: context.loadProgressImage, contextPending: context.contextPending }
   const replies = finalReplies(messages, boundarySeq, new Set(chat?.getCompletedReplySeqs?.() ?? []))
   const questions = pairQuestions(messages)
   const allAdded = replies.length > 0 && replies.every(reply => isReplyAdded(side, reply, questions.get(reply.key)))
@@ -155,7 +159,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
     <div className={css.nativeToolbar}>
       <button type="button" className={css.nativeAction} onClick={() => { openSession(ctx, side.parentSessionId) }}>{t(parentPending ? 'parentPending' : parentSnapshot?.running ? 'parentRunning' : 'parentIdle')}</button>
       <span className={css.nativeToolbarActions}>
-        <button type="button" className={css.nativeAction} disabled={running || replies.length === 0 || allAdded} aria-pressed={allAdded} onClick={() => { for (const reply of replies) addReply(side, reply, questions.get(reply.key)) }}>{t(allAdded ? 'reflowAllDone' : 'reflowAll')}</button>
+        <button type="button" className={css.nativeAction} disabled={running || replies.length === 0 || allAdded} title={t(boundarySeq === undefined ? 'reflowPending' : 'reflowAllTitle')} aria-pressed={allAdded} onClick={() => { for (const reply of replies) addReply(side, reply, questions.get(reply.key)) }}>{t(allAdded ? 'reflowAllDone' : 'reflowAll')}</button>
         <button type="button" className={css.nativeAction} disabled={running || composer.pending || hasDraft || saving} title={t(running || composer.pending ? 'promoteBusy' : hasDraft ? 'promoteDraftBusy' : 'promoteTitle')} onClick={() => { void promote() }}>{t('promote')}</button>
       </span>
     </div>

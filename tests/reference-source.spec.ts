@@ -37,7 +37,7 @@ function liveMeta(sessionId: string, tabId: string, childId: string, topic?: str
 }
 
 describe('@引用候选的会话作用域（M2）', () => {
-  beforeEach(() => localStorage.clear())
+  beforeEach(() => { localStorage.clear(); sessionStorage.clear() })
 
   it('同会话 pick 命中；跨会话复用候选名拒绝', async () => {
     const { ctx, source } = fakeCtx()
@@ -58,6 +58,7 @@ describe('@引用候选的会话作用域（M2）', () => {
     const cands = await source().candidates({ sessionId: 'sess-A' }, new AbortController().signal)
     // 会话清空（tab 关闭）→ 重新 candidates 得空列表 → 旧名失效
     localStorage.clear()
+    sessionStorage.clear()
     await source().candidates({ sessionId: 'sess-A' }, new AbortController().signal)
     expect(source().onPick({ candidate: cands[0]!, session: { sessionId: 'sess-A' } })).toBeUndefined()
   })

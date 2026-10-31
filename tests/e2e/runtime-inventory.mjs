@@ -20,6 +20,7 @@ function owningManifest(file, expected) {
 }
 
 export function apply(ctx, config) {
+  if (config.pidFile) writeFileSync(config.pidFile, String(process.pid))
   const modules = ctx.clientModules
   const collect = () => {
     const graph = modules.graph()

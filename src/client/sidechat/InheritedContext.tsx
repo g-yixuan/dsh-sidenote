@@ -16,6 +16,7 @@ export interface InheritedContextData {
   loadProgressImage?: (attachment: unknown) => Promise<string>
   progress?: { entries: SnapshotEntry[]; takenAt?: string | null }
   loadContext?: () => Promise<void>
+  loadError?: string
 }
 
 /** Side and saved sessions share the same reader and its local scroll owner. */
@@ -42,7 +43,8 @@ export function InheritedContext({ context }: { context: InheritedContextData })
         <IconChevronDownOutline14 size={12} className={expanded ? css.contextChevronOpen : css.contextChevron} />
         <span>{t('mainContext')}</span><span className={css.contextHint}>{context.contextPending ? t('contextAtSend') : context.progress?.takenAt ? t('contextAsOf', { time: context.progress.takenAt }) : t('contextInherited')}</span>
       </button>
-      {expanded && <ContextProgress id={contextId} history={context.history} entries={context.progress?.entries ?? []} live={context.contextPending === true} loading={loading} error={error} onRetry={() => { setAttempt(value => value + 1) }} loadImage={context.loadImage} loadProgressImage={context.loadProgressImage} />}
+      {!expanded && context.loadError && <div className={css.errorRow} role="alert">{context.loadError}<button type="button" className={css.nativeAction} onClick={() => { fold.toggle('inherited') }}>{t('contextRetry')}</button></div>}
+      {expanded && <ContextProgress id={contextId} history={context.history} entries={context.progress?.entries ?? []} live={context.contextPending === true} loading={loading} error={error ?? (loading ? undefined : context.loadError)} onRetry={() => { setAttempt(value => value + 1) }} loadImage={context.loadImage} loadProgressImage={context.loadProgressImage} />}
     </div>
   </div>
 }

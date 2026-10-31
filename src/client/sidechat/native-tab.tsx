@@ -199,6 +199,8 @@ function NativeSideChatBodyInner(props: NativeBodyInjected & NativeTabFrameworkP
     ...(meta === undefined ? {} : { meta }),
   }
 
+  if (isRestoredNativeTab(nativeTab) && !meta.childId) return <div role="alert" className={css.errorRow}>{t('sideRestoreMissing')}</div>
+
   return (
     <div className={css.nativeHost} data-dsh-sidenote-native-host="">
       <SideChatPanel ctx={ctx} store={undefined} scope={scope} tab={tab} visible={nativeTab.visible} reflow={reflow} annotations={annotations} renderConversation={(reference, side) => renderSideConversation(props, reference, side)} quoteRequestId={parseOpenParams(nativeTab.navigation.params)?.quoteRequestId} />

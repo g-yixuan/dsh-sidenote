@@ -3,7 +3,7 @@ import type { Context, ConversationSnapshot, ObservableSnapshot, SessionBinding,
 export interface ContextEvent {
   type: string
   seq: number
-  data: { turn?: number | null; commandId?: string; sourceCommandId?: string; source?: { kind?: string }; content?: readonly { type: string; text?: string }[]; message?: { content: readonly { type: string; text?: string }[] }; summary?: readonly { type: string; text?: string }[]; shadowedSeqs?: readonly number[] }
+  data: { inherited?: boolean; turn?: number | null; commandId?: string; sourceCommandId?: string; source?: { kind?: string }; content?: readonly { type: string; text?: string }[]; message?: { content: readonly { type: string; text?: string }[] }; summary?: readonly { type: string; text?: string }[]; shadowedSeqs?: readonly number[] }
   surfaceOp?: 'append' | { op: 'replace'; startSeq: number; endSeq: number }
 }
 export interface ContextEventWindow { entries: readonly { event: ContextEvent }[]; hasMore?: boolean }
@@ -24,16 +24,19 @@ export function unfinishedCompactionCut(session: SessionFace | undefined): numbe
   return (command?.seq ?? last.seq) - 1
 }
 
-/** Published event window, shared by all supported hosts. Its last seed marker
- * is the child’s own fork cut (earlier markers can belong to ancestor forks). */
+/** Restore also appends end-seed, but only inherited=true records a fork cut.
+ * A saved copy resolves the cut before its original first-send snapshot. */
+export function inheritedBoundaryOf(entries: readonly { event: { type: string; seq: number; data?: { inherited?: boolean } } }[], beforeSeq = Infinity): number | undefined {
+  const seed = entries.findLast(({ event }) => event.type === 'session/end-seed' && event.data?.inherited === true && event.seq < beforeSeq)
+  return seed === undefined ? undefined : seed.event.seq - 1
+}
+
+/** The loaded window can lack the inherited marker; undefined means pending. */
 export function inheritedBoundarySource(session: SessionFace | undefined): ObservableSnapshot<number | undefined> | undefined {
   const source = contextEventSource(session)
   return source && {
     subscribe: notify => source.subscribe(notify),
-    getSnapshot: () => {
-      const seed = source.getSnapshot().entries.findLast(entry => entry.event.type === 'session/end-seed')
-      return seed === undefined ? undefined : seed.event.seq - 1
-    },
+    getSnapshot: () => inheritedBoundaryOf(source.getSnapshot().entries),
   }
 }
 

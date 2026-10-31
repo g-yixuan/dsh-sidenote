@@ -54,6 +54,8 @@ BS_VERSION=none DSH_EXPECTED_VERSION=0.2.1-rc.5 DSH_CMD="npx -y --package @deeps
 
 `pnpm test:compat` 使用隔离 profile 安装当前打包构建，再验证不兼容更新被拒绝和原包恢复。退役系列通过 `DSH_COMPAT_BASELINE` 与 `DSH_COMPAT_REJECTED` 检查旧包钉版和真实新构建拒装，命令见[兼容政策](docs/compatibility.md)。真实模型单独运行：`DSH_E2E_REAL_KEY_FILE=/path/to/private-key-file pnpm test:mount --grep "official Flash"`（同时设置上例的精确 DSH_CMD / DSH_EXPECTED_VERSION）。Key 文件只由服务进程读取，不进入 profile、浏览器或产物；CI 默认不调用外部付费模型。此 lane 直连官方 api.deepseek.com / deepseek-flash，验证主侧工具、多轮、图片及实际推理等级请求，保存不含正文或鉴权信息的请求元数据。
 
+原生账号的真实重启验收：先在隔离的 `<scratch>/home` 中准备 DeepSeek 登录，再运行 `DSH_HOME_BASE=<scratch> DSH_E2E_ACCOUNT_MODEL="模型列表中的 Flash 名称" pnpm test:mount --grep "account Flash"`，同样设置精确宿主版本。该测试验证读文件、两次进程重启、侧聊记忆、回流后主线读取和再次分叉；凭证保留在隔离宿主中，请求证据只记录模型、状态和计数。没有账号配置时，默认 CI 跳过此测试。
+
 ## 代码与测试
 
 - 沿用邻近代码风格，不把无关格式化、重构或依赖升级混进 PR。

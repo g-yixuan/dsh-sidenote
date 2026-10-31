@@ -47,6 +47,8 @@ Clarify a detail during a design review or explore an implementation while readi
 
 Side chats support multiple turns, tool cards, model and permission switching, images, `@` references, and approvals inside the panel. Main and side conversations can move forward independently.
 
+After a reload or DSH restart, the side chat’s own exchanges stay in its conversation area and inherited mainline context keeps its collapsible section. Saving as a regular session preserves that separation; opening another side chat from the saved session establishes a new inherited range. Messages remain readable while their origin is being confirmed, and handback becomes available once it is confirmed.
+
 ### Put your feedback on the passage
 
 Select part of a reply in the main conversation or a side chat, then add a question or comment. **The original passage and your note stay together.** Collect several notes, preview or remove them before sending, and keep writing in the composer.

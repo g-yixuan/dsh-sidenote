@@ -155,7 +155,7 @@ export async function selectModel(page: Page, view: Locator, name: string): Prom
   const button = view.getByRole('button', { name: /^(Select model|选择模型)/ })
   if ((await button.getAttribute('aria-label'))?.includes(name)) return
   await button.click()
-  const choice = page.getByRole('menuitemradio', { name, exact: true })
+  const choice = page.getByRole('menuitemradio', { name })
   const modelMenu = page.getByRole('menuitem', { name: /^(Model |模型)/ })
   await expect(choice.or(modelMenu)).toBeVisible()
   if (await choice.count() === 0) await modelMenu.click()

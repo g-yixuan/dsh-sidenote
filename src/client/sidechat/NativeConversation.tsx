@@ -41,7 +41,8 @@ function Content(props: ContentProps) {
 }
 
 /** Only completed, fork-local final answers are eligible for reflow. */
-export function finalReplies(messages: readonly ChatMessage[], boundarySeq = -1, completed?: ReadonlySet<number>): ChatMessage[] {
+export function finalReplies(messages: readonly ChatMessage[], boundarySeq: number | undefined, completed?: ReadonlySet<number>): ChatMessage[] {
+  if (boundarySeq === undefined) return []
   const replies: ChatMessage[] = []
   let final: ChatMessage | undefined
   const finish = (): void => { if (final && !final.streaming && !final.interrupted && final.text.trim() !== '' && (completed === undefined || (final.seq !== undefined && completed.has(final.seq)))) replies.push(final) }
@@ -59,6 +60,7 @@ export function isReplyAdded(side: SideConversation, message: ChatMessage, quest
   return side.reflow.list(side.parentSessionId).some(item => item.sourceKey === key || (item.sourceKey === undefined && item.sideTitle === side.title && item.text === message.text && item.question === question))
 }
 export function addReply(side: SideConversation, message: ChatMessage, question?: string): void {
+  if (side.boundarySeq === undefined || message.seq === undefined || message.seq <= side.boundarySeq) return
   if (!isReplyAdded(side, message, question)) {
     side.reflow.add(side.parentSessionId, side.title, message.text, question, `${side.sessionId}:${message.seq ?? message.key}`)
   }

@@ -14,11 +14,9 @@
  * 孤键清扫：不能用旧页面键判断 tab 仍存活，而
  * 「有记录 ⇒ tab 存活」是编排层的判定——残留记录会把入口折叠成聚焦一个
  * 不存在的 tab（死锁，对抗性审查 B2）。每条记录带本页面生命周期的
- * runId，插件 apply 时撤掉 runId 不匹配的活记录。仅真正挂载的 restored
- * tab（navigation revision 0）可重新绑定恢复候选；普通新开不能认领它。
- * 已知限制：同一 origin 开两个窗口时，后启动窗口的清扫会清掉先开窗口的
- * 活记录（其面板 reconcile 幂等重建，childId 丢失退回首开 fork）——
- * 多窗口为边角场景，记录在案。
+ * runId，只有本页面认领的记录才算存活。sessionStorage 保留本窗口身份，
+ * localStorage 提供跨窗口关闭后的恢复副本；启动时只收集恢复候选，
+ * 不删除其他窗口的记录。仅 restored tab（revision 0）可认领旧身份。
  */
 export interface SideChatMetaRecord {
   readonly tabId: string
@@ -105,6 +103,15 @@ function storage(): Storage | null {
   return typeof localStorage === 'undefined' ? null : localStorage
 }
 
+function windowStorage(): Storage | null {
+  return typeof sessionStorage === 'undefined' ? null : sessionStorage
+}
+
+function readRecord(store: Storage | null, key: string): SideChatMetaRecord | undefined {
+  try { return revive(JSON.parse(store?.getItem(key) ?? 'null')) ?? undefined }
+  catch { return undefined }
+}
+
 // ── 变更订阅（标题槽活渲染用；版本号单调递增即可，不区分键） ──────────────────
 
 let version = 0
@@ -130,34 +137,29 @@ export function notifySideChatMetaListeners(): void {
 }
 
 export function readSideChatMeta(sessionId: string, tabId: string): SideChatMetaRecord | undefined {
-  const store = storage()
-  if (store === null) return undefined
-  try {
-    const raw = store.getItem(keyOf(sessionId, tabId))
-    if (raw === null) return undefined
-    return revive(JSON.parse(raw)) ?? undefined
-  } catch {
-    return undefined
-  }
+  const key = keyOf(sessionId, tabId)
+  const record = readRecord(windowStorage(), key) ?? readRecord(storage(), key)
+  return record?.runId === SIDENOTE_RUN_ID ? record : undefined
 }
 
 /** 写/合并一个 tab 的 meta（整体替换语义由调用方组合：先读再写）。 */
 export function writeSideChatMeta(record: SideChatMetaRecord, options?: { silent?: boolean }): void {
-  const store = storage()
-  if (store === null) return
-  try {
-    store.setItem(keyOf(record.sessionId, record.tabId), JSON.stringify(record))
-    if (options?.silent !== true) notify()
-  } catch { /* 隐私模式/写失败：meta 缺席降级为无绑定首开 */ }
+  const value = JSON.stringify({ ...record, runId: record.runId ?? SIDENOTE_RUN_ID })
+  for (const store of [windowStorage(), storage()]) {
+    try { store?.setItem(keyOf(record.sessionId, record.tabId), value) }
+    catch { /* The other store can still preserve this identity. */ }
+  }
+  if (options?.silent !== true) notify()
 }
 
 export function dropSideChatMeta(sessionId: string, tabId: string): void {
-  const store = storage()
-  if (store === null) return
+  const key = keyOf(sessionId, tabId)
+  try { windowStorage()?.removeItem(key) } catch { /* ignore */ }
   try {
-    store.removeItem(keyOf(sessionId, tabId))
-    notify()
+    const store = storage()
+    if (readRecord(store, key)?.runId === SIDENOTE_RUN_ID) store?.removeItem(key)
   } catch { /* ignore */ }
+  notify()
 }
 
 /** 枚举一个主会话的全部 meta 记录（按创建序升序）。 */
@@ -167,20 +169,23 @@ export function sideChatMetasOf(sessionId: string): SideChatMetaRecord[] {
 
 /** 枚举全部存活记录（跨会话；完成通知等全局监听用）。 */
 export function sideChatMetasAll(): SideChatMetaRecord[] {
-  const store = storage()
-  if (store === null) return []
-  try {
-    const out: SideChatMetaRecord[] = []
-    for (let i = 0; i < store.length; i += 1) {
-      const key = store.key(i)
-      if (typeof key !== 'string' || !key.startsWith(KEY_PREFIX)) continue
-      const record = revive(JSON.parse(store.getItem(key) ?? 'null'))
-      if (record !== null) out.push(record)
-    }
-    return out
-  } catch {
-    return []
+  return storedSideChatMetas().filter(record => record.runId === SIDENOTE_RUN_ID)
+}
+
+/** Durable recovery records; a window's own copy wins over another window. */
+export function storedSideChatMetas(): SideChatMetaRecord[] {
+  const records = new Map<string, SideChatMetaRecord>()
+  for (const store of [storage(), windowStorage()]) {
+    try {
+      for (let i = 0; store && i < store.length; i++) {
+        const key = store.key(i)
+        if (!key?.startsWith(KEY_PREFIX)) continue
+        const record = readRecord(store, key)
+        if (record) records.set(key, record)
+      }
+    } catch { /* Read the other store when one is unavailable. */ }
   }
+  return [...records.values()]
 }
 
 /**
@@ -194,28 +199,12 @@ export function nextSideChatNumber(sessionId: string): number {
 }
 
 /**
- * 孤键清扫：删掉 runId 与本页面生命周期不匹配的记录（上一页面周期的
- * 残留）。插件 apply 时调用一次；撤掉活身份，等待实际恢复记录认领。
- * 返回清扫数。
+ * 启动时收集恢复候选；持久记录不作为存活证明，也不跨窗口删除。
  */
 export function sweepOrphanedSideChatMeta(): number {
-  const store = storage()
-  if (store === null) return 0
-  try {
-    const staleKeys: string[] = []
-    for (let i = 0; i < store.length; i += 1) {
-      const key = store.key(i)
-      if (typeof key !== 'string' || !key.startsWith(KEY_PREFIX)) continue
-      const record = revive(JSON.parse(store.getItem(key) ?? 'null'))
-      if (record === null || record.runId !== SIDENOTE_RUN_ID) {
-        if (record !== null) restorationCandidates.set(key, record)
-        staleKeys.push(key)
-      }
-    }
-    for (const key of staleKeys) store.removeItem(key)
-    if (staleKeys.length > 0) notify()
-    return staleKeys.length
-  } catch {
-    return 0
+  restorationCandidates.clear()
+  for (const record of storedSideChatMetas()) {
+    if (record.runId !== SIDENOTE_RUN_ID) restorationCandidates.set(keyOf(record.sessionId, record.tabId), record)
   }
+  return restorationCandidates.size
 }

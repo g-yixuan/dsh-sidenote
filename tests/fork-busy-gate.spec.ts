@@ -14,7 +14,7 @@ function makeEnv(opts: { parentRunning: boolean; endSeq?: number; forkFails?: st
   const parent = { session: { getSnapshot: () => ({ running: opts.parentRunning }), subscribe: () => () => {} } }
   const binding = { session: {
     getSnapshot: () => ({ running: false }), cancel: vi.fn(), prompt: vi.fn(), subscribe: () => () => {},
-    eventSource: { subscribe: () => () => {}, getSnapshot: () => ({ entries: opts.endSeq === undefined ? [] : [{ event: { type: 'session/end-seed', seq: opts.endSeq + 1 } }] }) },
+    eventSource: { subscribe: () => () => {}, getSnapshot: () => ({ entries: opts.endSeq === undefined ? [] : [{ event: { type: 'session/end-seed', seq: opts.endSeq + 1, data: { inherited: true } } }] }) },
   } }
   const fork = vi.fn(async () => {
     if (opts.forkFails) throw new Error(opts.forkFails)
@@ -108,17 +108,22 @@ describe('fork cut and history ownership', () => {
     await expect(forkAndRegister(env.ctx, 'parent-1', 'tab1')).rejects.toThrow('not-found')
     expect(env.create).not.toHaveBeenCalled()
   })
-  it('recovers the actual child cut from the last seed, not a later user/steering node', () => {
+  it('重启恢复标记和后续插话不改变明确的继承边界', () => {
     const subscribe = vi.fn(() => () => {})
     const session = { eventSource: { subscribe, getSnapshot: () => ({ entries: [
-      { event: { type: 'session/end-seed', seq: 5 } },
-      { event: { type: 'session/end-seed', seq: 13 } },
+      { event: { type: 'session/end-seed', seq: 5, data: { inherited: true } } },
+      { event: { type: 'session/end-seed', seq: 13, data: { inherited: true } } },
       { event: { type: 'user/steering', seq: 99 } },
+      { event: { type: 'session/end-seed', seq: 101, data: {} } },
     ] }) } } as unknown as SessionFace
     const source = inheritedBoundarySource(session)!
     expect(source.getSnapshot()).toBe(12)
     source.subscribe(() => {})
     expect(subscribe).toHaveBeenCalledOnce()
     expect(inheritedBoundarySource(undefined)).toBeUndefined()
+  })
+  it('只加载到恢复标记时保持未就绪，不猜测继承范围', () => {
+    const session = { eventSource: { getSnapshot: () => ({ entries: [{ event: { type: 'session/end-seed', seq: 101, data: {} } }], hasMore: true }) } } as unknown as SessionFace
+    expect(inheritedBoundarySource(session)?.getSnapshot()).toBeUndefined()
   })
 })
