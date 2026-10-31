@@ -56,6 +56,24 @@ BS_VERSION=none DSH_EXPECTED_VERSION=0.2.1-rc.5 DSH_CMD="npx -y --package @deeps
 
 原生账号的真实重启验收：先在隔离的 `<scratch>/home` 中准备 DeepSeek 登录，再运行 `DSH_HOME_BASE=<scratch> DSH_E2E_ACCOUNT_MODEL="模型列表中的 Flash 名称" pnpm test:mount --grep "account Flash"`，同样设置精确宿主版本。该测试验证读文件、两次进程重启、侧聊记忆、回流后主线读取和再次分叉；凭证保留在隔离宿主中，请求证据只记录模型、状态和计数。没有账号配置时，默认 CI 跳过此测试。
 
+### 开发者诊断
+
+诊断不作为用户设置展示。需要排障时，在 DSH 页面打开浏览器开发者工具的 Console，执行后刷新：
+
+```js
+sessionStorage.setItem('dsh-sidenote:developer-diagnostics', 'true')
+location.reload()
+```
+
+从会话顶栏进入「兼容诊断」，可查看、重新检查或手动导出接入状态。标记只属于当前标签页和 DSH 地址，刷新保留，关闭标签页后失效；旧版的用户诊断开关记录不会启用此入口。提前关闭诊断：
+
+```js
+sessionStorage.removeItem('dsh-sidenote:developer-diagnostics')
+location.reload()
+```
+
+诊断入口不控制正常能力检测或失败恢复，也不修改宿主开发者开关。报告不自动上传，导出内容不含会话正文、凭证或本机路径。
+
 ## 代码与测试
 
 - 沿用邻近代码风格，不把无关格式化、重构或依赖升级混进 PR。

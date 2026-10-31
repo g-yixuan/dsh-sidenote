@@ -28,7 +28,7 @@ After closing a side chat, reopen the original child through the recently closed
 
 Side chats stay out of the sidebar list and search results from creation, without briefly flashing into the list. Closing tabs or reloading does not put registered side chats back in the list. Saving as a regular session creates a visible copy.
 
-On supported hosts, hidden side chats remain runnable. To find older side chats, enable **Settings → General → Show side chats in the session list**; the choice is local to this browser and DSH address. Historical 0.6.5 Releases retain their archive-based behavior. This setting does not recover deleted sessions or undo existing legacy archives; see the [compatibility policy](compatibility_EN.md).
+Hidden side chats remain runnable. Reopen them from the recently closed entries in `/side`; use **Save as session** to keep a visible copy in the list. This does not recover deleted sessions or undo existing legacy archives. Historical 0.6.5 Releases retain their archive-based behavior; see the [compatibility policy](compatibility_EN.md).
 
 ## Select and annotate
 
@@ -76,9 +76,7 @@ The saved session keeps the same layout: collapsible inherited context first, fo
 
 See the [overview](../README_EN.md#install) and [compatibility policy](compatibility_EN.md) for installation and verified versions. Supported native hosts need no BS; outside-window hosts pin the last compatible plugin, 0.6.5. Engine ranges do not imply that every version inside them is verified.
 
-Diagnostics are off by default. For troubleshooting, enable **Settings → General → dsh-sidenote diagnostic mode**, then use **Compatibility diagnostics** in the header to inspect, recheck, or manually export the status.
-
-The choice is local to the current browser and DSH address and survives reload; when local saving is unavailable, it applies only to the current page. Disabling diagnostics preserves capability checks, input recovery, and content retention on failure, and does not change the host's global developer setting. Waiting services do not mean incompatibility. Unreadable host versions remain unknown. Exported reports exclude user text, credentials, and local paths.
+[Report a problem](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose) with your DSH and plugin versions, reproduction steps, or a screenshot. Normal use requires no diagnostic configuration; developer troubleshooting is documented in the [contributing guide](../CONTRIBUTING_EN.md#developer-diagnostics).
 
 ## Local development
 

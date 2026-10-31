@@ -44,25 +44,26 @@ it('keeps concurrent creation gates independent and releases a failed operation'
   expect(visibleSessionList(listOf('parent', 'formal'), visibility.getSnapshot()).ids).toEqual(['parent', 'formal'])
 })
 
-it('persists more than five children independently of tabs and supports showing them after reload', () => {
+it('keeps more than five children hidden after reload and ignores the former show preference', () => {
   const visibility = createSessionVisibility()
   const children = Array.from({ length: 8 }, (_, index) => `child-${index}`)
   visibility.hide(...children)
   const reloaded = createSessionVisibility()
   const list = listOf('parent', ...children)
   expect(visibleSessionList(list, reloaded.getSnapshot()).ids).toEqual(['parent'])
-  reloaded.setShow(true)
-  expect(visibleSessionList(list, reloaded.getSnapshot())).toBe(list)
-  expect(createSessionVisibility().getSnapshot().show).toBe(true)
-  reloaded.setShow(false)
+  const off = reloaded.watch()
+  localStorage.setItem('dsh-sidenote:side-sessions:v1', JSON.stringify({ ids: children, show: true }))
+  window.dispatchEvent(new StorageEvent('storage', { key: 'dsh-sidenote:side-sessions:v1' }))
+  expect(visibleSessionList(list, reloaded.getSnapshot()).ids).toEqual(['parent'])
+  expect(visibleSessionList(list, createSessionVisibility().getSnapshot()).ids).toEqual(['parent'])
   expect(createSessionVisibility().getSnapshot().hidden.size).toBe(8)
+  off()
 })
 
 it('retains in-memory hiding if storage is unavailable and passes unknown host shapes through', () => {
   vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked') })
   const visibility = createSessionVisibility()
   visibility.hide('child')
-  expect(visibility.getSnapshot().saved).toBe(false)
   expect(visibleSessionList(listOf('parent', 'child'), visibility.getSnapshot()).ids).toEqual(['parent'])
   const unknown = { renamedCatalog: ['child'] }
   expect(visibleSessionList(unknown, visibility.getSnapshot())).toBe(unknown)
@@ -119,8 +120,6 @@ it('projects a real React workspace while leaving the global catalog untouched, 
   expect(env.ctx.sessions.list.getSnapshot().byId?.child).toBeDefined()
   act(() => { env.visibility.hide('child'); finish() })
   expect(env.rows()).toEqual(['parent'])
-  act(() => env.visibility.setShow(true))
-  expect(env.rows()).toEqual(['parent', 'child'])
   act(() => { env.dispose(); env.render() })
   expect(env.entry.component).toBe(env.Original)
   expect(env.rows()).toEqual(['parent', 'child'])
