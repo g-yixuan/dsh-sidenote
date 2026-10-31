@@ -86,7 +86,7 @@ See the [user guide](docs/usage_EN.md) for controls, recovery behavior, and sele
 
 The rolling window maintains **the current base-version series only**, sharing native Conversation. RCs remain covered within the current series; the former series retires only after a new series passes admission and ships in a plugin release. PRs test the current series' minimum and latest verified hosts; daily discovery detects new hosts and weekly runs cover all in-window versions. Retired hosts retain their last compatible plugin. See the [compatibility and maintenance policy](docs/compatibility_EN.md); published installations follow their Release declarations.
 
-For troubleshooting, enable **Settings → General → dsh-sidenote diagnostic mode** to inspect and manually export the integration status. [Report a problem or suggest an improvement](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose).
+[Report a problem or suggest an improvement](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose), including your DSH and plugin versions, reproduction steps, or a screenshot.
 
 ## Help shape Sidenote
 
