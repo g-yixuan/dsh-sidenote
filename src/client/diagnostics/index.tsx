@@ -4,7 +4,7 @@ import { hostDiagnostics, watchHostDiagnostics, type Capability, type Diagnostic
 import type { CapabilityState } from '../host/input.ts'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
-import { createDiagnosticMode, type DiagnosticMode } from './mode.ts'
+import { diagnosticsEnabled } from './mode.ts'
 import css from './diagnostics.module.css'
 
 const names = {
@@ -60,34 +60,12 @@ function CompatibilityButton({ ctx }: { ctx: Context }) {
   )
 }
 
-function DiagnosticSettings({ mode }: { mode: DiagnosticMode }) {
-  useLocaleTick()
-  const { enabled, saved } = useSyncExternalStore(mode.subscribe, mode.getSnapshot)
-  const descriptionId = useId()
-  return <div className={css.setting}>
-    <div>
-      <span className={css.settingTitle}>{t('diagMode')}</span>
-      <p id={descriptionId} className={css.description}>{t('diagModeDescription')}</p>
-      {!saved && <p className={css.description} role="status">{t('diagModeUnsaved')}</p>}
-    </div>
-    <input type="checkbox" role="switch" aria-label={t('diagMode')} aria-describedby={descriptionId} checked={enabled} onChange={event => { mode.setEnabled(event.currentTarget.checked); event.currentTarget.focus() }} />
-  </div>
-}
-
-function DiagnosticEntry({ ctx, mode }: { ctx: Context; mode: DiagnosticMode }) {
-  const { enabled } = useSyncExternalStore(mode.subscribe, mode.getSnapshot)
-  return enabled ? <CompatibilityButton ctx={ctx} /> : null
-}
-
 export function registerCompatibilityStatus(ctx: Context): void {
-  const mode = createDiagnosticMode()
   // Capability observation also drives input recovery and quote controls.
-  // Only diagnostic presentation is opt-in; keep business consumers alive.
+  // Developer opt-in only gates presentation; keep business consumers alive.
   ctx.effect(() => watchHostDiagnostics(ctx), 'dsh-sidenote: host status')
-  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
-    name: 'settings.general.item', id: 'dsh-sidenote-diagnostics-setting', order: 120, registrant: 'dsh-sidenote',
-  }, () => <DiagnosticSettings mode={mode} />))
+  if (!diagnosticsEnabled()) return
   ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
     name: 'conversation.session.header.utilities', id: 'dsh-sidenote-compatibility', order: 11, registrant: 'dsh-sidenote',
-  }, () => <DiagnosticEntry ctx={ctx} mode={mode} />))
+  }, () => <CompatibilityButton ctx={ctx} />))
 }

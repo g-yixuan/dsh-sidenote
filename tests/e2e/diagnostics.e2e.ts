@@ -8,34 +8,30 @@ const pluginVersion: string = JSON.parse(readFileSync('package.json', 'utf8')).v
 const entry = (page: Page) => page.getByRole('button', { name: /^(Compatibility diagnostics|兼容诊断)$/ })
 const modeSwitch = (page: Page) => page.getByRole('switch', { name: /^dsh-sidenote (diagnostic mode|诊断模式)$/ })
 
-async function openDiagnosticSettings(page: Page): Promise<void> {
-  await openGeneralSettings(page)
-  await expect(modeSwitch(page)).toBeVisible()
-}
-
 async function closeSettings(page: Page): Promise<void> {
   await page.getByRole('dialog', { name: /^(Settings|设置)$/ }).getByRole('button', { name: /^(Close(?: settings)?|关闭(?:设置)?)$/i }).click()
   await expect(modeSwitch(page)).not.toBeVisible()
 }
 
 async function setDiagnosticMode(page: Page, enabled: boolean): Promise<void> {
-  await openDiagnosticSettings(page)
-  await modeSwitch(page).setChecked(enabled)
-  await closeSettings(page)
+  await page.evaluate(value => {
+    if (value) sessionStorage.setItem('dsh-sidenote:developer-diagnostics', 'true')
+    else sessionStorage.removeItem('dsh-sidenote:developer-diagnostics')
+  }, enabled)
+  await page.reload()
+  await expect(page.locator('[data-chat-flow-kind="assistant-step"]').first()).toBeAttached()
   await expect(entry(page)).toHaveCount(enabled ? 1 : 0)
 }
 
-test('diagnostics require a real settings opt-in, remember both choices, and preserve the draft', async ({ page }) => {
+test('diagnostics have no user setting and require a developer opt-in confined to this tab', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('dsh-sidenote:diagnostics-enabled', 'true'))
   await prepareSeedPage(page)
   await expect(entry(page)).toHaveCount(0)
-  const input = page.locator('[data-composer-seat] [data-composer-input], [data-composer-seat] textarea').first()
-  await input.fill('draft preserved while changing diagnostic mode')
-  await openDiagnosticSettings(page)
-  await expect(modeSwitch(page)).not.toBeChecked()
+  await openGeneralSettings(page)
+  await expect(modeSwitch(page)).toHaveCount(0)
   await page.screenshot({ path: 'test-results/diagnostics-settings.png' })
-  await modeSwitch(page).check()
   await closeSettings(page)
-  expect(await input.evaluate(el => el instanceof HTMLTextAreaElement ? el.value : el.textContent)).toBe('draft preserved while changing diagnostic mode')
+  await setDiagnosticMode(page, true)
   await entry(page).click()
   const dialog = page.getByRole('dialog', { name: /^(Compatibility diagnostics|兼容诊断)$/ })
   await dialog.press('Escape')
@@ -43,6 +39,11 @@ test('diagnostics require a real settings opt-in, remember both choices, and pre
   await expect(entry(page)).toBeFocused()
   await page.reload()
   await expect(entry(page)).toBeVisible()
+  const other = await page.context().newPage()
+  try {
+    await prepareSeedPage(other)
+    await expect(entry(other)).toHaveCount(0)
+  } finally { await other.close() }
   await entry(page).click()
   await setDiagnosticMode(page, false)
   await expect(dialog).toHaveCount(0)
@@ -52,29 +53,19 @@ test('diagnostics require a real settings opt-in, remember both choices, and pre
   await page.screenshot({ path: 'test-results/diagnostics-disabled.png' })
 })
 
-test('a refused local save keeps diagnosis usable until refresh and explains the scope', async ({ page }) => {
+test('unavailable developer storage leaves diagnostics hidden and the normal composer usable', async ({ page }) => {
   await page.addInitScript(() => {
-    const read = Storage.prototype.getItem, write = Storage.prototype.setItem
+    const read = Storage.prototype.getItem
     Storage.prototype.getItem = function(key) {
-      if (key === 'dsh-sidenote:diagnostics-enabled') throw new DOMException('blocked', 'SecurityError')
+      if (key === 'dsh-sidenote:developer-diagnostics') throw new DOMException('blocked', 'SecurityError')
       return read.call(this, key)
-    }
-    Storage.prototype.setItem = function(key, value) {
-      if (key === 'dsh-sidenote:diagnostics-enabled') throw new DOMException('blocked', 'SecurityError')
-      write.call(this, key, value)
     }
   })
   await prepareSeedPage(page)
   await expect(entry(page)).toHaveCount(0)
-  await openDiagnosticSettings(page)
-  await modeSwitch(page).check()
-  await expect(page.getByRole('status').filter({ hasText: /current page|当前页面/ })).toBeVisible()
-  await closeSettings(page)
-  await entry(page).click()
-  await expect(page.getByRole('dialog', { name: /^(Compatibility diagnostics|兼容诊断)$/ })).toBeVisible()
-  await page.reload()
-  await expect(page.locator('[data-chat-flow-kind="assistant-step"]').first()).toBeAttached()
-  await expect(entry(page)).toHaveCount(0)
+  const input = page.locator('[data-composer-seat] [data-composer-input], [data-composer-seat] textarea').first()
+  await input.fill('ordinary draft without diagnostics')
+  expect(await input.evaluate(el => el instanceof HTMLTextAreaElement ? el.value : el.textContent)).toBe('ordinary draft without diagnostics')
 })
 
 test('compatibility report is visible, observes real admission, and exports software facts only', async ({ page }) => {
@@ -112,6 +103,7 @@ test('compatibility report is visible, observes real admission, and exports soft
 if (process.env.DSH_E2E_CAPABILITY_FAULT) test('missing side input is visible, retains body and quote, and recovers through the real facade', async ({ page }) => {
   await prepareSeedPage(page)
   await expect(entry(page)).toHaveCount(0)
+  await setDiagnosticMode(page, true)
   const child = await openSideChat(page)
   const side = sideChatOf(page)
   const input = side.locator('[data-composer-input]')
@@ -130,12 +122,10 @@ if (process.env.DSH_E2E_CAPABILITY_FAULT) test('missing side input is visible, r
   const records = () => page.evaluate(id => JSON.parse(localStorage.getItem('dsh-sidenote:annotations:v1:' + id) ?? '[]'), child)
   await expect.poll(records).toMatchObject([{ state: 'active', note: 'retained quote note' }])
   expect(userMessagesOf(child).some(text => text.includes('body retained across missing input'))).toBe(false)
-  await setDiagnosticMode(page, true)
   await page.getByRole('button', { name: /^(Compatibility diagnostics|兼容诊断)/ }).click()
   const dialog = page.getByRole('dialog', { name: /^(Compatibility diagnostics|兼容诊断)$/ })
   await expect(dialog.getByRole('listitem').filter({ hasText: /Side input|侧输入框/ }).locator('[data-state]')).toHaveAttribute('data-state', 'unavailable')
   await dialog.getByRole('button', { name: /^(Close compatibility diagnostics|关闭兼容诊断)$/ }).click()
-  await setDiagnosticMode(page, false)
   await page.getByRole('button', { name: 'Restore native input', exact: true }).click()
   // Recovery must become visible through the normal composer without a
   // diagnostic recheck; submitting while it still says waiting is a retry.
@@ -144,8 +134,6 @@ if (process.env.DSH_E2E_CAPABILITY_FAULT) test('missing side input is visible, r
   await input.press('Enter')
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes('body retained across missing input'))).toHaveLength(1)
   await expect.poll(records).toMatchObject([{ state: 'sent' }])
-  await expect(entry(page)).toHaveCount(0)
-  await setDiagnosticMode(page, true)
   await entry(page).click()
   await dialog.getByRole('button', { name: /^(Recheck|重新检查)$/ }).click()
   await expect(dialog.getByRole('listitem').filter({ hasText: /Side input|侧输入框/ }).locator('[data-state]')).toHaveAttribute('data-state', 'available')

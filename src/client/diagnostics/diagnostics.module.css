@@ -7,32 +7,6 @@
   cursor: pointer;
   font-size: 12px;
 }
-.setting {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--dsw-alias-border-l1, #ddd);
-  color: var(--dsw-alias-label-primary, #222);
-}
-.settingTitle { font-size: 14px; font-weight: 500; }
-.setting p { margin: 4px 0 0; }
-.setting input {
-  appearance: none;
-  flex-shrink: 0;
-  position: relative;
-  width: 36px;
-  height: 20px;
-  margin: 0;
-  border-radius: 10px;
-  background: var(--dsw-alias-label-tertiary, #aaa);
-  cursor: pointer;
-}
-.setting input::before { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
-.setting input:checked { background: var(--dsw-alias-label-primary, #222); }
-.setting input:checked::before { left: 19px; }
-.setting input:focus-visible { outline: 2px solid var(--dsw-alias-label-primary, #222); outline-offset: 3px; }
 .panel {
   position: fixed;
   z-index: 100;

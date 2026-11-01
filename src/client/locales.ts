@@ -12,9 +12,6 @@ export const LOCALE_NS = 'dsh-sidenote'
 export const en = {
   diagTitle: 'Compatibility diagnostics',
   diagClose: 'Close compatibility diagnostics',
-  diagMode: 'dsh-sidenote diagnostic mode',
-  diagModeDescription: 'Enable while debugging or reporting a problem to inspect integration status.',
-  diagModeUnsaved: 'This choice only applies to the current page because it could not be saved locally.',
   diagUnknownVersion: 'version unknown',
   diagDescription: 'Current integration status. This does not claim that a message was accepted or a model answered. Unreadable versions stay unknown.',
   diagNotDetected: 'not detected',
@@ -61,9 +58,6 @@ export const en = {
   quoteWorkflowWaiting: 'Annotations are not ready yet. Please try again shortly.',
 
   menuTitle: 'Side chat',
-  showSideSessions: 'Show side chats in the session list',
-  showSideSessionsDescription: 'Side chats stay hidden by default. Enable this to find older side chats.',
-  sideSessionsUnsaved: 'This choice only applies to the current page because it could not be saved locally.',
   tabBaseTitle: 'Side',
 
   // SideChatPanel
@@ -262,9 +256,6 @@ export type CopyKey = keyof typeof en
 export const zh: Record<CopyKey, string> = {
   diagTitle: '兼容诊断',
   diagClose: '关闭兼容诊断',
-  diagMode: 'dsh-sidenote 诊断模式',
-  diagModeDescription: '开发者调试或报告问题时开启，显示功能接入状态。',
-  diagModeUnsaved: '无法保存到本地，本次选择仅在当前页面生效。',
   diagUnknownVersion: '版本未知',
   diagDescription: '显示当前接入状态，不代表消息已被接受或模型已回答。无法可靠读取的版本显示未知。',
   diagNotDetected: '未检测到',
@@ -311,9 +302,6 @@ export const zh: Record<CopyKey, string> = {
   quoteWorkflowWaiting: '注释功能暂未就绪，请稍后重试。',
 
   menuTitle: '侧边聊天',
-  showSideSessions: '在会话列表中显示侧边聊天',
-  showSideSessionsDescription: '侧聊默认隐藏；开启后可找回较早的侧聊。',
-  sideSessionsUnsaved: '无法保存到本地，本次选择仅在当前页面生效。',
   tabBaseTitle: '侧边',
 
   codeCopy: '复制',

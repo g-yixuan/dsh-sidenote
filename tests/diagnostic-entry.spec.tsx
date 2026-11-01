@@ -6,9 +6,11 @@ import type { Context, KnownSlotKey, SlotRegisterOptions } from '../src/client/h
 import { registerCompatibilityStatus } from '../src/client/diagnostics/index.tsx'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-afterEach(() => { localStorage.clear(); document.body.replaceChildren() })
+afterEach(() => { localStorage.clear(); sessionStorage.clear(); document.body.replaceChildren() })
 
-it('waits for the settings slot, hides diagnostics by default, and closes with restored focus', () => {
+it.each([false, true])('registers diagnostics only with the developer flag (%s), without a settings row', enabled => {
+  localStorage.setItem('dsh-sidenote:diagnostics-enabled', 'true')
+  if (enabled) sessionStorage.setItem('dsh-sidenote:developer-diagnostics', 'true')
   const declarations = new Map<KnownSlotKey, () => unknown>()
   const components = new Map<KnownSlotKey, ComponentType>()
   const disposers: (() => void)[] = []
@@ -23,31 +25,24 @@ it('waits for the settings slot, hides diagnostics by default, and closes with r
     },
   } as unknown as Context
   registerCompatibilityStatus(ctx)
-  declarations.get('conversation.session.header.utilities')!()
-  const Header = components.get('conversation.session.header.utilities')!
-  const host = document.createElement('div'); document.body.append(host)
-  const root = createRoot(host)
-  act(() => { root.render(<Header />) })
-  expect(host.querySelector('button')).toBeNull()
-  declarations.get('settings.general.item')!()
-  const Settings = components.get('settings.general.item')!
-  act(() => { root.render(<><Header /><Settings /></>) })
-  const toggle = host.querySelector<HTMLInputElement>('[role="switch"]')!
-  expect(toggle.checked).toBe(false)
-  act(() => { toggle.click() })
-  const trigger = host.querySelector('button')!
-  act(() => { trigger.click() })
-  expect(document.activeElement).toBe(host.querySelector('[role="dialog"]'))
-  act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
-  expect(host.querySelector('[role="dialog"]')).toBeNull()
-  expect(document.activeElement).toBe(trigger)
-  act(() => { trigger.click(); toggle.click() })
-  expect(host.querySelector('button')).toBeNull()
-  expect(host.querySelector('[role="dialog"]')).toBeNull()
-  expect(document.activeElement).toBe(toggle)
-  // Hiding diagnostics does not stop the business capability observer.
+  expect(declarations.has('settings.general.item')).toBe(false)
+  expect(declarations.has('conversation.session.header.utilities')).toBe(enabled)
+  if (enabled) {
+    declarations.get('conversation.session.header.utilities')!()
+    const Header = components.get('conversation.session.header.utilities')!
+    const host = document.createElement('div'); document.body.append(host)
+    const root = createRoot(host)
+    act(() => { root.render(<Header />) })
+    const trigger = host.querySelector('button')!
+    act(() => { trigger.click() })
+    expect(document.activeElement).toBe(host.querySelector('[role="dialog"]'))
+    act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    expect(host.querySelector('[role="dialog"]')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+    act(() => { root.unmount() })
+  }
+  // Diagnostic presentation never controls the business capability observer.
   expect(unwatch).not.toHaveBeenCalled()
-  act(() => { root.unmount() })
   for (const off of disposers) off()
   expect(unwatch).toHaveBeenCalledOnce()
 })

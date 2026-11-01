@@ -86,7 +86,7 @@ dsh plugin --profile web add dsh-sidenote
 
 维护窗口按 **当前基础版本系列** 滚动，侧聊共用原生 Conversation。同系列 RC 持续覆盖；新系列完成验收并随插件发布后，再停止维护原系列。日常 PR 检查当前系列的最低版和最新已验证版，每日探测新增宿主、每周回归全部窗口内版本。窗口外保留最后兼容插件。详见[兼容与维护政策](docs/compatibility.md)；公开安装以对应 Release 为准。
 
-遇到问题时，可在 **设置 → 通用设置 → dsh-sidenote 诊断模式** 开启诊断，查看并手动导出接入状态。[报告问题或提出建议](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose)。
+遇到问题或有改进建议，欢迎[反馈](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose)，附上 DSH 与插件版本、复现步骤或截图。
 
 ## 一起完善 Sidenote
 

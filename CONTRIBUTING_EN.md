@@ -56,6 +56,24 @@ Keyless E2E verifies interactions and mounting, not model answers. Changes to op
 
 For native-account restart validation, prepare a DeepSeek login in an isolated `<scratch>/home`, then run `DSH_HOME_BASE=<scratch> DSH_E2E_ACCOUNT_MODEL="Flash name from the model picker" pnpm test:mount --grep "account Flash"` with the exact host version as above. This checks file reading, two process restarts, side-chat memory, mainline use of a returned answer, and another fork. Credentials stay in the isolated host; request evidence records only model, status and counts. Default CI skips this test without an account configuration.
 
+### Developer diagnostics
+
+Diagnostics are not exposed as a user setting. To troubleshoot, open the browser developer tools Console on the DSH page and run:
+
+```js
+sessionStorage.setItem('dsh-sidenote:developer-diagnostics', 'true')
+location.reload()
+```
+
+Open **Compatibility diagnostics** in the session header to inspect, recheck, or manually export integration status. The flag belongs to this tab and DSH address, survives reloads, and expires when the tab closes. The former user diagnostic preference does not enable this entry. To disable it sooner:
+
+```js
+sessionStorage.removeItem('dsh-sidenote:developer-diagnostics')
+location.reload()
+```
+
+Diagnostic presentation does not control normal capability checks or failure recovery, or change the host developer setting. Reports are never uploaded automatically, and exports exclude conversation text, credentials, and local paths.
+
 ## Code and tests
 
 - Follow neighboring code style. Keep unrelated formatting, refactors, and dependency upgrades out of a PR.
