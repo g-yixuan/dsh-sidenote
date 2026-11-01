@@ -1,182 +1,104 @@
 // @vitest-environment jsdom
-/**
- * open.ts 直连腿编排（Workitem_04）：BS ≥ 0.19 ⇒ tab 直连注册在原生右栏，
- * 存活枚举走 live registry（存活面板）+ metaStore（面板卸载但 tab 仍在），
- * 聚焦走 ISidebarRight.focus，meta 走 metaStore。
- * 核心回归面：活伤修复——已有存活 tab 时「新建/提问」必须显式聚焦且草稿
- * 经 pendingDraft 投递（不再被 held 折叠静默丢弃）。
- */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import type { Context } from '../src/client/host/contracts.ts'
 import { SIDE_TAB_TYPE } from '../src/client/sidechat/model.ts'
-import { clearNativeRuntime, markSideChatOpening, registerLiveSideChat } from '../src/client/sidechat/native.ts'
+import { clearNativeRuntime, registerLiveSideChat } from '../src/client/sidechat/native.ts'
 import { createSideChat, openOrFocusSideChat, reopenSideChat, sideChatTargetTitle } from '../src/client/sidechat/open.ts'
-import { readSideChatMeta, writeSideChatMeta } from '../src/client/sidechat/metaStore.ts'
+import { writeSideChatMeta } from '../src/client/sidechat/metaStore.ts'
 
 const SESSION = 'sess-1'
-
-interface MockFace {
-  openTab: ReturnType<typeof vi.fn>
-  focus: ReturnType<typeof vi.fn>
-  close: ReturnType<typeof vi.fn>
-}
-
-/** 直连腿 ctx：sidebarRight mock 面 + sessions.list；withBs=true 时 BS 0.19.1
- *  在场（真实主路径——属性与 get 双通道可达），否则 BS 缺席（optional peer）。 */
-function directCtx(opts?: { withBs?: boolean }): { ctx: Context, face: MockFace } {
-  const face: MockFace = {
-    openTab: vi.fn(),
-    focus: vi.fn(),
-    close: vi.fn(),
+function fixture() {
+  const tabs: { id: string; kind: string; title: string }[] = []
+  let active = ''
+  const face = {
+    tabsIn: () => tabs,
+    active: () => tabs.find(tab => tab.id === active),
+    openTab: vi.fn(() => { active = `tab-${tabs.length + 1}`; tabs.push({ id: active, kind: SIDE_TAB_TYPE, title: 'Side' }) }),
+    focus: vi.fn((id: string) => { active = id }),
+    isExpanded: () => true,
   }
-  const bs = { version: '0.19.1' }
-  const withBs = opts?.withBs === true
   const ctx = {
-    ...(withBs ? { betterSidebar: bs } : {}),
-    sessions: { list: { getSnapshot: () => ({ current: SESSION, byId: {} }), subscribe: () => () => {} } },
-    get: (name: string) => {
-      if (name === 'sidebarRight') return face
-      if (name === 'betterSidebar') return withBs ? bs : undefined
-      return undefined
-    },
+    sessions: { list: { getSnapshot: () => ({ current: SESSION, byId: {} }) } },
+    get: (name: string) => name === 'sidebarRight' ? face : undefined,
   } as unknown as Context
-  return { ctx, face }
+  const add = (id: string, childId?: string) => {
+    tabs.push({ id, kind: SIDE_TAB_TYPE, title: id }); active = id
+    writeSideChatMeta({ tabId: id, sessionId: SESSION, parentSessionId: SESSION, childId, number: tabs.length, createdAt: 1 })
+  }
+  return { ctx, face, tabs, add }
 }
 
-function liveMeta(tabId: string, extra?: { childId?: string, number?: number, topic?: string }): void {
-  writeSideChatMeta({
-    tabId,
-    sessionId: SESSION,
-    parentSessionId: SESSION,
-    ...(extra?.childId !== undefined ? { childId: extra.childId } : {}),
-    ...(extra?.topic !== undefined ? { topic: extra.topic } : {}),
-    number: extra?.number ?? 1,
-    createdAt: 1,
-  }, { silent: true })
-}
+beforeEach(() => { localStorage.clear(); sessionStorage.clear(); clearNativeRuntime() })
 
-beforeEach(() => {
-  localStorage.clear()
-  sessionStorage.clear()
-  clearNativeRuntime()
+it('explicit creation always opens a new tab, while ordinary opening focuses the selected one', () => {
+  const { ctx, face, add } = fixture()
+  add('older', 'a'); add('newer', 'b')
+  const draftA = vi.fn(), draftB = vi.fn()
+  registerLiveSideChat(SESSION, 'older', draftA, () => ({}), () => 'Older')
+  registerLiveSideChat(SESSION, 'newer', draftB, () => ({}), () => 'Newer')
+  face.focus('older')
+  expect(sideChatTargetTitle(ctx, SESSION)).toBe('Older')
+  expect(openOrFocusSideChat(ctx, SESSION, 'to A')).toBe(true)
+  expect(draftA).toHaveBeenCalledWith('to A')
+  expect(draftB).not.toHaveBeenCalled()
+  expect(face.openTab).not.toHaveBeenCalled()
+  expect(createSideChat(ctx, SESSION, 'new C')).toBe(true)
+  expect(face.openTab).toHaveBeenCalledWith(SIDE_TAB_TYPE, { params: { parentSessionId: SESSION, pendingDraft: 'new C' } })
 })
 
-describe('openOrFocusSideChat（直连腿）', () => {
-  it('无存活无窗口：openTab 铸造（params 携带 parentSessionId/pendingDraft）并标记窗口', () => {
-    const { ctx, face } = directCtx()
-    expect(openOrFocusSideChat(ctx, SESSION, '问一下')).toBe(true)
-    expect(face.openTab).toHaveBeenCalledWith(SIDE_TAB_TYPE, {
-      params: { parentSessionId: SESSION, pendingDraft: '问一下' },
-    })
-    // 窗口期内重复触发：草稿落 openings 暂存，不再开第二个 tab
-    expect(openOrFocusSideChat(ctx, SESSION, '再补一句')).toBe(true)
-    expect(face.openTab).toHaveBeenCalledTimes(1)
-  })
-
-  it('存活面板：草稿直达 seedDraft + focus，不开新 tab', () => {
-    const { ctx, face } = directCtx()
-    const seedDraft = vi.fn()
-    const dispose = registerLiveSideChat(SESSION, 'tab-1', seedDraft, () => ({}), () => '侧边')
-    expect(openOrFocusSideChat(ctx, SESSION, '继续问')).toBe(true)
-    expect(seedDraft).toHaveBeenCalledWith('继续问')
-    expect(face.focus).toHaveBeenCalledWith('tab-1')
-    expect(face.openTab).not.toHaveBeenCalled()
-    dispose()
-  })
-
-  it('活伤修复：metaStore 有记录 → 草稿写 pendingDraft + openTab（held 折叠聚焦由宿主裁定）', () => {
-    const { ctx, face } = directCtx()
-    liveMeta('tab-old', { childId: 'child-1' })
-    expect(openOrFocusSideChat(ctx, SESSION, '这段什么意思')).toBe(true)
-    // openTab 即裁定（审查 M-3）：tab 在 → held 聚焦；不在（孤键）→ 新铸自愈。
-    // 有存活记录时 params 不带 pendingDraft（草稿走 metaStore——存活面板的
-    // 唯一可达通道，reconcile 幂等不消费 params）。
-    expect(face.openTab).toHaveBeenCalledWith(SIDE_TAB_TYPE, {
-      params: { parentSessionId: SESSION },
-    })
-    expect(readSideChatMeta(SESSION, 'tab-old')?.pendingDraft).toBe('这段什么意思')
-    // 再投一次：清掉 openings 窗口标记（第一次 openTab 后标的），
-    // 让第二投仍走 metaStore 追加（appendDraftText 语义）。
-    clearNativeRuntime()
-    expect(openOrFocusSideChat(ctx, SESSION, '追问')).toBe(true)
-    expect(readSideChatMeta(SESSION, 'tab-old')?.pendingDraft).toBe('这段什么意思\n追问')
-  })
-
-  it('createSideChat 在单实例期折叠为 openOrFocus（openTab 聚焦既有 + 草稿投递）', () => {
-    const { ctx, face } = directCtx()
-    liveMeta('tab-old')
-    expect(createSideChat(ctx, SESSION, '带草稿')).toBe(true)
-    expect(face.openTab).toHaveBeenCalledWith(SIDE_TAB_TYPE, { params: { parentSessionId: SESSION } })
-    expect(readSideChatMeta(SESSION, 'tab-old')?.pendingDraft).toBe('带草稿')
-  })
-
-  it('会话不在屏：拒绝（不越权开 tab）', () => {
-    const { ctx, face } = directCtx()
-    expect(openOrFocusSideChat(ctx, 'other-session', 'x')).toBe(false)
-    expect(face.openTab).not.toHaveBeenCalled()
-  })
+it('keeps concurrent opening drafts attached to their actual tabs even when they mount in reverse order', () => {
+  const { ctx, face } = fixture()
+  createSideChat(ctx, SESSION, 'initial A')
+  openOrFocusSideChat(ctx, SESSION, 'later A')
+  createSideChat(ctx, SESSION, 'initial B')
+  openOrFocusSideChat(ctx, SESSION, 'later B')
+  expect(face.openTab).toHaveBeenCalledTimes(2)
+  const a = vi.fn(), b = vi.fn()
+  registerLiveSideChat(SESSION, 'tab-2', b, () => ({}), () => 'B')
+  registerLiveSideChat(SESSION, 'tab-1', a, () => ({}), () => 'A')
+  expect(a.mock.calls).toEqual([['later A']])
+  expect(b.mock.calls).toEqual([['later B']])
 })
 
-describe('reopenSideChat（直连腿）', () => {
-  it('无存活：openTab 携带 childId 恢复参数 + 标记窗口', () => {
-    const { ctx, face } = directCtx()
-    expect(reopenSideChat(ctx, SESSION, 'child-9')).toBe(true)
-    expect(face.openTab).toHaveBeenCalledWith(SIDE_TAB_TYPE, {
-      params: { parentSessionId: SESSION, childId: 'child-9' },
-    })
-  })
-
-  it('topic 随恢复走（Delivery_05）：openTab params 携带 topic，reconcile 落进新记录', () => {
-    const { ctx, face } = directCtx()
-    expect(reopenSideChat(ctx, SESSION, 'child-9', { topic: '部署泳道排查' })).toBe(true)
-    expect(face.openTab).toHaveBeenCalledWith(SIDE_TAB_TYPE, {
-      params: { parentSessionId: SESSION, childId: 'child-9', topic: '部署泳道排查' },
-    })
-  })
-
-  it('有存活实例：拒绝（held 折叠会丢恢复信息，弹层本就不列）', () => {
-    const { ctx, face } = directCtx()
-    liveMeta('tab-live')
-    expect(reopenSideChat(ctx, SESSION, 'child-9')).toBe(false)
-    expect(face.openTab).not.toHaveBeenCalled()
-  })
+it('does not treat stale metadata as an open tab', () => {
+  const { ctx, face } = fixture()
+  writeSideChatMeta({ tabId: 'ghost', sessionId: SESSION, number: 9, createdAt: 1 })
+  expect(openOrFocusSideChat(ctx, SESSION, 'new draft')).toBe(true)
+  expect(face.openTab).toHaveBeenCalledWith(SIDE_TAB_TYPE, { params: { parentSessionId: SESSION, pendingDraft: 'new draft' } })
+  expect(face.focus).not.toHaveBeenCalledWith('ghost')
 })
 
-describe('sideChatTargetTitle（直连腿）', () => {
-  it('无实例时回退基础标题；有存活记录时读 metaStore 编号', () => {
-    const { ctx } = directCtx()
-    expect(sideChatTargetTitle(ctx, SESSION)).toBe('Side')
-    liveMeta('tab-2', { number: 2 })
-    expect(sideChatTargetTitle(ctx, SESSION)).toBe('Side 2')
-  })
-
-  it('有 topic 的存活记录优先显示内容身份（Delivery_05）', () => {
-    const { ctx } = directCtx()
-    liveMeta('tab-3', { topic: '部署泳道排查' })
-    expect(sideChatTargetTitle(ctx, SESSION)).toBe('Side · 部署泳道排查')
-  })
+it('reopens the original child while a sibling exists, then focuses an already open child instead of duplicating it', () => {
+  const { ctx, face, add } = fixture()
+  add('sibling', 'b')
+  expect(reopenSideChat(ctx, SESSION, 'a', { topic: 'Original', savedMeta: { boundarySeq: 7, number: 2 } })).toBe(true)
+  expect(face.openTab).toHaveBeenCalledWith(SIDE_TAB_TYPE, { params: { parentSessionId: SESSION, childId: 'a', topic: 'Original', savedMeta: { boundarySeq: 7, number: 2 } } })
+  expect(reopenSideChat(ctx, SESSION, 'a')).toBe(true) // still mounting: do not duplicate it
+  expect(face.openTab).toHaveBeenCalledTimes(1)
+  expect(reopenSideChat(ctx, SESSION, 'b')).toBe(true)
+  expect(face.focus).toHaveBeenLastCalledWith('sibling')
+  expect(face.openTab).toHaveBeenCalledTimes(1)
 })
 
-describe('BS ≥ 0.19 在场的真实主路径（审查 n1：旧 mock 全部从 BS 缺席分支进入）', () => {
-  it('openOrFocus 与 reopen 与 BS 缺席分支行为一致（直连编排不依赖 BS）', () => {
-    const { ctx, face } = directCtx({ withBs: true })
-    expect(openOrFocusSideChat(ctx, SESSION, '问一下')).toBe(true)
-    expect(face.openTab).toHaveBeenCalledWith(SIDE_TAB_TYPE, {
-      params: { parentSessionId: SESSION, pendingDraft: '问一下' },
-    })
-    const { ctx: ctx2, face: face2 } = directCtx({ withBs: true })
-    expect(reopenSideChat(ctx2, SESSION, 'child-9')).toBe(true)
-    expect(face2.openTab).toHaveBeenCalledWith(SIDE_TAB_TYPE, {
-      params: { parentSessionId: SESSION, childId: 'child-9' },
-    })
-  })
+it('refuses creation outside the on-screen parent and reports a host that did not create a tab', () => {
+  const { ctx, face } = fixture()
+  expect(createSideChat(ctx, 'other')).toBe(false)
+  expect(reopenSideChat(ctx, 'other', 'child')).toBe(false)
+  expect(face.openTab).not.toHaveBeenCalled()
+  face.openTab.mockImplementation(() => {})
+  expect(createSideChat(ctx, SESSION)).toBe(false)
 })
 
-describe('openings 窗口', () => {
-  it('markSideChatOpening 后 openOrFocus 落暂存不铸造', () => {
-    const { ctx, face } = directCtx()
-    markSideChatOpening(SESSION)
-    expect(openOrFocusSideChat(ctx, SESSION, '草稿')).toBe(true)
-    expect(face.openTab).not.toHaveBeenCalled()
-  })
+
+it('recognizes an unmounted restored child only when its native address still matches', () => {
+  const { ctx, face, tabs } = fixture()
+  tabs.push({ id: 'restored', kind: SIDE_TAB_TYPE, title: 'Old' })
+  Object.assign(tabs[0]!, { contentId: 'sidebar://side/original' })
+  writeSideChatMeta({ tabId: 'restored', sessionId: SESSION, childId: 'original-child', nativeAddress: 'sidebar://side/original', runId: 'previous-page', number: 1, createdAt: 1 })
+  expect(reopenSideChat(ctx, SESSION, 'original-child')).toBe(true)
+  expect(face.focus).toHaveBeenLastCalledWith('restored')
+  expect(face.openTab).not.toHaveBeenCalled()
+  Object.assign(tabs[0]!, { contentId: 'sidebar://side/different' })
+  expect(reopenSideChat(ctx, SESSION, 'original-child')).toBe(true)
+  expect(face.openTab).toHaveBeenCalledTimes(1)
 })

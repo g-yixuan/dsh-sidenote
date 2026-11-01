@@ -1,23 +1,8 @@
-/**
- * /side 斜杠命令（spike 落点）：经 client 侧 `ctx.commandUi.register`
- * （dsh-client-ui-commands 的 CommandContribution，ui 形态 popupSelect）
- * 注册。popupSelect 是该注册面唯一的 UI 形态 —— 菜单行被选中后弹一个
- * 选项壳，选项 = 新建 + 当前会话已并存的侧边聊天（聚焦）+ 最近关闭（重开）。
- * native 宿主（DSH ≥ 0.1.5 原生右栏；legacy 宿主由 better-sidebar ≥ 0.19
- * 转发到同一原生栏）受 dsh sidebar-right 的 held 规则约束
- * （page kind 每 pane 单实例）：有存活实例时不列「新建」与「重开」。
- *
- * 服务经 ctx.get 惰性解析（commandUi 不在 inject 清单里）：服务缺失、
- * 注册抛错（如与 host 命令撞名）都降级为「只有 Tab 入口」，绝不影响面板。
- *
- * 中文别名「侧边」：宿主命令过滤只匹配命令名、不匹配描述（B1 实测中文用户
- * 输「/侧边」候选直接清空）——注册双名让中文关键词直达。
- */
+/** /side offers explicit creation, focusing open tabs, and reopening original children. */
 import type { Context } from '../host/contracts.ts'
 import { canForkFrom, collectSideTabs } from './model.ts'
-import { betterSidebarOf, directNativeLeg, focusNativeTab, liveSideChatsOf } from './native.ts'
-import { sideChatMetasOf } from './metaStore.ts'
-import { createSideChat, reopenSideChat } from './open.ts'
+import { betterSidebarOf, directNativeLeg, focusNativeTab } from './native.ts'
+import { createSideChat, reopenSideChat, sideChatTabsOf } from './open.ts'
 import { dropClosedSideChat, listClosedSideChats } from './recentClosed.ts'
 import { formatClosedAt, sideChatTitleOf } from './identity.ts'
 import { t } from '../locales.ts'
@@ -69,28 +54,15 @@ function makeContribution(ctx: Context, name: string) {
       options: (session: CommandSession) => {
         const options: SelectOption[] = []
         const native = directNativeLeg(ctx)
-        // 存活枚举 = live registry（存活面板）∪ metaStore 记录（面板卸载但
-        // tab 仍在布局——聚焦即 openTab held 折叠）。与 open.ts 同源。
-        const lives = native ? liveSideChatsOf(session.sessionId) : []
-        const liveIds = new Set(lives.map(live => live.tabId))
-        const unloaded = native
-          ? sideChatMetasOf(session.sessionId).filter(meta => !liveIds.has(meta.tabId))
-          : []
-        // native 下同 kind 每 pane 单实例（dsh-client-ui-sidebar-right 的 held
-        // 规则：page kind 的 contentId 恒为 sidebar://<kind>，openTab 必折叠为
-        // 聚焦既有 tab）——已有存活实例时「新建」名不副实，不列。
-        if (!native || lives.length === 0) {
-          options.push({ id: 'new', label: t('cmdNew'), detail: t('cmdNewDetail') })
-        }
+        const lives = native ? sideChatTabsOf(ctx, session.sessionId) : []
+        options.push({ id: 'new', label: t('cmdNew'), detail: t('cmdNewDetail') })
         // 已并存的侧边聊天列为聚焦项（命令弹层即多实例管理入口）。
-        // native（>= 0.19）：tab 不进布局快照，枚举改读 live registry；
+        // Native membership comes from DSH, including not-yet-mounted tabs;
         // legacy：读布局快照（现状）。
         if (native) {
-          for (const live of lives) {
-            options.push({ id: `focus:${live.tabId}`, label: t('cmdFocus', { title: live.readTitle() }), detail: t('cmdFocusDetail') })
-          }
-          for (const meta of unloaded) {
-            options.push({ id: `focus:${meta.tabId}`, label: t('cmdFocus', { title: sideChatTitleOf(meta) }), detail: t('cmdFocusDetail') })
+          for (const tab of lives) {
+            const meta = tab.meta
+            options.push({ id: `focus:${tab.id}`, label: t('cmdFocus', { title: meta ? sideChatTitleOf(meta) : tab.title }), detail: t('cmdFocusDetail') })
           }
         } else {
           const snapshot = betterSidebarOf(ctx)?.getSnapshot()
@@ -100,20 +72,14 @@ function makeContribution(ctx: Context, name: string) {
             }
           }
         }
-        // D3 后悔药：最近关闭的可重开（Cmd+Shift+T 心智）。
-        // native 单实例约束下，有存活实例时 reopen 必被 held 折叠（seed.meta
-        // 丢弃且聚焦错对象）——此时不列重开项。
-        // Delivery_05：label 用内容身份（topic 优先，老条目回退原标题），
-        // detail 给相对关闭时间——此前五行全叫「侧边」+ 同一句静态文案，
-        // 完全不可区分。
-        if (!(native && lives.length > 0)) {
-          for (const entry of listClosedSideChats(session.sessionId)) {
-            options.push({
-              id: `reopen:${entry.childId}`,
-              label: t('cmdReopen', { title: entry.topic ?? entry.title }),
-              detail: formatClosedAt(entry.closedAt),
-            })
-          }
+        const openChildren = new Set(lives.map(tab => tab.meta?.childId))
+        for (const entry of listClosedSideChats(session.sessionId)) {
+          if (openChildren.has(entry.childId)) continue
+          options.push({
+            id: `reopen:${entry.childId}`,
+            label: t('cmdReopen', { title: entry.topic ?? entry.title }),
+            detail: formatClosedAt(entry.closedAt),
+          })
         }
         return Promise.resolve(options)
       },

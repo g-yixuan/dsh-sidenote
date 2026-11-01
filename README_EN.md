@@ -73,6 +73,7 @@ Click the **Bring back to main conversation** icon on the right of a side replyâ
 
 | What matters | How Sidenote handles it |
 |---|---|
+| Explore several questions | Keep independent side-chat tabs in the right sidebar, switch freely, and reopen closed conversations. |
 | Earlier context | Side chats inherit the full history, collapsed until you need it. |
 | Several pieces of feedback | Send annotations together, or preview and remove them individually. |
 | A failed send | Annotations and draft text stay available for retry. |

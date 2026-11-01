@@ -1,12 +1,13 @@
 import { afterEach, expect, it } from 'vitest'
+import { SIDE_TAB_TYPE } from '../src/client/sidechat/model.ts'
 import type { Context } from '../src/client/host/contracts.ts'
 import { captureSideChatTarget, ensureSideChatTarget } from '../src/client/sidechat/target.ts'
-import { clearNativeRuntime, liveSideChat, notifyLiveSideChats, registerLiveSideChat } from '../src/client/sidechat/native.ts'
+import { clearNativeRuntime, liveSideChat, liveSideChatsOf, notifyLiveSideChats, registerLiveSideChat } from '../src/client/sidechat/native.ts'
 
 afterEach(clearNativeRuntime)
 const ctx = {
   sessions: { list: { getSnapshot: () => ({ current: 'parent' }) } },
-  get: (name: string) => name === 'sidebarRight' ? { openTab() {}, focus() {}, isExpanded: () => true } : undefined,
+  get: (name: string) => name === 'sidebarRight' ? { openTab() {}, focus() {}, isExpanded: () => true, tabsIn: (id: string) => liveSideChatsOf(id).map(panel => ({ id: panel.tabId, kind: SIDE_TAB_TYPE, title: panel.readTitle() })), active: () => undefined } : undefined,
 } as unknown as Context
 
 it('waits for the originally selected panel even if a newer ready panel appears', async () => {
@@ -50,4 +51,17 @@ it('closing a target during note editing does not redirect the saved quote to a 
   close()
   registerLiveSideChat('parent', 'newer', () => {}, () => ({}), () => 'Newer', () => ({ phase: 'chat', childId: 'wrong-child' }))
   await expect(captured.resolve(new AbortController().signal)).rejects.toThrow('已关闭')
+})
+
+
+it('captures the selected older tab instead of the most recently created one', async () => {
+  registerLiveSideChat('parent', 'A', () => {}, () => ({}), () => 'A', () => ({ phase: 'chat', childId: 'child-A' }))
+  registerLiveSideChat('parent', 'B', () => {}, () => ({}), () => 'B', () => ({ phase: 'chat', childId: 'child-B' }))
+  let active = 'A'
+  const facade = ctx.get('sidebarRight') as object
+  const selected = { ...ctx, get: (name: string) => name === 'sidebarRight' ? { ...facade, active: () => ({ id: active, kind: SIDE_TAB_TYPE }) } : undefined } as Context
+  const captured = captureSideChatTarget(selected, 'parent')
+  active = 'B'
+  const target = await captured.resolve(new AbortController().signal)
+  expect(target.childId).toBe('child-A')
 })

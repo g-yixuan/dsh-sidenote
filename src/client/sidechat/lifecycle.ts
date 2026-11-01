@@ -118,6 +118,7 @@ export async function forkAndRegister(ctx: Context, parentSessionId: string, tab
   } finally {
     finishVisibility()
   }
+  if (signal?.aborted) return forked
   // meta 先行：fork resolve 后立即登记 childId（会话切换导致组件卸载时
   // updateTab 找不到 tab 也只是 no-op——否则 Tab 永远停在 forking 且下次
   // 挂载重复 fork 出孤儿会话）。

@@ -22,7 +22,7 @@ import css from './sidechat.module.css'
 
 const NOOP_UNSUBSCRIBE = (): void => {}
 
-export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; annotations: AnnotationStore; renderConversation: RenderConversation; quoteRequestId?: string }) {
+export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; annotations: AnnotationStore; renderConversation: RenderConversation }) {
   useLocaleTick()
   const { ctx, scope, tab, visible } = props
   const meta = parseSideChatMeta(tab.meta)
@@ -98,9 +98,9 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
     updateTabMeta(ctx, scope.sessionId, tab.id, clearPendingDraft)
     requestAnimationFrame(() => { if (rootRef.current) focusSideComposer(rootRef.current) })
   }, [meta.pendingDraft, phase, composer.machine, ctx, scope.sessionId, tab.id])
-  const live = useRef({ composer, meta: tab.meta, phase, title: tab.title, childId, error: forkError ?? undefined, requestId: props.quoteRequestId })
-  live.current = { composer, meta: tab.meta, phase, title: tab.title, childId, error: forkError ?? undefined, requestId: props.quoteRequestId }
-  useEffect(() => { notifyLiveSideChats() }, [phase, childId, forkError, props.quoteRequestId])
+  const live = useRef({ composer, meta: tab.meta, phase, title: tab.title, childId, error: forkError ?? undefined })
+  live.current = { composer, meta: tab.meta, phase, title: tab.title, childId, error: forkError ?? undefined }
+  useEffect(() => { notifyLiveSideChats() }, [phase, childId, forkError])
   useEffect(() => { if (childId) dropClosedSideChat(scope.sessionId, childId) }, [childId, scope.sessionId])
   useEffect(() => {
     const dispose = registerLiveSideChat(scope.sessionId, tab.id, text => {
@@ -110,7 +110,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
         live.current.composer.appendDraft(text)
         requestAnimationFrame(() => { if (rootRef.current) focusSideComposer(rootRef.current) })
       }
-    }, () => live.current.meta, () => live.current.title, () => ({ phase: live.current.phase, childId: live.current.childId, error: live.current.error, requestId: live.current.requestId }))
+    }, () => live.current.meta, () => live.current.title, () => ({ phase: live.current.phase, childId: live.current.childId, error: live.current.error }))
     const remember = (): void => {
       const current = parseSideChatMeta(live.current.meta)
       if (!current.childId || !current.parentSessionId) return

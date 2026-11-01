@@ -13,9 +13,8 @@
  *   openTab → 面板挂载的窗口期内，初始值（parentSessionId/pendingDraft/恢复
  *   用的 childId）经 openTab params 随宿主管道投递，面板挂载时落进 store。
  *
- * 单实例语义（Delivery_01）：held 规则下同 pane 同 kind 去重，「新建」由
- * 编排层折叠为聚焦既有（open.ts），注册层不感知；多实例等 Delivery_02
- * 的 multiple（0.1.6+）放开。
+ * multiple 为每次打开保留独立标签；keepMounted 保留已访问面板，
+ * 使切换标签不等同于关闭，后台输入、运行与恢复继续使用原会话。
  */
 import { Component, useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from 'react'
 import { IconNewChatOutline16 } from '../host/icons.ts'
@@ -32,9 +31,10 @@ import type { ReflowStore } from '../reflow.ts'
 import type { AnnotationStore } from '../annotations/model.ts'
 import { SideChatPanel } from './SideChatPanel.tsx'
 import { SIDE_TAB_TYPE } from './model.ts'
+import { forgetSideChatOpening } from './native.ts'
 import { sideChatTitleOf } from './identity.ts'
 import { isRestoredNativeTab } from '../host/tabs.ts'
-import { parseSideChatMeta, type SideChatMeta } from './model.ts'
+import { parseSideChatMeta, type SideChatOpenParams } from './model.ts'
 import { forgetClosedTabBinding, listClosedSideChats } from './recentClosed.ts'
 import {
   SIDENOTE_RUN_ID,
@@ -53,20 +53,6 @@ import { renderSideConversation, type ConversationRendererProps } from './Native
 /** 原生注册表里的实现 id（槽 key；kind 沿用 SIDE_TAB_TYPE 保持自文档化）。 */
 const NATIVE_IMPL_ID = 'dsh-sidenote:side-chat'
 
-/** openTab params 的形态（窗口期投递的初始 meta；宿主管道，JSON-shaped）。 */
-export interface SideChatOpenParams {
-  /** 面板归属的主会话（metaStore 初始记录的 sessionId）。 */
-  parentSessionId: string
-  /** 首开待投递草稿。 */
-  pendingDraft?: string
-  /** 后悔药重开：既有子会话（走绑定恢复，不重新 fork）。 */
-  childId?: string
-  /** 后悔药重开：内容身份随恢复走（Delivery_05）——否则重开即丢 topic。 */
-  topic?: string
-  quoteRequestId?: string
-  savedMeta?: SideChatMeta & { number?: number }
-}
-
 export function parseOpenParams(params: unknown): SideChatOpenParams | undefined {
   if (typeof params !== 'object' || params === null) return undefined
   const p = params as Record<string, unknown>
@@ -76,7 +62,6 @@ export function parseOpenParams(params: unknown): SideChatOpenParams | undefined
     ...(typeof p.pendingDraft === 'string' && p.pendingDraft !== '' ? { pendingDraft: p.pendingDraft } : {}),
     ...(typeof p.childId === 'string' && p.childId !== '' ? { childId: p.childId } : {}),
     ...(typeof p.topic === 'string' && p.topic !== '' ? { topic: p.topic } : {}),
-    ...(typeof p.quoteRequestId === 'string' ? { quoteRequestId: p.quoteRequestId } : {}),
     ...(typeof p.savedMeta === 'object' && p.savedMeta !== null ? { savedMeta: {
       ...parseSideChatMeta(p.savedMeta),
       ...(typeof (p.savedMeta as { number?: unknown }).number === 'number' ? { number: (p.savedMeta as { number: number }).number } : {}),
@@ -115,6 +100,7 @@ export function reconcileMeta(record: NativeTabRecord, sessionId: string): { cre
     ...restored,
     ...params?.savedMeta,
     tabId: record.id,
+    nativeAddress: record.navigation.address,
     sessionId,
     ...(params?.childId !== undefined ? { childId: params.childId } : {}),
     parentSessionId: params?.parentSessionId ?? sessionId,
@@ -183,7 +169,7 @@ function NativeSideChatBodyInner(props: NativeBodyInjected & NativeTabFrameworkP
   // （挂载自愈清误记），这里不双写。
   const tabSignal = nativeTab.signal
   useEffect(() => {
-    const onAbort = (): void => { dropSideChatMeta(sessionId, nativeTab.id) }
+    const onAbort = (): void => { forgetSideChatOpening(sessionId, nativeTab.id); dropSideChatMeta(sessionId, nativeTab.id) }
     if (tabSignal.aborted) {
       onAbort()
       return
@@ -203,7 +189,7 @@ function NativeSideChatBodyInner(props: NativeBodyInjected & NativeTabFrameworkP
 
   return (
     <div className={css.nativeHost} data-dsh-sidenote-native-host="">
-      <SideChatPanel ctx={ctx} store={undefined} scope={scope} tab={tab} visible={nativeTab.visible} reflow={reflow} annotations={annotations} renderConversation={(reference, side) => renderSideConversation(props, reference, side)} quoteRequestId={parseOpenParams(nativeTab.navigation.params)?.quoteRequestId} />
+      <SideChatPanel ctx={ctx} store={undefined} scope={scope} tab={tab} visible={nativeTab.visible} reflow={reflow} annotations={annotations} renderConversation={(reference, side) => renderSideConversation(props, reference, side)} />
     </div>
   )
 }
@@ -257,6 +243,8 @@ export function registerNativeSideChatTab(ctx: Context, reflow: ReflowStore, ann
     const disposeType = tabs.register({
       id: NATIVE_IMPL_ID,
       kind: SIDE_TAB_TYPE,
+      multiple: true,
+      keepMounted: true,
       priority: 'extension',
       // 静态兜底标题（open 时捕获）；活标题由 title 槽读 metaStore。
       title: () => t('tabBaseTitle'),

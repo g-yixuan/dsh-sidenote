@@ -22,7 +22,9 @@ After main-session compaction, **Main conversation context** starts with the lat
 
 ![An independent conversation in the native sidebar](assets/sidechat-en.jpg)
 
-After closing a side chat, reopen the original child through the recently closed options in `/side`. Normal entries focus an existing tab. Native page kinds allow one tab per pane, with multiple panes through splitting. Only admitted native hosts are maintained; outside-window hosts pin plugin 0.6.5; see the [compatibility policy](compatibility_EN.md).
+The right sidebar can keep multiple side-chat tabs, each with independent history, drafts, and running state. Click a tab to switch. Create another through `/side` → **New side chat** or the sidebar **+** menu; the header **Side** button focuses the selected side chat. Reopen a closed original conversation through `/side` without first closing other side chats. Only admitted native hosts are maintained; outside-window hosts pin plugin 0.6.5; see the [compatibility policy](compatibility_EN.md).
+
+**Ask in side chat** targets the selected side-chat tab. When another sidebar page such as a file is selected, it uses the last opened side chat. The target is frozen when note editing begins: switching tabs afterward never redirects the quote. If the original target closes, the note remains available with a retry message.
 
 ### Session lists and recovery
 
