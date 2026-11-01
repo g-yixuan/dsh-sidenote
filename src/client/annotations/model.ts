@@ -3,9 +3,13 @@
  * (DOM-free, React-free) so the whole lifecycle is unit-testable. One instance
  * per plugin activation.
  *
- * Numbering: a per-session monotonic counter assigns each annotation its
- * display number at creation (①②… rendered as plain digits). Numbers are
- * never reused and never re-packed on delete — 删除不重排.
+ * Numbering: two layers. The per-session monotonic counter (number) keeps its
+ * original semantics — assigned at creation, never reused, never re-packed on
+ * delete — and stays the wire <annotation id> so history references remain
+ * stable. On top of it, localNumber is the user-facing round-local number:
+ * the current active batch of a session is numbered 1..k contiguously by
+ * creation order (delete → compact re-pack), frozen at send time. Badges,
+ * chip rows and sent cards all display localNumber.
  *
  * State machine per annotation: 'active' (counts in the composer chip, rides
  * the next message via the send interceptor) → 'sent' (the message it was
@@ -18,8 +22,12 @@
 export interface Annotation {
   /** Store-unique identity (monotonic across sessions). */
   readonly id: number
-  /** Per-session display number assigned at creation; never reused. */
+  /** Per-session display number assigned at creation; never reused.
+   *  Goes on the wire as <annotation id> so history references stay stable. */
   readonly number: number
+  /** 用户侧局部编号：本会话当前 active 批次按创建序连续 1..k（不漏号），
+   *  发送时冻结；删除后剩余 active 紧凑重排。角标/chip 全显示它。 */
+  readonly localNumber: number
   readonly sessionId: string
   /** Source is independent of the send target. Missing fields revive legacy main quotes. */
   readonly sourceSessionId?: string
@@ -88,6 +96,8 @@ function reviveStored(value: unknown): Annotation | null {
   return {
     id: a.id,
     number: a.number,
+    // 旧数据没有局部号：先用全局号兜底，水合后的重排会把 active 修正掉。
+    localNumber: typeof a.localNumber === 'number' ? a.localNumber : a.number,
     sessionId: a.sessionId,
     sourceSessionId: typeof a.sourceSessionId === 'string' && a.sourceSessionId !== '' ? a.sourceSessionId : undefined,
     sourceSurface: a.sourceSurface === 'main' || a.sourceSurface === 'side' ? a.sourceSurface : undefined,
@@ -182,6 +192,33 @@ export function createAnnotationStore(
     for (const fn of [...listeners]) fn()
   }
 
+  /** 局部编号重排：每个会话的 active 注释按创建序（id 序）连续编 1..k，
+   *  已发送的保持冻结值不动（历史角标/引用不能漂移）。只在有变化时替换。 */
+  const recomputeLocalNumbers = (): void => {
+    const activesBySession = new Map<string, Annotation[]>()
+    for (const a of annotations) {
+      if (a.state !== 'active') continue
+      const bucket = activesBySession.get(a.sessionId)
+      if (bucket === undefined) activesBySession.set(a.sessionId, [a])
+      else bucket.push(a)
+    }
+    const patches = new Map<number, number>()
+    for (const bucket of activesBySession.values()) {
+      bucket.sort((x, y) => x.id - y.id)
+      for (let i = 0; i < bucket.length; i += 1) {
+        if (bucket[i]!.localNumber !== i + 1) patches.set(bucket[i]!.id, i + 1)
+      }
+    }
+    if (patches.size === 0) return
+    annotations = annotations.map(a => {
+      const local = patches.get(a.id)
+      return local === undefined ? a : { ...a, localNumber: local }
+    })
+  }
+
+  // 水合后立即规整一次：旧记录没有局部号（revive 用全局号兜底），active 重排为 1..k。
+  recomputeLocalNumbers()
+
   const replace = (id: number, patch: Partial<Annotation>): void => {
     const target = annotations.find(a => a.id === id)
     annotations = annotations.map(a => (a.id === id ? { ...a, ...patch } : a))
@@ -200,11 +237,15 @@ export function createAnnotationStore(
       return () => { listeners.delete(fn) }
     },
     add(draft: AnnotationDraft): Annotation {
+      // 全局编号：上游原语义——单调递增、不复用（历史消息引用稳定）。
       const number = (counters.get(draft.sessionId) ?? 0) + 1
       counters.set(draft.sessionId, number)
+      // 局部编号：active 恒为 1..k 连续，新来的排 k+1。
+      const localNumber = annotations.filter(a => a.sessionId === draft.sessionId && a.state === 'active').length + 1
       const annotation: Annotation = {
         id: nextId,
         number,
+        localNumber,
         sessionId: draft.sessionId,
         sourceSessionId: draft.sourceSessionId,
         sourceSurface: draft.sourceSurface,
@@ -230,6 +271,7 @@ export function createAnnotationStore(
       const target = annotations.find(a => a.id === id)
       if (target === undefined) return
       annotations = annotations.filter(a => a.id !== id)
+      recomputeLocalNumbers()
       persistTouched([target.sessionId])
       notify()
     },
@@ -243,6 +285,8 @@ export function createAnnotationStore(
         touched.add(a.sessionId)
         return { ...a, state: 'sent' }
       })
+      // 刚发送的这批局部号就地冻结（保持此刻 1..k），剩余 active 重新紧凑排。
+      recomputeLocalNumbers()
       persistTouched([...touched])
       notify()
     },

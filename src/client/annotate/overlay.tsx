@@ -331,7 +331,7 @@ function SentViewer(props: {
 
   return (
     <div ref={rootRef} className={css.editorEdit} style={{ left, top, width, maxHeight: (props.bounds?.bottom ?? window.innerHeight) - top - 8, overflowY: 'auto' }}>
-      <div className={css.sentCardTitle}>{t('sentCardTitle', { n: props.annotation.number })}</div>
+      <div className={css.sentCardTitle}>{t('sentCardTitle', { n: props.annotation.localNumber })}</div>
       <div className={css.sentCardQuote}>{props.annotation.text}</div>
       {props.annotation.note !== '' && <div className={css.sentCardNote}>{props.annotation.note}</div>}
     </div>
@@ -587,9 +587,9 @@ function BadgeLayer(props: {
         className={annotation.state === 'sent' ? `${css.badge} ${css.badgeSent}` : css.badge}
         style={{ left: point.x - 18, top: point.y }}
         title={annotation.state === 'sent'
-          ? t('sentBadgeTitle', { n: annotation.number })
+          ? t('sentBadgeTitle', { n: annotation.localNumber })
           : annotation.note === '' ? annotation.text : `${annotation.text}\n${t('noteLine', { note: annotation.note })}`}
-        aria-label={source.surface === 'side' ? `${annotation.number} · ${source.view.dataset.sidenoteViewTitle ?? ''}` : undefined}
+        aria-label={source.surface === 'side' ? `${annotation.localNumber} · ${source.view.dataset.sidenoteViewTitle ?? ''}` : undefined}
         onMouseEnter={() => { setHoveredId(annotation.id) }}
         onMouseLeave={() => { setHoveredId(null) }}
         onClick={(event) => {
@@ -598,7 +598,7 @@ function BadgeLayer(props: {
           props.onOpen(annotation, { ...point, bounds: clip, targetTitle: source.view.dataset.sidenoteViewTitle })
         }}
       >
-        {annotation.number}
+        {annotation.localNumber}
       </button>,
     )
   }
@@ -635,6 +635,18 @@ export function AnnotationEditor(props: {
   // 首次渲染的值——用户敲完注解再点别处，那段注解会静默丢掉。
   const noteRef = useRef(note)
   noteRef.current = note
+
+  // 新建态输入框升级为自适应高度的 textarea：内容超过一行时自动长高
+  //（上限 5 行，再多内部滚动），长注解不再被单行输入框截断展示。
+  const noteInputRef = useRef<HTMLTextAreaElement | null>(null)
+  useEffect(() => {
+    const el = noteInputRef.current
+    if (el === null) return
+    el.style.height = 'auto'
+    const content = el.scrollHeight
+    el.style.height = `${Math.min(content, 110)}px`
+    el.style.overflowY = content > 110 ? 'auto' : 'hidden'
+  })
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -676,14 +688,17 @@ export function AnnotationEditor(props: {
       <div ref={rootRef} className={props.targetTitle === undefined ? css.editorNew : css.editorAsk} style={{ left, top, width }}>
         {props.targetTitle !== undefined && <div className={css.editorTarget}>{t('sendToTarget', { title: props.targetTitle })}</div>}
         <div className={css.editorAskRow} style={{ flex: 1 }}>
-        <input
+        <textarea
+          ref={noteInputRef}
           className={css.editorInput}
           value={note}
           placeholder={t('notePlaceholder')}
+          rows={1}
           autoFocus
+          style={{ resize: 'none', fontFamily: 'inherit', padding: 0 }}
           onChange={(event) => { setNote(event.target.value) }}
           onKeyDown={(event) => {
-            if (event.key !== 'Enter') return
+            if (event.key !== 'Enter' || event.shiftKey) return
             // IME 保护：组合中（候选窗未提交）的 Enter 属于输入法，不能算确认。
             if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
             event.preventDefault()
