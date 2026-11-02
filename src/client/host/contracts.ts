@@ -473,6 +473,8 @@ export interface NativeTabRegistry {
 }
 
 export interface NativeTabDefinition {
+  multiple?: boolean
+  keepMounted?: boolean
   /** 实现 id（槽 key），跨注册唯一——用包名前缀防碰撞。 */
   id: string
   /** 类型判别符：`openTab(kind)` 依此打开。 */
@@ -497,6 +499,7 @@ export interface NativeTabRecord {
   id: string
   kind: string
   title: string
+  contentId?: string
   visible: boolean
   navigation: { address: string, params?: unknown, revision?: number }
   /**
@@ -505,6 +508,8 @@ export interface NativeTabRecord {
    * 静默失效）。
    */
   readonly signal: AbortSignal
+  /** Bound to this occurrence's session, including after the main view switches. */
+  readonly actions: { close(): void }
 }
 
 /** useTabInfo() 的返回（槽框架注入的 tab 信息 hook）。 */
@@ -518,21 +523,16 @@ export interface NativeTabFrameworkProps {
   useTabInfo: () => NativeTabInfo
 }
 
-/**
- * 原生右栏服务（ctx.sidebarRight；0.1.5-rc.2 的 controller 面）。
- * 注意：
- * - 快照枚举（getSnapshot/subscribe）在每会话的 surface store 上，**不在
- *   controller 上**——插件侧不可达，不要试图枚举原生布局；存活面板枚举走
- *   live registry（面板挂载自登记），关闭检测走 tab record 的 signal。
- * - openTab 只写在屏会话；跨会话的 openTabIn/closeIn 在具体类上
- *   （不在接口里），需要时结构化探测。
- */
+/** Native right-sidebar controller. tabsIn/active describe layout membership,
+ * including not-yet-mounted bodies; tab signals arrive through the body slot. */
 export interface SidebarRightService {
   openTab(kind: string, options?: { paneId?: string, replaceTab?: string, revealIfOpened?: boolean, params?: unknown }): void
   close(tabId: string): void
   isExpanded(): boolean
   toggleExpanded(): void
   focus(tabId: string): void
+  active?(): Pick<NativeTabRecord, 'id' | 'kind' | 'title' | 'contentId'> | undefined
+  tabsIn?(sessionId: string): readonly Pick<NativeTabRecord, 'id' | 'kind' | 'title' | 'contentId'>[]
 }
 
 

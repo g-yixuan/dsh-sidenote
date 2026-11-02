@@ -5,7 +5,7 @@
  * 容量：每个主会话最多记 5 条（新者在前）；会话本体仍 archived 在盘
  * （× 只关 Tab），重开 = 开 Tab + meta 预置 childId（面板绑定而非 fork）。
  */
-import type { SideChatMeta } from './model.ts'
+import { parseSideChatMeta, type SideChatMeta } from './model.ts'
 
 export interface ClosedSideEntry {
   readonly childId: string
@@ -46,6 +46,17 @@ export function recordClosedSideChat(parentSessionId: string, entry: ClosedSideE
   } catch {
     // 隐私模式/写失败：后悔药缺席不影响主流程。
   }
+}
+
+/** Share the recovery payload between pagehide and true native-tab closure. */
+export function rememberSideChat(tabId: string, title: string, meta: unknown): void {
+  const current = parseSideChatMeta(meta)
+  if (!current.childId || !current.parentSessionId) return
+  recordClosedSideChat(current.parentSessionId, {
+    childId: current.childId, parentSessionId: current.parentSessionId, tabId, title,
+    savedMeta: { ...current, number: (meta as { number?: number }).number },
+    ...(current.topic ? { topic: current.topic } : {}), closedAt: Date.now(),
+  })
 }
 
 /** 读某主会话的最近关闭列表（新者在前）。 */

@@ -20,6 +20,8 @@
  */
 export interface SideChatMetaRecord {
   readonly tabId: string
+  /** Stable native content address guards recovery against a reused tab id. */
+  readonly nativeAddress?: string
   /** 所属主会话。 */
   readonly sessionId: string
   /** fork 出的子会话（首开 fork 完成后登记）。 */
@@ -85,6 +87,7 @@ function revive(value: unknown): SideChatMetaRecord | null {
   if (typeof r.number !== 'number') return null
   return {
     tabId: r.tabId,
+    ...(typeof r.nativeAddress === 'string' ? { nativeAddress: r.nativeAddress } : {}),
     sessionId: r.sessionId,
     ...(typeof r.childId === 'string' ? { childId: r.childId } : {}),
     ...(typeof r.parentSessionId === 'string' ? { parentSessionId: r.parentSessionId } : {}),

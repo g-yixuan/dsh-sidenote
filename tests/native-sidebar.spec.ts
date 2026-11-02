@@ -337,7 +337,7 @@ describe('native 数据源切换（P2）', () => {
     let contribution: { ui: { options: (s: { sessionId: string }) => Promise<readonly { id: string; label: string }[]>; onSelect: (o: { id: string }, s: { sessionId: string }) => void } } | undefined
     ;(ctx as { get: unknown }).get = (name: string) => {
       if (name === 'commandUi') return { register: (c: typeof contribution) => { contribution = c } }
-      if (name === 'sidebarRight') return { focus: focusFn }
+      if (name === 'sidebarRight') return { openTab() {}, focus: focusFn, tabsIn: () => liveSideChatsOf('s-slash').map(panel => ({ id: panel.tabId, kind: SIDE_TAB_TYPE, title: panel.readTitle() })) }
       return undefined
     }
     const dispose = registerLiveSideChat('s-slash', 'tab-slash', () => {}, () => ({}), () => '侧边 2')
@@ -348,10 +348,9 @@ describe('native 数据源切换（P2）', () => {
     contribution!.ui.onSelect({ id: 'focus:tab-slash' }, { sessionId: 's-slash' })
     expect(focusFn).toHaveBeenCalledWith('tab-slash')
     expect(calls.activations).toEqual([])
-    // 有存活实例时「新建」被 held 折叠名不副实——不列（dsh sidebar-right：
-    // page kind 的 contentId 恒为 sidebar://<kind>，每 pane 单实例）
+    // Multiple native instances always offer explicit creation.
     const optionsWithLive = await contribution!.ui.options({ sessionId: 's-slash' })
-    expect(optionsWithLive.map(o => o.id)).not.toContain('new')
+    expect(optionsWithLive.map(o => o.id)).toContain('new')
     dispose()
     // 无存活实例后「新建」回归
     const optionsAfterClose = await contribution!.ui.options({ sessionId: 's-slash' })

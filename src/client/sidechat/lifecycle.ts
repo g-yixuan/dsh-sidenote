@@ -8,7 +8,8 @@
  */
 import type { Context, SessionFace } from '../host/contracts.ts'
 import { parseSideChatMeta, type SideChatMeta } from './model.ts'
-import { readTab, sidebarRightOf } from './open.ts'
+import { readTab } from './open.ts'
+import { currentSessionIdOf } from '../host/currentSession.ts'
 import { betterSidebarOf, directNativeLeg, rootContext } from './native.ts'
 import { readSideChatMeta, writeSideChatMeta } from './metaStore.ts'
 import { sideChatTitleOf } from './identity.ts'
@@ -118,6 +119,7 @@ export async function forkAndRegister(ctx: Context, parentSessionId: string, tab
   } finally {
     finishVisibility()
   }
+  if (signal?.aborted) return forked
   // meta 先行：fork resolve 后立即登记 childId（会话切换导致组件卸载时
   // updateTab 找不到 tab 也只是 no-op——否则 Tab 永远停在 forking 且下次
   // 挂载重复 fork 出孤儿会话）。
@@ -175,15 +177,10 @@ export function updateTabMeta(ctx: Context, sessionId: string, tabId: string, mu
     const next = mutate(parseSideChatMeta(direct))
     // 缺键即删（clearPendingDraft 语义）：JSON.stringify 丢弃 undefined 键。
     writeSideChatMeta({
+      ...next,
       tabId,
       sessionId: direct.sessionId,
-      ...(next.childId !== undefined ? { childId: next.childId } : {}),
-      ...(next.parentSessionId !== undefined ? { parentSessionId: next.parentSessionId } : {}),
-      ...(next.pendingDraft !== undefined ? { pendingDraft: next.pendingDraft } : {}),
-      ...(next.boundarySeq !== undefined ? { boundarySeq: next.boundarySeq } : {}),
-      ...(next.forkedMidTurn === true ? { forkedMidTurn: true } : {}),
-      ...(next.snapshotOnly === true ? { snapshotOnly: true } : {}),
-      ...(next.topic !== undefined ? { topic: next.topic } : {}),
+      nativeAddress: direct.nativeAddress,
       number: direct.number,
       createdAt: direct.createdAt,
       ...(direct.runId !== undefined ? { runId: direct.runId } : {}),
@@ -211,28 +208,16 @@ export function setSideChatTopic(ctx: Context, sessionId: string, tabId: string,
   betterSidebarOf(ctx)?.updateTab(tabId, { title: sideChatTitleOf({ number: 1, topic: effective }) })
 }
 
-/** 关闭侧聊 tab：直连腿走 ISidebarRight.close，legacy 走 betterSidebar.closeTab。 */
-export function closeSideTab(ctx: Context, tabId: string, sessionId: string): void {
-  if (directNativeLeg(ctx)) {
-    const face = sidebarRightOf(ctx)
-    if (face !== undefined) {
-      face.close(tabId)
-      return
-    }
-  }
-  betterSidebarOf(ctx)?.closeTab(tabId, { sessionId })
-}
-
-/** A saved copy is a regular session; close the source tab before changing views. */
-export async function saveSideChatSession(ctx: Context, childId: string, tabId: string, parentSessionId: string, annotations?: Pick<AnnotationStore, 'countActive'>): Promise<void> {
+/** Close the captured occurrence; a background save must not change the foreground. */
+export async function saveSideChatSession(ctx: Context, childId: string, closeSource: () => void, parentSessionId: string, annotations?: Pick<AnnotationStore, 'countActive'>): Promise<void> {
   const session = rootContext(ctx).sessions.binding(childId)?.session
   const machine = resolveInput(rootContext(ctx), childId)
   const input = machine?.state.getSnapshot()
   if (session?.getSnapshot().running === true || (input?.queue?.length ?? 0) > 0 || (input !== undefined && input.phase !== 'plain')) throw new Error(t('promoteBusy'))
   if (input?.draft.trim() || (machine !== undefined && inputAttachmentIds(machine).length > 0) || (annotations?.countActive(childId) ?? 0) > 0) throw new Error(t('promoteDraftBusy'))
   const promoted = await rootContext(ctx).sessions.fork({ sessionId: childId, increaseTitle: true })
-  closeSideTab(ctx, tabId, parentSessionId)
-  openSession(ctx, promoted)
+  closeSource()
+  if (currentSessionIdOf(ctx) === parentSessionId) openSession(ctx, promoted)
 }
 
 /**

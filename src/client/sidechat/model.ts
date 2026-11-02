@@ -17,6 +17,19 @@ import { t } from '../locales.ts'
 /** Tab 类型 id（better-sidebar 注册表键；带包前缀防冲突）。 */
 export const SIDE_TAB_TYPE = 'dsh-sidenote:side'
 
+/** openTab params 的形态（窗口期投递的初始 meta；宿主管道，JSON-shaped）。 */
+export interface SideChatOpenParams {
+  /** 面板归属的主会话（metaStore 初始记录的 sessionId）。 */
+  parentSessionId: string
+  /** 首开待投递草稿。 */
+  pendingDraft?: string
+  /** 后悔药重开：既有子会话（走绑定恢复，不重新 fork）。 */
+  childId?: string
+  /** 后悔药重开：内容身份随恢复走（Delivery_05）——否则重开即丢 topic。 */
+  topic?: string
+  savedMeta?: SideChatMeta & { number?: number }
+}
+
 
 
 // ── Tab id 与标题 ────────────────────────────────────────────────────────────

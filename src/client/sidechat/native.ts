@@ -34,10 +34,10 @@ interface LiveSideChat {
   readMeta(): unknown
   /** Current tab title（聚焦列表/编号数据源的读取面）。 */
   readTitle(): string
-  readStatus(): { phase: string; childId?: string; error?: string; requestId?: string }
+  readStatus(): { phase: string; childId?: string; error?: string }
 }
 
-/** Native tab id → live panel. Native layouts are memory-only, so is this. */
+/** Mounted bodies only; authoritative open-tab membership lives in the host. */
 const liveSideChats = new Map<string, LiveSideChat>()
 const panelKey = (sessionId: string, tabId: string): string => JSON.stringify([sessionId, tabId])
 const liveListeners = new Set<() => void>()
@@ -71,10 +71,11 @@ export function registerLiveSideChat(
   liveSideChats.set(key, entry)
   if (!birthOrder.has(key)) birthOrder.set(key, ++birthSeq)
   // 挂载即回放在 openTab→注册窗口内暂存的草稿（seedDraft 内有相位门）。
-  const opening = openings.get(sessionId)
+  const exactKey = openingKey(sessionId, tabId)
+  const keyOfOpening = openings.has(exactKey) ? exactKey : openingKey(sessionId, '')
+  const opening = openings.get(keyOfOpening)
   if (opening !== undefined) {
-    opening.target = entry
-    openings.delete(sessionId)
+    openings.delete(keyOfOpening)
     for (const draft of opening.drafts) seedDraft(draft)
   }
   notifyLiveSideChats()
@@ -96,22 +97,30 @@ interface OpeningMark {
   readonly at: number
   /** 窗口内到达的待投递草稿（面板注册时经 seedDraft 回放）。 */
   readonly drafts: string[]
-  target?: LiveSideChat
+  readonly childId?: string
 }
 
 const openings = new Map<string, OpeningMark>()
+const openingKey = (sessionId: string, tabId: string): string => JSON.stringify([sessionId, tabId])
 
 /** 标记一次已发起、面板尚未注册的 native 打开（create/reopen 铸造后调用）。 */
-export function markSideChatOpening(sessionId: string): void {
-  openings.set(sessionId, { at: Date.now(), drafts: [] })
+export function markSideChatOpening(sessionId: string, tabId = '', childId?: string): OpeningMark {
+  const mark: OpeningMark = { at: Date.now(), drafts: [], childId }
+  openings.set(openingKey(sessionId, tabId), mark)
+  return mark
 }
 
 /** 进行中的打开；TTL 外视为 openTab 被拒/面板未挂载，清除并返回 undefined。 */
-export function sideChatOpening(sessionId: string): OpeningMark | undefined {
-  const mark = openings.get(sessionId)
+export function forgetSideChatOpening(sessionId: string, tabId: string): void {
+  openings.delete(openingKey(sessionId, tabId))
+}
+
+export function sideChatOpening(sessionId: string, tabId = ''): OpeningMark | undefined {
+  const key = openingKey(sessionId, tabId)
+  const mark = openings.get(key)
   if (mark === undefined) return undefined
   if (Date.now() - mark.at > OPENING_TTL_MS) {
-    openings.delete(sessionId)
+    openings.delete(key)
     return undefined
   }
   return mark

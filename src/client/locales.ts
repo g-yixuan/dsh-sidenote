@@ -231,7 +231,7 @@ export const en = {
   promoteTitle: 'Fork this side chat into a standalone session in the main list',
   promoteBusy: 'Wait for the reply and queued messages to finish before saving',
   promoteDraftBusy: 'Send or clear the draft, attachments and annotations before saving',
-  promoteDone: 'Saved as a regular session — it\'s open in the main view now',
+  promoteDone: 'Saved as a regular session',
 
   // 工具卡叶子块 labels（0.1.2 起必填——host/labels.ts）
   readWindow: '{shown} of {total} lines',
@@ -462,7 +462,7 @@ export const zh: Record<CopyKey, string> = {
   promoteTitle: '把侧边聊天转为会话列表里的正式会话',
   promoteBusy: '请等待回复及待发消息处理完成后再保存',
   promoteDraftBusy: '发送或清除草稿、附件和注释后再保存',
-  promoteDone: '已保存为正式会话——已在主视图打开',
+  promoteDone: '已保存为正式会话',
 
   readWindow: '{shown}/{total} 行',
   searchPathsSummary: '{shown}/{total} 个路径',

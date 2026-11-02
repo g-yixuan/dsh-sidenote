@@ -1,20 +1,5 @@
-/**
- * 「新建或聚焦一个侧边聊天 Tab」的共享编排：桥接（WI-03 划选提问
- * askInSideChat）与 /side 斜杠命令共用。
- *
- * 双腿（Workitem_04 单路化）：
- * - 直连腿（BS ≥ 0.19 ⇒ 宿主 DSH ≥ 0.1.5）：tab 注册在原生右栏，meta 在
- *   自有 metaStore，聚焦走 ISidebarRight.focus，枚举走原生快照的扁平
- *   tabs map + live registry（面板挂载自登记）+ openings 窗口期标记。
- *   单实例语义：held 规则下同 pane 同 kind 去重，「新建」折叠为聚焦既有
- *   ——草稿投递必须命中三处之一（seedDraft / openings 暂存 / metaStore
- *   的 pendingDraft），任一缺失即静默丢草稿（PR#3 前的活伤）。
- * - legacy 腿（BS < 0.19）：布局快照即注册表，openTab 同步落快照。
- *
- * 聚焦策略：同一主会话并存多个时聚焦最后一个（最近打开的）。
- * 草稿注入：目标 Tab 已 fork 且 input 机器可达 → 直接写机器草稿；
- * 否则写 meta.pendingDraft 移交面板（面板在 composer 就绪后应用并清除）。
- */
+/** Entry orchestration: focus the selected side chat, explicitly create a new
+ * native tab, or reopen the original child. Layout membership belongs to DSH. */
 import type { Context, SidebarTab } from '../host/contracts.ts'
 import {
   SIDE_TAB_TYPE,
@@ -27,12 +12,14 @@ import {
 } from './model.ts'
 import { readInputDraft, resolveSessionInput } from './composer.ts'
 import { currentSessionIdOf } from '../host/currentSession.ts'
-import { betterSidebarOf, directNativeLeg, focusNativeTab, lastLiveSideChat, liveSideChatsOf, markSideChatOpening, nativeSidebarHost, nativeTabShell, sideChatOpening } from './native.ts'
-import { readSideChatMeta, sideChatMetasOf, writeSideChatMeta } from './metaStore.ts'
+import { betterSidebarOf, directNativeLeg, focusNativeTab, lastLiveSideChat, liveSideChat, liveSideChatsOf, markSideChatOpening, nativeSidebarHost, nativeTabShell, sideChatOpening } from './native.ts'
+import { readSideChatMeta, storedSideChatMetas } from './metaStore.ts'
 import { sideChatTitleOf } from './identity.ts'
 import { t } from '../locales.ts'
 
 import { sidebarRightOf } from '../host/sidebar.ts'
+import { activeNativeTabOf, nativeTabsOf } from '../host/tabs.ts'
+import type { SideChatOpenParams } from './model.ts'
 export { sidebarRightOf } from '../host/sidebar.ts'
 
 /** 直连腿判定：directNativeLeg（BS ≥0.19 或 BS 缺席）+ 原生面已就位。 */
@@ -40,11 +27,31 @@ function directLeg(ctx: Context): boolean {
   return directNativeLeg(ctx) && sidebarRightOf(ctx) !== undefined
 }
 
-/** 直连腿：向既存 tab 追加待投递草稿（面板 pendingDraft effect 消费）。 */
-function appendNativePendingDraft(sessionId: string, tabId: string, draftText: string): void {
-  const meta = readSideChatMeta(sessionId, tabId)
-  if (meta === undefined) return
-  writeSideChatMeta({ ...meta, pendingDraft: appendDraftText(meta.pendingDraft ?? '', draftText) })
+/** The selected native side tab wins; when viewing another kind, use the last side tab. */
+export function sideChatTabsOf(ctx: Context, sessionId: string) {
+  const saved = storedSideChatMetas()
+  return nativeTabsOf(ctx, sessionId).filter(tab => tab.kind === SIDE_TAB_TYPE).map(tab => ({
+    ...tab,
+    meta: readSideChatMeta(sessionId, tab.id) ?? saved.find(meta => meta.sessionId === sessionId && meta.tabId === tab.id && meta.nativeAddress !== undefined && meta.nativeAddress === tab.contentId),
+  }))
+}
+
+export function sideChatTargetTab(ctx: Context, sessionId: string) {
+  const tabs = sideChatTabsOf(ctx, sessionId)
+  return tabs.find(tab => tab.id === activeNativeTabOf(ctx)?.id) ?? tabs.at(-1)
+}
+
+/** Opening is synchronous in admitted hosts; capture the actual newly minted id. */
+function openDirectTab(ctx: Context, sessionId: string, params: SideChatOpenParams): boolean {
+  if (currentSessionIdOf(ctx) !== sessionId) return false
+  const sidebar = sidebarRightOf(ctx)
+  if (!sidebar) return false
+  const before = new Set(sideChatTabsOf(ctx, sessionId).map(tab => tab.id))
+  sidebar.openTab(SIDE_TAB_TYPE, { params })
+  const created = sideChatTabsOf(ctx, sessionId).find(tab => !before.has(tab.id))
+  if (!created) return false
+  markSideChatOpening(sessionId, created.id, params.childId)
+  return true
 }
 
 /**
@@ -76,53 +83,18 @@ export function openOrFocusSideChat(ctx: Context, sessionId: string, draftText?:
   return openOrFocusLegacy(ctx, sessionId, draftText)
 }
 
-/** 直连腿：聚焦既有（三级数据源）或铸造新开。 */
+/** Focus without navigating an existing tab: new params must never replace its identity. */
 function openOrFocusDirect(ctx: Context, sessionId: string, draftText?: string): boolean {
   try {
-    // 会话守卫：只操作在屏会话（openTab 本就只写在屏会话，提前拒掉省一次铸造）。
-    // 0.1.7 的列表已无 current 字段——双源（list.current / DOM）。
     if (currentSessionIdOf(ctx) !== sessionId) return false
-    const hasDraft = draftText !== undefined && draftText !== ''
-
-    // 1. 存活面板（已挂载登记）：草稿直达 composer/相位门。
-    const live = lastLiveSideChat(sessionId)
-    if (live !== undefined) {
-      if (hasDraft) live.seedDraft(draftText!)
-      if (!focusNativeTab(ctx, live.tabId)) sidebarRightOf(ctx)?.focus(live.tabId)
-      return true
+    const target = sideChatTargetTab(ctx, sessionId)
+    if (!target) return openDirectTab(ctx, sessionId, { parentSessionId: sessionId, ...(draftText ? { pendingDraft: draftText } : {}) })
+    if (draftText) {
+      const live = liveSideChat(target.id, sessionId)
+      if (live) live.seedDraft(draftText)
+      else (sideChatOpening(sessionId, target.id) ?? markSideChatOpening(sessionId, target.id)).drafts.push(draftText)
     }
-
-    // 2. openTab→面板挂载窗口期：草稿暂存，面板注册时回放。
-    const opening = sideChatOpening(sessionId)
-    if (opening !== undefined) {
-      if (hasDraft) opening.drafts.push(draftText!)
-      return true
-    }
-
-    // 3. metaStore 里本会话已有记录：草稿先落 metaStore.pendingDraft（存活
-    //    面板消费草稿的唯一通道——held 折叠时宿主虽 navigate 新 params
-    //    （审查 M1 实证），但 reconcile 幂等不覆盖既有记录，params 不会被
-    //    消费）。注意 metaStore 不作存活 Oracle（审查 M-3）：记录是否是
-    //    孤键（tab 已不在布局）由下一步的 openTab 裁定。
-    const metas = sideChatMetasOf(sessionId)
-    const target = metas[metas.length - 1]
-    if (target !== undefined && hasDraft) {
-      appendNativePendingDraft(sessionId, target.tabId, draftText!)
-    }
-
-    // 4. openTab 即裁定：held 规则下同 kind 既有 tab 折叠聚焦（孤键/正常
-    //    存活都正确）；无既存则新铸（孤键自愈——面板 reconcile 幂等接管
-    //    旧记录，childId 在则走绑定恢复）。首开/新铸的初始 meta 经 params
-    //    随宿主管道投递（reconcile 落 store）；聚焦既存时 params 不消费
-    //    （见第 3 级），传 parentSessionId 足够。
-    sidebarRightOf(ctx)!.openTab(SIDE_TAB_TYPE, {
-      params: {
-        parentSessionId: sessionId,
-        ...(hasDraft && target === undefined ? { pendingDraft: draftText! } : {}),
-      },
-    })
-    markSideChatOpening(sessionId)
-    return true
+    return focusNativeTab(ctx, target.id)
   } catch (error) {
     console.warn('[dsh-sidenote] 打开侧边聊天失败:', error)
     return false
@@ -183,15 +155,11 @@ function openOrFocusLegacy(ctx: Context, sessionId: string, draftText?: string):
   }
 }
 
-/**
- * 无条件新建一个侧边聊天 Tab（/side「新建侧边聊天」选项的语义）。
- * 直连腿（单实例期）：折叠为「聚焦既有 + 草稿正确投递」（= openOrFocus；
- * 多实例随 Delivery_02 的 multiple 放开）。
- * @returns false = 未能创建（调用方保持自己的流程）。
- */
+/** Explicit creation always mints another native tab and an independent child. */
 export function createSideChat(ctx: Context, sessionId: string, draftText?: string): boolean {
-  if (directLeg(ctx)) return openOrFocusDirect(ctx, sessionId, draftText)
-  return createSideChatLegacy(ctx, sessionId, draftText)
+  if (!directLeg(ctx)) return createSideChatLegacy(ctx, sessionId, draftText)
+  try { return openDirectTab(ctx, sessionId, { parentSessionId: sessionId, ...(draftText ? { pendingDraft: draftText } : {}) }) }
+  catch (error) { console.warn('[dsh-sidenote] 新建侧边聊天失败:', error); return false }
 }
 
 function createSideChatLegacy(ctx: Context, sessionId: string, draftText?: string): boolean {
@@ -239,11 +207,8 @@ export function sideChatTargetTitle(ctx: Context, sessionId: string): string | u
   try {
     if (directLeg(ctx)) {
       if (currentSessionIdOf(ctx) !== sessionId) return undefined
-      const live = lastLiveSideChat(sessionId)
-      if (live !== undefined) return live.readTitle()
-      const metas = sideChatMetasOf(sessionId)
-      const last = metas[metas.length - 1]
-      if (last !== undefined) return sideChatTitleOf(last)
+      const target = sideChatTargetTab(ctx, sessionId)
+      if (target) return liveSideChat(target.id, sessionId)?.readTitle() ?? (target.meta ? sideChatTitleOf(target.meta) : target.title)
       return t('tabBaseTitle')
     }
     const snapshot = betterSidebarOf(ctx)?.getSnapshot()
@@ -271,18 +236,15 @@ export function reopenSideChat(ctx: Context, sessionId: string, childId: string,
   if (directLeg(ctx)) {
     try {
       if (currentSessionIdOf(ctx) !== sessionId) return false
-      // 单实例（held）：有存活实例时重开无意义（弹层侧此时本就不列重开项）。
-      if (sideChatMetasOf(sessionId).length > 0) return false
-      sidebarRightOf(ctx)!.openTab(SIDE_TAB_TYPE, {
-        params: {
-          parentSessionId: sessionId,
-          childId,
-          ...(opts?.savedMeta !== undefined ? { savedMeta: opts.savedMeta } : {}),
-          ...(opts?.topic !== undefined ? { topic: opts.topic } : {}),
-        },
+      const existing = sideChatTabsOf(ctx, sessionId).find(tab =>
+        sideChatOpening(sessionId, tab.id)?.childId === childId ||
+        tab.meta?.childId === childId)
+      if (existing) return focusNativeTab(ctx, existing.id)
+      return openDirectTab(ctx, sessionId, {
+        parentSessionId: sessionId, childId,
+        ...(opts?.savedMeta !== undefined ? { savedMeta: opts.savedMeta } : {}),
+        ...(opts?.topic !== undefined ? { topic: opts.topic } : {}),
       })
-      markSideChatOpening(sessionId)
-      return true
     } catch (error) {
       console.warn('[dsh-sidenote] 重开侧边聊天失败:', error)
       return false
