@@ -11,6 +11,10 @@ This guide applies to maintainers of `g-yixuan/dsh-sidenote` and the npm package
 
 GitHub Actions publishes through OIDC authorization without requiring a local npm login. Forks need their own npm package and publishing authorization.
 
+## Version selection
+
+Prefer patch releases, for example `0.8.1` → `0.8.2`. Before increasing the minor or major version (for example `0.8.x` → `0.9.0` or `0.x` → `1.0.0`), discuss the exact version with the user and obtain explicit approval. A generic request to release does not authorize a minor or major bump.
+
 ## Release steps
 
 1. Create a release branch from `main`, update the version in `package.json`, prepare release notes, and open a `release:` PR. Do not push version changes directly to `main`.

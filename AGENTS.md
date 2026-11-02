@@ -6,5 +6,6 @@
 - For code changes, run the relevant checks: architecture gates, typecheck, build, then tests. Bundle integrity tests require current build output. UI/session/host changes also need relevant host validation; document gaps honestly.
 - Keep `sidechat/` and `annotate/` independent; shared code belongs in a shared layer. Preserve host compatibility through `src/client/host/`.
 - Preserve external contributors' authorship and co-author information. Do not rewrite merged history or bump package versions outside a release PR.
+- Prefer patch releases (for example, `0.8.1` → `0.8.2`). Before increasing the minor or major version (for example, `0.8.x` → `0.9.0` or `0.x` → `1.0.0`), discuss the exact version with the user and obtain explicit approval. A generic request to release does not authorize a minor or major bump.
 - Update both Chinese and English public guides in the same PR when changing features, rules, commands, or compatibility facts. Wording-only edits and everyday issue/PR discussions do not require translations.
 - Do not commit generated `lib/`, test output, local agent records, credentials, or personal environment details. `.vibe/` is optional local bookkeeping and is not part of the public contribution process; when using worktrees, keep it only in the primary checkout.
