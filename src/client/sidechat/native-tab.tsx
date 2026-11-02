@@ -33,9 +33,9 @@ import { SideChatPanel } from './SideChatPanel.tsx'
 import { SIDE_TAB_TYPE } from './model.ts'
 import { forgetSideChatOpening } from './native.ts'
 import { sideChatTitleOf } from './identity.ts'
-import { isRestoredNativeTab } from '../host/tabs.ts'
+import { closeNativeTab, isRestoredNativeTab } from '../host/tabs.ts'
 import { parseSideChatMeta, type SideChatOpenParams } from './model.ts'
-import { forgetClosedTabBinding, listClosedSideChats } from './recentClosed.ts'
+import { forgetClosedTabBinding, listClosedSideChats, rememberSideChat } from './recentClosed.ts'
 import {
   SIDENOTE_RUN_ID,
   dropSideChatMeta,
@@ -110,13 +110,39 @@ export function reconcileMeta(record: NativeTabRecord, sessionId: string): { cre
     createdAt: restored?.createdAt ?? Date.now(),
     runId: SIDENOTE_RUN_ID,
   }
-  writeSideChatMeta(meta, { silent: true })
-  return { created: true, meta }
+  if (!record.signal.aborted) writeSideChatMeta(meta, { silent: true })
+  return { created: !record.signal.aborted, meta }
 }
 
 /** 芯片标题：metaStore 兑现（topic 优先，编号回退——Delivery_05 单源）。 */
 export function titleOf(sessionId: string, tabId: string): string {
   return sideChatTitleOf(readSideChatMeta(sessionId, tabId))
+}
+
+/** Titles also mount for unvisited tabs, so restore their identity before commands enumerate them. */
+function useSideChatMeta(record: NativeTabRecord, sessionId: string) {
+  const { created, meta } = reconcileMeta(record, sessionId)
+  const createdRef = useRef(false)
+  if (created) createdRef.current = true
+  useSyncExternalStore(sideChatMetaStore.subscribe, sideChatMetaStore.getSnapshot)
+  useEffect(() => {
+    if (createdRef.current) {
+      createdRef.current = false
+      notifySideChatMetaListeners()
+    }
+  }, [])
+  useEffect(() => {
+    const onAbort = (): void => {
+      const current = readSideChatMeta(sessionId, record.id)
+      rememberSideChat(record.id, sideChatTitleOf(current), current)
+      forgetSideChatOpening(sessionId, record.id)
+      dropSideChatMeta(sessionId, record.id)
+    }
+    if (record.signal.aborted) { onAbort(); return }
+    record.signal.addEventListener('abort', onAbort, { once: true })
+    return () => { record.signal.removeEventListener('abort', onAbort) }
+  }, [sessionId, record.id, record.signal])
+  return readSideChatMeta(sessionId, record.id) ?? meta
 }
 
 /** Body 注册的注入（插件根 ctx + 会话身份 + reflow store，经槽 inject 工厂）。 */
@@ -142,41 +168,10 @@ function NativeSideChatBodyInner(props: NativeBodyInjected & NativeTabFrameworkP
   const info: NativeTabInfo = useTabInfo()
   const nativeTab = info.tab
 
-  // meta 初始登记（渲染期幂等；见 reconcileMeta 的时序说明）。结果直接
-  // 作为本轮渲染的 meta 数据源（子面板 fork 相位依赖它），不等 store 回读。
-  // notify 补触发用 ref：StrictMode/并发下渲染期返回值在第二次渲染失真。
-  const { created, meta: reconciledMeta } = reconcileMeta(nativeTab, sessionId)
-  const createdRef = useRef(false)
-  if (created) createdRef.current = true
-  useEffect(() => {
-    if (createdRef.current) {
-      createdRef.current = false
-      notifySideChatMetaListeners()
-    }
-  }, [])
+  const meta = useSideChatMeta(nativeTab, sessionId)
 
   const cwd = useSessionCwd(ctx, sessionId)
   const scope = useMemo((): SessionScope => ({ sessionId, ...(cwd !== undefined ? { cwd } : {}) }), [sessionId, cwd])
-
-  // meta 变更驱动重渲（fork 登记 childId、草稿清除等）；首轮用 reconcile 的
-  // 直接结果，之后跟 store（两者同键同源，切换无跳变）。
-  useSyncExternalStore(sideChatMetaStore.subscribe, sideChatMetaStore.getSnapshot)
-  const meta = readSideChatMeta(sessionId, nativeTab.id) ?? reconciledMeta
-
-  // meta 清场：tab record 的 signal 在 record 消失（真关闭）时 abort——
-  // 直接监听 abort 事件（精确时点；切会话/重挂载不 abort，不动）。
-  // 后悔药登记（recentClosed）由 SideChatPanel 的卸载 effect 负责
-  // （挂载自愈清误记），这里不双写。
-  const tabSignal = nativeTab.signal
-  useEffect(() => {
-    const onAbort = (): void => { forgetSideChatOpening(sessionId, nativeTab.id); dropSideChatMeta(sessionId, nativeTab.id) }
-    if (tabSignal.aborted) {
-      onAbort()
-      return
-    }
-    tabSignal.addEventListener('abort', onAbort, { once: true })
-    return () => { tabSignal.removeEventListener('abort', onAbort) }
-  }, [nativeTab.id, tabSignal, sessionId])
 
   const tab: SidebarTab = {
     id: nativeTab.id,
@@ -189,7 +184,7 @@ function NativeSideChatBodyInner(props: NativeBodyInjected & NativeTabFrameworkP
 
   return (
     <div className={css.nativeHost} data-dsh-sidenote-native-host="">
-      <SideChatPanel ctx={ctx} store={undefined} scope={scope} tab={tab} visible={nativeTab.visible} reflow={reflow} annotations={annotations} renderConversation={(reference, side) => renderSideConversation(props, reference, side)} />
+      <SideChatPanel ctx={ctx} store={undefined} scope={scope} tab={tab} visible={nativeTab.visible} closeSource={() => closeNativeTab(nativeTab)} reflow={reflow} annotations={annotations} renderConversation={(reference, side) => renderSideConversation(props, reference, side)} />
     </div>
   )
 }
@@ -216,8 +211,7 @@ class NativeTabBoundary extends Component<{ children: ReactNode }, { error: stri
 function NativeSideChatTitle(props: NativeBodyInjected & NativeTabFrameworkProps): ReactNode {
   const { useTabInfo } = props
   const info = useTabInfo()
-  useSyncExternalStore(sideChatMetaStore.subscribe, sideChatMetaStore.getSnapshot)
-  return titleOf(props.sessionId, info.tab.id)
+  return sideChatTitleOf(useSideChatMeta(info.tab, props.sessionId))
 }
 
 /** 会话工作区根（better-sidebar useSessionCwd 同款）。 */

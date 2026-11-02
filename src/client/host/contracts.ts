@@ -508,6 +508,8 @@ export interface NativeTabRecord {
    * 静默失效）。
    */
   readonly signal: AbortSignal
+  /** Bound to this occurrence's session, including after the main view switches. */
+  readonly actions: { close(): void }
 }
 
 /** useTabInfo() 的返回（槽框架注入的 tab 信息 hook）。 */

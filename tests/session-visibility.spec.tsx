@@ -193,10 +193,10 @@ it('uses the available host navigator and closes the source tab before opening t
   const order: string[] = []
   const workspace = { openSession: vi.fn((id: string) => { order.push(`open:${id}`) }) }
   const ctx = {
-    get: (name: string) => name === 'uiWorkspace' ? workspace : name === 'sidebarRight' ? { openTab() {}, close: () => order.push('close') } : undefined,
-    sessions: { fork: vi.fn(async () => 'saved'), open: vi.fn(), binding: () => ({ session: { getSnapshot: () => ({ running: false }) } }) },
+    get: (name: string) => name === 'uiWorkspace' ? workspace : undefined,
+    sessions: { fork: vi.fn(async () => 'saved'), open: vi.fn(), binding: () => ({ session: { getSnapshot: () => ({ running: false }) } }), list: { getSnapshot: () => ({ current: 'parent' }) } },
   } as unknown as Context
-  await saveSideChatSession(ctx, 'child', 'tab', 'parent')
+  await saveSideChatSession(ctx, 'child', () => { order.push('close') }, 'parent')
   expect(order).toEqual(['close', 'open:saved'])
   expect(ctx.sessions.fork).toHaveBeenCalledWith({ sessionId: 'child', increaseTitle: true })
   expect(sessionVisibilityOf(ctx).getSnapshot().hidden.has('saved')).toBe(false)
@@ -207,6 +207,26 @@ it('uses the available host navigator and closes the source tab before opening t
   expect(() => openSession({ get: () => undefined, sessions: {} } as unknown as Context, 'parent')).toThrow('navigation is unavailable')
 })
 
+it('后台保存只关闭捕获的源标签，保留用户切换后的主会话', async () => {
+  let current = 'parent-A'
+  let finish!: (id: string) => void
+  const fork = new Promise<string>(resolve => { finish = resolve })
+  const closeSource = vi.fn()
+  const closeCurrent = vi.fn()
+  const navigate = vi.fn()
+  const ctx = {
+    get: (name: string) => name === 'sidebarRight' ? { openTab() {}, close: closeCurrent } : name === 'uiWorkspace' ? { openSession: navigate } : undefined,
+    sessions: { fork: () => fork, binding: () => ({ session: { getSnapshot: () => ({ running: false }) } }), list: { getSnapshot: () => ({ current }) } },
+  } as unknown as Context
+  const pending = saveSideChatSession(ctx, 'child-A', closeSource, 'parent-A')
+  current = 'parent-B'
+  finish('saved-A')
+  await pending
+  expect(closeSource).toHaveBeenCalledOnce()
+  expect(closeCurrent).not.toHaveBeenCalled()
+  expect(navigate).not.toHaveBeenCalled()
+})
+
 it.each(['running', 'queued', 'submitting', 'draft', 'attachment', 'annotation'])('keeps the source open instead of saving an incomplete %s session', async state => {
   const fork = vi.fn()
   const close = vi.fn()
@@ -215,7 +235,7 @@ it.each(['running', 'queued', 'submitting', 'draft', 'attachment', 'annotation']
     get: (name: string) => name === 'conversation' ? { input: { for: () => input } } : name === 'sidebarRight' ? { openTab() {}, close } : undefined,
     sessions: { fork, scope: () => ({}), binding: () => ({ session: { getSnapshot: () => ({ running: state === 'running' }) } }) },
   } as unknown as Context
-  await expect(saveSideChatSession(ctx, 'child', 'tab', 'parent', { countActive: () => state === 'annotation' ? 1 : 0 })).rejects.toThrow()
+  await expect(saveSideChatSession(ctx, 'child', close, 'parent', { countActive: () => state === 'annotation' ? 1 : 0 })).rejects.toThrow()
   expect(fork).not.toHaveBeenCalled()
   expect(close).not.toHaveBeenCalled()
 })

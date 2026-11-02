@@ -2,15 +2,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { SessionReference, TabComponentProps } from '../host/contracts.ts'
 import { focusMainComposer, focusSideComposer } from '../host/dom.ts'
+import { activeNativeTabOf } from '../host/tabs.ts'
 import { loadForkBoundary, sessionStatusSource } from '../host/chat.ts'
 import { useMainContext } from './useMainContext.ts'
 import { useComposer } from './composer.ts'
-import { appendDraftText, clearPendingDraft, pairQuestions, parseSideChatMeta, phaseOf } from './model.ts'
+import { SIDE_TAB_TYPE, appendDraftText, clearPendingDraft, pairQuestions, parseSideChatMeta, phaseOf } from './model.ts'
 import { StateScreen } from './rows.tsx'
 import { ensurePanelOpen, forkAndRegister, openSession, openSessionWindow, retainSession, saveSideChatSession, setSideChatTopic, unarchiveSideSession, updateTabMeta } from './lifecycle.ts'
 import { topicOf } from './identity.ts'
 import { registerLiveSideChat, notifyLiveSideChats } from './native.ts'
-import { dropClosedSideChat, recordClosedSideChat } from './recentClosed.ts'
+import { dropClosedSideChat, rememberSideChat } from './recentClosed.ts'
 import type { ReflowStore } from '../reflow.ts'
 import type { AnnotationStore } from '../annotations/model.ts'
 import { registerSubmissionExtras } from '../annotations/submissionExtras.ts'
@@ -22,7 +23,7 @@ import css from './sidechat.module.css'
 
 const NOOP_UNSUBSCRIBE = (): void => {}
 
-export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; annotations: AnnotationStore; renderConversation: RenderConversation }) {
+export function SideChatPanel(props: TabComponentProps & { closeSource: () => void; reflow: ReflowStore; annotations: AnnotationStore; renderConversation: RenderConversation }) {
   useLocaleTick()
   const { ctx, scope, tab, visible } = props
   const meta = parseSideChatMeta(tab.meta)
@@ -111,26 +112,29 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
         requestAnimationFrame(() => { if (rootRef.current) focusSideComposer(rootRef.current) })
       }
     }, () => live.current.meta, () => live.current.title, () => ({ phase: live.current.phase, childId: live.current.childId, error: live.current.error }))
-    const remember = (): void => {
-      const current = parseSideChatMeta(live.current.meta)
-      if (!current.childId || !current.parentSessionId) return
-      recordClosedSideChat(current.parentSessionId, { childId: current.childId, parentSessionId: current.parentSessionId, title: live.current.title, tabId: tab.id,
-        savedMeta: { ...current, number: (live.current.meta as { number?: number } | null)?.number }, ...(current.topic ? { topic: current.topic } : {}), closedAt: Date.now() })
-    }
+    const remember = (): void => { rememberSideChat(tab.id, live.current.title, live.current.meta) }
     window.addEventListener('pagehide', remember)
     return () => { dispose(); window.removeEventListener('pagehide', remember); remember() }
   }, [ctx, scope.sessionId, tab.id])
   useEffect(() => {
     if (!visible) return
     const onKey = (event: KeyboardEvent): void => {
-      if (!event.altKey || event.key.toLowerCase() !== 's') return
+      if (event.defaultPrevented || !event.altKey || event.key.toLowerCase() !== 's') return
+      const root = rootRef.current
+      if (!root) return
+      // The event target remains stable even after another handler changes focus.
+      const from = event.target instanceof Element ? event.target : null
+      const ownsFocus = from !== null && root.contains(from)
+      if (!ownsFocus && from?.closest('[data-sidenote-chat-session]')) return
+      const active = activeNativeTabOf(ctx)
+      if (!ownsFocus && active?.kind === SIDE_TAB_TYPE && active.id !== tab.id) return
       event.preventDefault()
-      if (rootRef.current?.contains(document.activeElement)) focusMainComposer(document.body)
-      else if (rootRef.current) focusSideComposer(rootRef.current)
+      if (ownsFocus) focusMainComposer(document.body)
+      else focusSideComposer(root)
     }
     document.addEventListener('keydown', onKey)
     return () => { document.removeEventListener('keydown', onKey) }
-  }, [visible])
+  }, [visible, ctx, tab.id])
   const parent = meta.parentSessionId ? ctx.sessions.binding(meta.parentSessionId)?.session : undefined
   const parentSnapshot = useSyncExternalStore(useCallback(notify => parent?.subscribe(notify) ?? NOOP_UNSUBSCRIBE, [parent]), () => parent?.getSnapshot() ?? null)
   const status = sessionStatusSource(ctx)
@@ -140,7 +144,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore; 
   const promote = async (): Promise<void> => {
     if (!childId || saving) return
     setSaving(true); setSaveError(undefined)
-    try { await saveSideChatSession(ctx, childId, tab.id, scope.sessionId, props.annotations); showToast(t('promoteDone')) }
+    try { await saveSideChatSession(ctx, childId, props.closeSource, scope.sessionId, props.annotations); showToast(t('promoteDone')) }
     catch (error) { setSaveError(error instanceof Error ? error.message : String(error)) }
     finally { setSaving(false) }
   }

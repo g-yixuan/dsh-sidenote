@@ -3,7 +3,7 @@
  * metaStore（自有 meta 持久化）+ native-tab 纯逻辑（openParams 解析 /
  * reconcile 落库 / 编号标题）。jsdom 环境自带 localStorage；每个用例前清场。
  */
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   dropSideChatMeta,
   nextSideChatNumber,
@@ -15,6 +15,9 @@ import {
 import { parseOpenParams, reconcileMeta, titleOf } from '../src/client/sidechat/native-tab.tsx'
 import type { NativeTabRecord } from '../src/client/host/contracts.ts'
 import { recordClosedSideChat, listClosedSideChats } from '../src/client/sidechat/recentClosed.ts'
+import { updateTabMeta } from '../src/client/sidechat/lifecycle.ts'
+import type { Context } from '../src/client/host/contracts.ts'
+import { closeNativeTab } from '../src/client/host/tabs.ts'
 
 function meta(partial: Partial<Parameters<typeof writeSideChatMeta>[0]> & { tabId: string, sessionId: string }) {
   return { number: 1, createdAt: 1, ...partial }
@@ -28,6 +31,7 @@ function tabRecord(id: string, params?: unknown): NativeTabRecord {
     visible: true,
     navigation: { address: `sidebar://dsh-sidenote:side`, ...(params === undefined ? {} : { params }) },
     signal: new AbortController().signal,
+    actions: { close() {} },
   }
 }
 
@@ -87,6 +91,36 @@ describe('parseOpenParams', () => {
 })
 
 describe('reconcileMeta', () => {
+  it('延迟关闭只作用于仍存活的原生标签实例', () => {
+    const controller = new AbortController()
+    const close = vi.fn()
+    const tab = { signal: controller.signal, actions: { close } }
+    closeNativeTab(tab)
+    expect(close).toHaveBeenCalledOnce()
+    controller.abort()
+    closeNativeTab(tab)
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('保留原生地址，同时仍能删除草稿和首次发送标记', () => {
+    const ctx = { get: () => undefined } as unknown as Context
+    const record = tabRecord('t', { parentSessionId: 'parent', pendingDraft: 'draft' })
+    reconcileMeta(record, 'parent')
+    updateTabMeta(ctx, 'parent', 't', current => ({ ...current, childId: 'child', boundarySeq: 44, forkedMidTurn: true }))
+    updateTabMeta(ctx, 'parent', 't', current => { const { pendingDraft: _draft, forkedMidTurn: _pending, ...rest } = current; return rest })
+    expect(readSideChatMeta('parent', 't')).toMatchObject({ nativeAddress: record.navigation.address, childId: 'child', boundarySeq: 44 })
+    expect(readSideChatMeta('parent', 't')?.pendingDraft).toBeUndefined()
+    expect(readSideChatMeta('parent', 't')?.forkedMidTurn).toBeUndefined()
+  })
+
+  it('已经关闭的原生标签不能重新写入元数据', () => {
+    const record = tabRecord('closed', { parentSessionId: 'parent' })
+    const controller = new AbortController()
+    controller.abort()
+    expect(reconcileMeta({ ...record, signal: controller.signal }, 'parent').created).toBe(false)
+    expect(readSideChatMeta('parent', 'closed')).toBeUndefined()
+  })
+
   it('刷新优先恢复本窗口身份，跨窗口副本仅作后备', () => {
     const key = 'dsh-sidenote:side-meta:v1:s1:t1'
     sessionStorage.setItem(key, JSON.stringify(meta({ tabId: 't1', sessionId: 's1', childId: 'original', runId: 'old-page' })))
