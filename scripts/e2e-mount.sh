@@ -205,7 +205,7 @@ if [ -n "${DSH_E2E_REAL_KEY_FILE:-}" ]; then
           - id: deepseek-flash
             name: DeepSeek Flash (official E2E)
             input: [text, image]
-            contextWindow: 32768
+            contextWindow: 262144
             maxTokens: 2048
             reasoningEfforts:
               off: null

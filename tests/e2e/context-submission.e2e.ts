@@ -23,10 +23,13 @@ async function addNote(page: Page, main: Locator, note: string) {
 async function preview(page: Page, row: Locator, label: RegExp, expected: string) {
   const chip = row.getByRole('button', { name: label })
   await expect(chip).toBeVisible()
-  await page.mouse.move(0, 0)
-  await chip.hover()
   const panel = page.locator('[data-sidenote-sent-preview]')
-  await expect(panel).toContainText(expected)
+  // Native reload/queue restoration can replace or reposition the hovered row.
+  await expect(async () => {
+    await page.mouse.move(0, 0)
+    await chip.hover()
+    await expect(panel).toContainText(expected, { timeout: 1_000 })
+  }).toPass({ timeout: 8_000 })
   await expect(panel).toBeInViewport()
   await chip.click()
   await expect(chip).toHaveAttribute('aria-expanded', 'true')

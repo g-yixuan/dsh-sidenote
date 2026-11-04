@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       host-canary:
-        description: Probe all published hosts in the supported series
+        description: Probe all published hosts in the supported current and alpha series
         type: boolean
         default: false
   # Daily discovery; Monday and manual canaries cover every published in-window host.
@@ -59,7 +59,7 @@ jobs:
     name: plugin-mount (${{ matrix.dsh-version }}, ${{ matrix.bs-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Minimum and latest verified host of the current series, deduplicated.
+    # Minimum and latest verified host of each admitted series, deduplicated.
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.ci.outputs.host-matrix) }}

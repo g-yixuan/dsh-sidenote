@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, userMessageContentsOf, openSideChat, selectModel } from './journey'
+import { prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, userMessageContentsOf, openSideChat, selectModel, USER_BUBBLE } from './journey'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -133,7 +133,7 @@ test.describe('annotation editor lifecycle', () => {
     await composer.press('Enter')
     const bubble = page.locator('[data-chat-flow-kind="user"]').filter({ hasText: 'review annotation note' }).last()
     await expect.poll(() => userMessagesOf(process.env.DSH_E2E_SEED_SESSION!).find(text => text.includes('review annotation note'))).toContain('<note>刚输入的中文注解</note>')
-    await expect(bubble.locator('[class$="_bubble"] [data-dsh-sidenote-bubble] button')).toBeVisible()
+    await expect(bubble.locator(`${USER_BUBBLE} [data-dsh-sidenote-bubble] button`)).toBeVisible()
     await expect(bubble.getByText('刚输入的中文注解', { exact: true })).not.toBeVisible()
     await expect.poll(() => items(page)).toMatchObject([{ note: '刚输入的中文注解', state: 'sent' }])
     await expect(chipOf(page)).toHaveCount(0)
@@ -286,15 +286,22 @@ test('real malformed-image rejection keeps quote and clean body, then retries on
   const body = 'retry after actual host rejection'
   await input.fill(body)
   await side.locator('input[type=file]').setInputFiles({ name: 'invalid.png', mimeType: 'image/png', buffer: Buffer.from('not a valid PNG image') })
-  await side.getByRole('button', { name: /^(Send|Send message|发送|发送消息|Queue message|加入队列|排队发送)$/ }).click()
-  await expect(side.getByRole('alert')).toBeVisible()
+  const send = side.getByRole('button', { name: /^(Send|Send message|发送|发送消息|Queue message|加入队列|排队发送)$/ })
+  const invalid = side.getByRole('button', { name: /Only PNG, JPG, WebP, and GIF images are supported|仅支持 PNG、JPG、WebP、GIF 格式的图片/ })
+  // New hosts validate staged uploads before submit; RC hosts reject on send.
+  await expect.poll(async () => await invalid.isVisible() || await send.isEnabled()).toBe(true)
+  if (await invalid.isVisible()) await expect(send).toBeDisabled()
+  else {
+    await send.click()
+    await expect(side.getByRole('alert')).toBeVisible()
+  }
   await expect(input).toHaveText(body)
   expect(userMessagesOf(child).filter(text => text.includes(body))).toHaveLength(0)
   const childItems = () => page.evaluate(id => JSON.parse(localStorage.getItem('dsh-sidenote:annotations:v1:' + id) ?? '[]'), child)
   expect(await childItems()).toMatchObject([{ state: 'active', note: '失败后需要保留的注解' }])
   await side.getByRole('button', { name: /^(Remove image|移除图片)/ }).click()
   await side.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
-  await side.getByRole('button', { name: /^(Send|Send message|发送|发送消息|Queue message|加入队列|排队发送)$/ }).click()
+  await send.click()
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes(body))).toHaveLength(1)
   expect(userMessagesOf(child).find(text => text.includes(body))!.match(/<annotation id=/g)).toHaveLength(1)
   await expect.poll(childItems).toMatchObject([{ state: 'sent' }])
@@ -317,7 +324,7 @@ for (const surface of ['main', 'side'] as const) {
       await input.press('Enter')
       await expect.poll(() => userMessagesOf(sessionId).some(text => text === wire)).toBe(true)
       const row = conversation.locator('[data-chat-flow-kind="user"]').filter({ has: page.locator('[data-dsh-sidenote-bubble]') }).last()
-      const bubble = row.locator('[class$="_bubble"]')
+      const bubble = row.locator(USER_BUBBLE)
       await expect(bubble.locator('[data-dsh-sidenote-bubble]')).toHaveCount(1)
       await expect(bubble).toBeVisible()
       await expect(bubble).not.toContainText('<annotation')
@@ -356,8 +363,8 @@ for (const surface of ['main', 'side'] as const) {
       await expect(conversation.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
       await page.screenshot({ path: `test-results/sent-context-${surface}-${index}.png` })
     }
-    const countBeforeReload = await conversation.locator('[class$="_bubble"] [data-dsh-sidenote-bubble]').count()
+    const countBeforeReload = await conversation.locator(`${USER_BUBBLE} [data-dsh-sidenote-bubble]`).count()
     await page.reload()
-    await expect(conversation.locator('[class$="_bubble"] [data-dsh-sidenote-bubble]')).toHaveCount(countBeforeReload)
+    await expect(conversation.locator(`${USER_BUBBLE} [data-dsh-sidenote-bubble]`)).toHaveCount(countBeforeReload)
   })
 }

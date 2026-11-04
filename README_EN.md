@@ -37,7 +37,7 @@ dsh plugin --profile web add dsh-sidenote
 
 Open DSH Web and click **Side** in the session header, or select a passage in a reply. You can also open a side chat with `/side` and switch focus between main and side inputs with `Alt+S`.
 
-Starting with dsh-sidenote **0.8.0**, the main branch maintains **DSH 0.2.1 (from rc.2)**, allowing later RCs and the unsuffixed release within the current series, without dsh-better-sidebar. Verified hosts are 0.2.1-rc.2 / rc.3 / rc.4 / rc.5; future installable RCs are not automatically verified, and historical declarations remain unchanged. DSH 0.2.0-rc.2 pins dsh-sidenote@0.7.6; earlier hosts retain their own last compatible package. See the [compatibility policy](docs/compatibility_EN.md).
+The main branch maintains **DSH 0.2.1 (from rc.2)** and adds **the 0.2.2 alpha series (from alpha.3)**, sharing the native conversation interface. Verified hosts are 0.2.1-rc.2 / rc.3 / rc.4 / rc.5 and 0.2.2-alpha.3. Later RCs or alphas within their admitted series may be installed, with verification recorded per exact version. Alpha support takes effect in the next plugin release containing this change. Published 0.8.2 declares only the 0.2.1 range. DSH 0.2.0-rc.2 pins dsh-sidenote@0.7.6; earlier hosts retain their last compatible package. See the [compatibility policy](docs/compatibility_EN.md).
 
 ## One task. Room to explore.
 
@@ -85,7 +85,7 @@ See the [user guide](docs/usage_EN.md) for controls, recovery behavior, and sele
 
 ## Compatibility and help
 
-The rolling window maintains **the current base-version series only**, sharing native Conversation. RCs remain covered within the current series; the former series retires only after a new series passes admission and ships in a plugin release. PRs test the current series' minimum and latest verified hosts; daily discovery detects new hosts and weekly runs cover all in-window versions. Retired hosts retain their last compatible plugin. See the [compatibility and maintenance policy](docs/compatibility_EN.md); published installations follow their Release declarations.
+The rolling window covers **the current RC/release series and one admitted alpha series**, sharing native Conversation. Full validation admits an alpha series while maintenance continues for the current RC series. PRs test each series' minimum and latest verified hosts. Daily discovery tracks latest / next / alpha and new in-window hosts, with weekly regression across all in-window versions. When the current series rolls forward, retired hosts retain their last compatible plugin. See the [compatibility and maintenance policy](docs/compatibility_EN.md); published installations follow their Release declarations.
 
 [Report a problem or suggest an improvement](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose), including your DSH and plugin versions, reproduction steps, or a screenshot.
 

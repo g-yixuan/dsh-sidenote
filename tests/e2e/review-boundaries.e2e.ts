@@ -9,6 +9,7 @@ test.beforeAll(registerSeedWorkspace)
 const stop = /^(Stop generating|停止生成)$/
 async function send(view: Locator, text: string) {
   await view.locator('[data-composer-input]').fill(text)
+  await expect(view.getByRole('button', { name: /^(Send message|发送消息)$/ })).toBeEnabled()
   await view.locator('[data-composer-input]').press('Enter')
   await expect(view.getByRole('button', { name: stop })).toHaveCount(0, { timeout: 60_000 })
 }

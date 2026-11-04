@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { openSideChat, prepareSeedPage, registerSeedWorkspace, sessionEventsOf, sideChatOf, userMessagesOf, selectModel, userMessageContentsOf, openGeneralSettings } from './journey'
+import { openSideChat, prepareSeedPage, registerSeedWorkspace, sessionEventsOf, sideChatOf, userMessagesOf, selectModel, userMessageContentsOf, openGeneralSettings, USER_BUBBLE } from './journey'
 
 test.skip(!process.env.DSH_E2E_REAL_MODEL, 'Set DSH_E2E_REAL_KEY_FILE for the official DeepSeek lane')
 test.beforeAll(registerSeedWorkspace)
@@ -173,12 +173,12 @@ test('official Flash UI regressions: live context, empty annotation send and inl
   await expect(side.getByRole('button', { name: /Added to main conversation, not sent yet|已加入主对话，尚未发送/ })).toBeDisabled()
   await expect(main.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: marker })).toBeVisible({ timeout: 90_000 })
   expect(userMessagesOf(mainId).some(text => text.includes('批注直发验证通过'))).toBe(false)
-  await expect(side.locator('[class$="_bubble"] [data-dsh-sidenote-bubble]')).toBeVisible()
+  await expect(side.locator(`${USER_BUBBLE} [data-dsh-sidenote-bubble]`)).toBeVisible()
 
   const returnPrompt = '只复述刚才从侧边带回的回答，不调用工具。'
   await main.locator('[data-composer-input]').fill(returnPrompt)
   await main.locator('[data-composer-input]').press('Enter')
-  const returnedBubble = main.locator('[data-chat-flow-kind="user"] [class$="_bubble"]').filter({ hasText: returnPrompt })
+  const returnedBubble = main.locator(`[data-chat-flow-kind="user"] ${USER_BUBBLE}`).filter({ hasText: returnPrompt })
   const returnChip = returnedBubble.getByRole('button', { name: /Side-chat context|含侧边回流上下文/ })
   await expect(returnChip).toBeVisible()
   await returnChip.click()
@@ -263,7 +263,9 @@ test('official Flash executes real file tools in main and side, with isolated mu
   await expect.poll(() => wire().some(request => request.thinking?.type === 'enabled' && request.reasoningEffort === 'low' && request.status === 200 && request.finished)).toBe(true)
   const beforeImage = sessionEventsOf(child).at(-1)!.seq
   await side.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
-  await input.fill('不要调用工具，简短描述上传图片的主要颜色。'); await input.press('Enter')
+  await input.fill('不要调用工具，简短描述上传图片的主要颜色。')
+  await expect(side.getByRole('button', { name: /^(Send message|发送消息)$/ })).toBeEnabled()
+  await input.press('Enter')
   await expect.poll(() => userMessageContentsOf(child).at(-1)?.some(block => block.type === 'image')).toBe(true)
   await expect.poll(() => sessionEventsOf(child).some(event => event.seq > beforeImage && event.type === 'turn/end' && event.data.reason.kind === 'completed'), { timeout: 60_000 }).toBe(true)
   await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0, { timeout: 60_000 })

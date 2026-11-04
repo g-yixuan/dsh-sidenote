@@ -1,7 +1,7 @@
 import { splitSnapshotPrefix } from '../../src/client/annotations/format'
 import { expect, test } from '@playwright/test'
 import { writeFileSync } from 'node:fs'
-import { openSideChat, prepareSeedPage, registerSeedWorkspace, selectModel, sessionEventsOf, sideChatOf, userMessagesOf } from './journey'
+import { openSideChat, prepareSeedPage, registerSeedWorkspace, selectModel, sessionEventsOf, sideChatOf, userMessagesOf, USER_BUBBLE } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
 
@@ -106,7 +106,7 @@ test('shared host journey: multi-turn side context and an explicit conclusion re
   expect(returned[0]?.endsWith(parentDraft)).toBe(true)
   expect(returned[0]!.match(/<reflow source=/g)).toHaveLength(1)
   await expect(main.getByText('Main received SIDENOTE_SIDE_BLUE.', { exact: true })).toBeVisible()
-  const sentBubble = main.locator('[data-chat-flow-kind="user"] [class$="_bubble"]').filter({ hasText: parentDraft })
+  const sentBubble = main.locator(`[data-chat-flow-kind="user"] ${USER_BUBBLE}`).filter({ hasText: parentDraft })
   const sentReflow = sentBubble.getByRole('button', { name: /Side-chat context|含侧边回流上下文/ })
   await expect(sentReflow).toBeVisible()
   await sentReflow.click()

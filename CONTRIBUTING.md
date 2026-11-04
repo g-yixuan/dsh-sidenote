@@ -47,7 +47,7 @@ pnpm exec playwright install chromium
 BS_VERSION=none DSH_EXPECTED_VERSION=0.2.1-rc.5 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.1-rc.5 dsh" pnpm test:mount
 ```
 
-脚本使用临时 DSH_HOME；[CI](.github/workflows/ci.yml) 从 package.json 的 dshSupport 生成当前系列最低版与最新已验证版的精确矩阵，所有任务必须通过 host-compatibility 汇总。每日探测新增 RC，每周及手动 canary 回归窗口内全部已发布版本。允许安装与已验证版本分别记录；窗口外用户固定最后兼容插件。见[兼容政策](docs/compatibility.md)。
+脚本使用临时 DSH_HOME；[CI](.github/workflows/ci.yml) 从 package.json 的 dshSupport 生成当前系列和已准入 alpha 系列各自最低版与最新已验证版的精确矩阵，所有任务必须通过 host-compatibility 汇总。每日探测 latest／next／alpha 及新增窗口内版本，每周及手动 canary 回归窗口内全部已发布版本。允许安装与已验证版本分别记录；窗口外用户固定最后兼容插件。见[兼容政策](docs/compatibility.md)。
 
 无模型凭证的 E2E 验证交互与挂载，不验证模型回答。涉及主线运行中开侧聊、取消、队列或进展快照时，请额外说明真实运行场景和验证结果；没有验证的范围也应明确写出。
 
