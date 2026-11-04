@@ -108,7 +108,9 @@ for (const withImage of [false, true]) test(`busy fork keeps the parent running 
   expect(inputBox.y).toBeGreaterThan(panelBox.y + panelBox.height * 0.65)
   await addSideQuote(page, 'busy fork annotation')
   if (withImage) await side.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
-  await input.fill('first accepted busy fork question'); await input.press('Enter')
+  await input.fill('first accepted busy fork question')
+  await expect(side.getByRole('button', { name: /^(Send message|发送消息)$/ })).toBeEnabled()
+  await input.press('Enter')
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes('first accepted busy fork question'))).toHaveLength(1)
   const first = userMessagesOf(child).find(text => text.includes('first accepted busy fork question'))!
   expect(first.match(/<mainline-progress-snapshot /g)).toHaveLength(1)
@@ -146,6 +148,7 @@ test('busy fork after repeated steering keeps side messages and answers outside 
   await input.fill('Original running task [e2e:long-tool] [e2e:steer-window]'); await input.press('Enter')
   for (const [index, ending] of ['[e2e:steer-window]', '[e2e:hold]'].entries()) {
     await expect.poll(() => sessionEventsOf(mainId).filter(event => event.seq > before && event.type === 'tool/result').length).toBe(index + 1)
+    await expect(input).toBeEditable()
     await input.fill(`Steering update ${index + 1} [e2e:long-tool] ${ending}`); await input.press('ControlOrMeta+Enter')
   }
   await expect.poll(() => sessionEventsOf(mainId).filter(event => event.seq > before && event.type === 'tool/result').length).toBe(3)
@@ -163,9 +166,12 @@ test('busy fork after repeated steering keeps side messages and answers outside 
   await side.locator('[data-composer-input]').press('Enter')
   try {
     const echo = side.locator('[data-submission-echo]')
-    await expect(echo).toContainText(question)
-    await expect(echo).toBeInViewport()
-    await expect(echo).not.toContainText('mainline-progress-snapshot')
+    const sendingDraft = side.locator('[data-composer-input][contenteditable="false"]')
+    // Alpha publishes the native echo after Host acceptance and retains a
+    // read-only draft while admission is pending. RC hosts show a local echo.
+    await expect(echo.or(sendingDraft).filter({ hasText: question }).first()).toBeInViewport()
+    if (await echo.count() > 0) await expect(echo).not.toContainText('mainline-progress-snapshot')
+    expect(userMessagesOf(child).some(text => text.includes(question))).toBe(false)
     await expect(context.locator(':scope > button')).toBeVisible()
   } finally { release() }
   await expect.poll(() => userMessagesOf(child).some(text => text.includes(question))).toBe(true)
@@ -204,6 +210,7 @@ test('fork keeps a stopped parent queue out of the new side conversation', async
   await input.fill('Hold before a parent-only queued task [e2e:hold]'); await input.press('Enter')
   await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toBeVisible()
   const queued = 'PARENT-ONLY queue must remain on the main conversation'
+  await expect(input).toBeEditable()
   await input.fill(queued); await input.press('Enter')
   await expect(main.locator('[data-queue-dock]')).toContainText(queued)
   await main.getByRole('button', { name: /^(Stop generating|停止生成)$/ }).click()
