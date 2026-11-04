@@ -2,15 +2,16 @@
 
 [中文](compatibility.md) · English
 
-The development branch maintains **the current base-version series only**, sharing native Conversation. A series is the complete version without its prerelease suffix, such as `0.2.1`, not all of `0.2.x`. Starting at the current series' minimum compatible RC, later RCs and the unsuffixed release may be installed. Advancing an RC number does not retire supported hosts. Alpha, beta, and outside-window series are not admitted automatically.
+The development branch maintains **the current RC/release series and one alpha series admitted through validation**, sharing native Conversation. A series is the complete version without its prerelease suffix, such as `0.2.1`. The current series covers later RCs and the unsuffixed release from its minimum compatible RC. The alpha series covers later alphas from its minimum compatible alpha.
 
-Installation eligibility and evidence are separate: **an installable version is not necessarily verified**, and compatibility of unpublished RCs is not guaranteed. In `package.json`, `dshSupport` records the current series' `minimum` and a sorted `verified` list. Ordinary PRs test the current series' minimum and latest verified version, deduplicated; periodic canaries cover intermediate versions and new RCs. Historical npm packages serve retired series; the main branch keeps neither a transition series nor long-lived maintenance branches.
+Installation eligibility and validation evidence are recorded separately. In `package.json`, `dshSupport` stores the current series' `minimum` and sorted `verified` inventory. The optional `alpha` entry stores the same fields for the additional alpha series. Ordinary PRs test each series' minimum and latest verified host, deduplicated. Periodic canaries cover intermediate and new versions. Future RCs and alphas may be installed before validation, with verification recorded against actual execution evidence.
 
 | Series | Minimum compatible host | Verified exact versions | Required hosts on ordinary PRs |
 |---|---|---|---|
-| Current: 0.2.1 | 0.2.1-rc.2 | rc.2, rc.3, rc.4, rc.5 | 0.2.1-rc.2, 0.2.1-rc.5 |
+| Current RC/release: 0.2.1 | 0.2.1-rc.2 | rc.2, rc.3, rc.4, rc.5 | 0.2.1-rc.2, 0.2.1-rc.5 |
+| Alpha: 0.2.2 | 0.2.2-alpha.3 | alpha.3 | 0.2.2-alpha.3 |
 
-This table describes the main branch's support range starting with dsh-sidenote 0.8.0; it does not retroactively change published 0.7.6 or other historical packages. Public installation follows each Release and package declaration. Future RCs in the same series are allowed by default but enter `verified` only after validation.
+The 0.2.1 series has been supported since plugin 0.8.0. Alpha support takes effect in the next plugin release containing this change. Published 0.8.2 declares `>=0.2.1-rc.2 <0.2.2-0`. Public installation follows each Release and npm package. The alpha window ends before beta, so beta/RC/release versions require current-series admission. A new base-version series requires full validation before its range is added.
 
 | Retired host | Installation to retain |
 |---|---|
@@ -35,11 +36,11 @@ Earlier 0.1 hosts pin 0.6.5 as listed above. This writes an exact profile depend
 
 Three layers enforce this policy:
 
-- **Repository:** `dshSupport` records series floors and verified versions. `node scripts/host-window.mjs` checks both DSH engines and the UI primitives peer against the series ranges and generates an exact CI matrix; `--all` emits all verified versions. The current range is `>=0.2.1-rc.2 <0.2.2-0`; each upper bound excludes every prerelease of the next series. DSH 0.2.0 checks DSH peers, so root engines alone is insufficient.
+- **Repository:** `dshSupport` records series floors and verified versions. `node scripts/host-window.mjs` checks both DSH engines and the UI primitives peer against the series ranges and generates an exact CI matrix; `--all` emits all verified versions. The development range is `>=0.2.1-rc.2 <0.2.2-0 || >=0.2.2-alpha.3 <0.2.2-beta`, bounding the current series and the admitted alpha series separately. DSH 0.2.0 checks DSH peers, so root engines alone is insufficient.
 - **npm:** retain historical packages and point `latest` at the current plugin release. Dist-tags are aliases, not host-aware selection; old packages need neither removal nor a new name.
 - **DSH installer/market:** enforce the declared range. The 0.2.1 market can select compatible releases from a complete index. Direct CLI installation rejects incompatible targets or restores the prior installation, without promising to search all historical npm versions. Automatic fallback on earlier installers is unverified.
 
-Before rolling the window, validate the new series with full functional, relevant real-model, and visible-browser journeys. Update the inventory, all three ranges, and bilingual guides through a PR, effective with the plugin release. The former series retires; record its last compatible plugin and exact installation command. A new alpha or npm tag change never retires a series. Feature PRs keep the plugin version unchanged; releases use a separate PR.
+Adding an alpha series and rolling the current series both require full functional, relevant real-model, and visible-browser journeys. Update the inventory, all three ranges, and bilingual guides through a PR, effective with the plugin release. Maintenance continues for the current RC series when an alpha series is added. On reaching RC/release, admit that series as the current series, remove its alpha window, and record the former series' last compatible plugin and exact installation command. Validate the next alpha series separately. Feature PRs retain the package version and releases use a separate PR.
 
 ## Native conversation reuse
 
@@ -61,13 +62,13 @@ Reports download only on request and are never uploaded automatically. They cont
 
 ## Validation and rolling admission
 
-Relevant PRs run `ci`, every `plugin-mount` for the minimum and latest verified hosts of the current series, and the fixed `host-compatibility` summary. Failed, cancelled, or skipped dependencies cannot pass. Required checks remain ci + host-compatibility. Window changes keep these names; gate-structure changes require updating and reading back the actual ruleset.
+Relevant PRs run `ci`, every `plugin-mount` for the minimum and latest verified hosts of both the current and alpha series, and the fixed `host-compatibility` summary. Failed, cancelled, or skipped dependencies cannot pass. Required checks remain ci + host-compatibility. Window changes keep these names; gate-structure changes require updating and reading back the actual ruleset.
 
-Daily canary reads npm's versions and latest / next tags once. Using the same series ranges, it deduplicates and runs full journeys for every published RC/release not yet in `verified`, the current series' newest published version, and in-window channel targets. This also catches RCs whose tags advanced between probes. Every Monday, and when host-canary is enabled manually, it tests every published in-window RC/release, including intermediate versions. Outside-window latest / next targets are recorded and explicitly fail with an admission notice while in-window hosts still run; a missing next may be skipped.
+Daily canary reads npm's versions and latest / next / alpha tags once. Using the same installation ranges, it deduplicates and runs full journeys for every published version awaiting verification, each series' newest published version, and in-window channel targets. This catches RCs and alphas whose tags advanced between probes. Every Monday, and when host-canary is enabled manually, it tests every published in-window version, including intermediate versions. Channels outside the windows, including an alpha series reaching beta/RC, produce an admission failure while in-window hosts still run. Missing next or alpha tags may be skipped.
 
 Each host uses official installation, isolated DSH_HOME, actual component versions, and the current bundle digest. Controlled models cover queue, stop, rejection, recovery, and main/side isolation; the separate official Flash lane validates external responses and real tools. Reports distinguish message acceptance from successful model replies. After full functional, relevant real-model, and visible-browser validation, record a new version in `verified` through a PR. Canary does not write verification records, publish plugins, or upgrade user environments, and is outside the required per-PR gate.
 
-Future RCs within a series may be installed before validation completes. If an interface actually breaks, adapt it or narrow the declared range through a PR identifying the affected versions. Evidence covers only versions actually exercised; minimum/latest checks do not replace intermediate-version admission and periodic regression. `pnpm test:compat` verifies that an incompatible update restores the current compatible build. At series retirement, separately verify that the old host rejects the new build and restores the exact historical dependency, package manifest, and client/server bytes; do not retain the old host in ordinary functional matrices. After `pnpm build && pnpm pack`, run this retirement check:
+Future RCs and alphas within their admitted series may be installed before validation completes. If an interface actually breaks, adapt it or narrow the declared range through a PR identifying the affected versions. Evidence covers only versions actually exercised; minimum/latest checks do not replace intermediate-version admission and periodic regression. `pnpm test:compat` verifies that an incompatible update restores the current compatible build. At series retirement, separately verify that the old host rejects the new build and restores the exact historical dependency, package manifest, and client/server bytes; do not retain the old host in ordinary functional matrices. After `pnpm build && pnpm pack`, run this retirement check:
 
 ```bash
 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.0-rc.2 dsh" \

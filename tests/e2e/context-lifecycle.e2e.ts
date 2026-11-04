@@ -98,6 +98,7 @@ test('inherited images and formatted replies remain readable in the independent 
   await selectModel(page, main, 'Controlled E2E')
   await main.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
   await main.locator('[data-composer-input]').fill('Keep this attachment in the inherited context')
+  await expect(main.getByRole('button', { name: /^(Send message|发送消息)$/ })).toBeEnabled()
   await main.locator('[data-composer-input]').press('Enter')
   await expect(main.locator('[data-chat-flow-kind="assistant-step"]')).toHaveCount(1)
   await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)

@@ -23,10 +23,13 @@ const hosts = (result: ReturnType<typeof resolve>) => {
   return (output.matrix ?? output).include.map((row: { 'dsh-version': string }) => row['dsh-version'])
 }
 
-describe('single-series native host window', () => {
+describe('current and alpha native host windows', () => {
   it('bounds required PR checks while retaining the full verified inventory', () => {
-    expect(hosts(resolve())).toEqual(['0.2.1-rc.2', '0.2.1-rc.5'])
-    expect(hosts(resolve(manifest(), ['--all']))).toEqual(['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5'])
+    expect(hosts(resolve())).toEqual(['0.2.1-rc.2', '0.2.1-rc.5', '0.2.2-alpha.3'])
+    expect(hosts(resolve(manifest(), ['--all']))).toEqual(['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.2-alpha.3'])
+    const value = manifest()
+    value.dshSupport.alpha.verified.push('0.2.2-alpha.4')
+    expect(hosts(resolve(value))).toEqual(['0.2.1-rc.2', '0.2.1-rc.5', '0.2.2-alpha.3', '0.2.2-alpha.4'])
   })
 
   it.each([
@@ -35,7 +38,9 @@ describe('single-series native host window', () => {
     ['0.2.1-alpha.99', false, false], ['0.2.1-beta.99', false, false], ['0.2.1-rc.1', false, false],
     ['0.2.1-rc.3', true, true], ['0.2.1-rc.4', true, true], ['0.2.1-rc.5', true, true],
     ['0.2.1-rc.100', true, false], ['0.2.1', true, false],
-    ['0.2.2-alpha.2', false, false], ['0.2.2-rc.1', false, false], ['0.3.0', false, false], ['latest', false, false],
+    ['0.2.2-alpha.2', false, false], ['0.2.2-alpha.3', true, true], ['0.2.2-alpha.100', true, false],
+    ['0.2.2-beta', false, false], ['0.2.2-beta.1', false, false], ['0.2.2-rc.1', false, false], ['0.2.2', false, false],
+    ['0.2.3-alpha.1', false, false], ['0.3.0', false, false], ['latest', false, false],
   ])('distinguishes install eligibility from evidence for %s', (version, eligible, verified) => {
     const result = resolve(manifest(), ['--candidate', version])
     expect(result.status, result.stderr).toBe(0)
@@ -43,19 +48,28 @@ describe('single-series native host window', () => {
   })
 
   it('discovers every unseen RC even after tags advance, without admitting a new series', () => {
-    const registry = { versions: ['0.2.0-rc.2', '0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.1-rc.6', '0.2.1-rc.7', '0.2.2-alpha.2'], 'dist-tags': { latest: '0.2.1-rc.7', next: '0.2.2-alpha.2' } }
+    const registry = { versions: ['0.2.0-rc.2', '0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.1-rc.6', '0.2.1-rc.7', '0.2.2-alpha.3'], 'dist-tags': { latest: '0.2.1-rc.7', next: '0.2.2-beta.1', alpha: '0.2.2-alpha.3' } }
     const result = resolve(manifest(), [], registry)
-    expect(hosts(result)).toEqual(['0.2.1-rc.6', '0.2.1-rc.7'])
+    expect(hosts(result)).toEqual(['0.2.1-rc.6', '0.2.1-rc.7', '0.2.2-alpha.3'])
     const plan = JSON.parse(result.stdout)
     expect(plan.unverified).toEqual(['0.2.1-rc.6', '0.2.1-rc.7'])
-    expect(plan.channels).toContainEqual({ channel: 'next', version: '0.2.2-alpha.2', eligible: false, verified: false })
-    expect(hosts(resolve(manifest(), ['--all'], registry))).toEqual(registry.versions.slice(1, -1))
+    expect(plan.channels).toContainEqual({ channel: 'next', version: '0.2.2-beta.1', eligible: false, verified: false })
+    expect(plan.channels).toContainEqual({ channel: 'alpha', version: '0.2.2-alpha.3', eligible: true, verified: true })
+    expect(hosts(resolve(manifest(), ['--all'], registry))).toEqual(registry.versions.slice(1))
   })
 
   it('deduplicates matching latest/next channels and rejects incomplete registry evidence', () => {
-    const registry = { versions: ['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5'], 'dist-tags': { latest: '0.2.1-rc.5', next: '0.2.1-rc.5' } }
-    expect(hosts(resolve(manifest(), [], registry))).toEqual(['0.2.1-rc.5'])
+    const registry = { versions: ['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.2-alpha.3'], 'dist-tags': { latest: '0.2.1-rc.5', next: '0.2.1-rc.5' } }
+    expect(hosts(resolve(manifest(), [], registry))).toEqual(['0.2.1-rc.5', '0.2.2-alpha.3'])
     expect(resolve(manifest(), [], { ...registry, versions: [] }).status).not.toBe(0)
+  })
+
+  it('keeps each series latest host when all dist-tags have moved outside the windows', () => {
+    const registry = { versions: ['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.2-alpha.3', '0.2.2-alpha.4', '0.2.2-alpha.5'], 'dist-tags': { latest: '0.2.2-rc.1', alpha: '0.2.3-alpha.1' } }
+    const result = resolve(manifest(), [], registry)
+    expect(hosts(result)).toEqual(['0.2.1-rc.5', '0.2.2-alpha.4', '0.2.2-alpha.5'])
+    expect(JSON.parse(result.stdout).unverified).toEqual(['0.2.2-alpha.4', '0.2.2-alpha.5'])
+    expect(hosts(resolve(manifest(), ['--all'], registry))).toEqual(registry.versions)
   })
 
   it('rolls the complete series while leaving the former series to historical packages', () => {
@@ -75,6 +89,16 @@ describe('single-series native host window', () => {
     if (fault === 'missing-floor') current.verified.shift()
     if (fault === 'alpha-floor') current.minimum = '0.2.1-alpha.2'
     if (fault === 'extra-series') value.dshSupport.previous = { minimum: '0.2.0-rc.2', verified: ['0.2.0-rc.2'] }
+    expect(resolve(value).status).not.toBe(0)
+  })
+
+  it.each(['rc-floor', 'same-series', 'beta-evidence', 'missing-floor', 'duplicate'])('rejects invalid alpha metadata: %s', fault => {
+    const value = manifest(), alpha = value.dshSupport.alpha
+    if (fault === 'rc-floor') alpha.minimum = '0.2.2-rc.1'
+    if (fault === 'same-series') alpha.minimum = '0.2.1-alpha.3'
+    if (fault === 'beta-evidence') alpha.verified.push('0.2.2-beta.1')
+    if (fault === 'missing-floor') alpha.verified = []
+    if (fault === 'duplicate') alpha.verified.push(alpha.minimum)
     expect(resolve(value).status).not.toBe(0)
   })
 

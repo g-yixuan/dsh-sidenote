@@ -47,7 +47,7 @@ pnpm exec playwright install chromium
 BS_VERSION=none DSH_EXPECTED_VERSION=0.2.1-rc.5 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.1-rc.5 dsh" pnpm test:mount
 ```
 
-The script uses a temporary DSH_HOME. [CI](.github/workflows/ci.yml) derives exact minimum/latest verified hosts for the current series from package.json's dshSupport; all must pass host-compatibility. Daily discovery detects new RCs; weekly and manual canaries test every published in-window version. Install eligibility and verified evidence are recorded separately; retired hosts pin their last compatible plugin. See the [compatibility policy](docs/compatibility_EN.md).
+The script uses a temporary DSH_HOME. [CI](.github/workflows/ci.yml) derives exact minimum/latest verified hosts for both the current series and the admitted alpha series from package.json's dshSupport. All must pass host-compatibility. Daily discovery tracks latest / next / alpha and new in-window versions. Weekly and manual canaries test every published in-window version. Install eligibility and verified evidence are recorded separately; retired hosts pin their last compatible plugin. See the [compatibility policy](docs/compatibility_EN.md).
 
 Keyless E2E verifies interactions and mounting, not model answers. Changes to opening a side chat while the main session is running, cancellation, queues, or progress snapshots also need a real running-session scenario and explicit validation results. State any limits of your validation.
 

@@ -22,7 +22,8 @@ function questionBody(text) {
 
 export function apply(ctx) {
   const provider = 'sidenote-e2e'
-  const model = { provider, id: 'controlled', name: 'Controlled E2E', inputModalities: ['text', 'image'], context: { contextWindow: 32768 }, defaultMaxTokens: 128 }
+  // Alpha hosts reserve 65,536 tokens of compaction headroom on model switches.
+  const model = { provider, id: 'controlled', name: 'Controlled E2E', inputModalities: ['text', 'image'], context: { contextWindow: 262144 }, defaultMaxTokens: 128 }
   const adapter = {
     providerInfo: id => ({ id, name: 'Sidenote E2E' }),
     providerRetryPolicy: () => undefined,

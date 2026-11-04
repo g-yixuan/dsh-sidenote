@@ -81,6 +81,7 @@ export async function openGeneralSettings(page: Page): Promise<void> {
 }
 
 export const sideChatOf = (page: Page) => page.locator('[data-sidenote-chat-session]:visible')
+export const USER_BUBBLE = ':is([data-message-bubble], [class$="_bubble"])'
 
 /** Both the transcript and its turn rail are paged. Embedded views have no
  * rail at all; the native Load earlier control works for both presentations. */

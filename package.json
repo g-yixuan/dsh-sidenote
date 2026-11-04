@@ -21,7 +21,7 @@
   },
   "engines": {
     "node": ">=20",
-    "dsh": ">=0.2.1-rc.2 <0.2.2-0"
+    "dsh": ">=0.2.1-rc.2 <0.2.2-0 || >=0.2.2-alpha.3 <0.2.2-beta"
   },
   "dsh": {
     "bundle": {
@@ -37,7 +37,7 @@
       "platform": "web"
     },
     "engines": {
-      "dsh": ">=0.2.1-rc.2 <0.2.2-0"
+      "dsh": ">=0.2.1-rc.2 <0.2.2-0 || >=0.2.2-alpha.3 <0.2.2-beta"
     }
   },
   "dshSupport": {
@@ -47,7 +47,11 @@
       "0.2.1-rc.3",
       "0.2.1-rc.4",
       "0.2.1-rc.5"
-    ]
+    ],
+    "alpha": {
+      "minimum": "0.2.2-alpha.3",
+      "verified": ["0.2.2-alpha.3"]
+    }
   },
   "files": [
     "lib/index.js",
@@ -71,7 +75,7 @@
     "check:arch": "node scripts/check-arch.mjs"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-client-ui-primitives": ">=0.2.1-rc.2 <0.2.2-0",
+    "@deepseek-ai/dsh-client-ui-primitives": ">=0.2.1-rc.2 <0.2.2-0 || >=0.2.2-alpha.3 <0.2.2-beta",
     "cordis": "^4.0.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
