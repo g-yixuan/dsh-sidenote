@@ -263,7 +263,9 @@ test('official Flash executes real file tools in main and side, with isolated mu
   await expect.poll(() => wire().some(request => request.thinking?.type === 'enabled' && request.reasoningEffort === 'low' && request.status === 200 && request.finished)).toBe(true)
   const beforeImage = sessionEventsOf(child).at(-1)!.seq
   await side.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
-  await input.fill('不要调用工具，简短描述上传图片的主要颜色。'); await input.press('Enter')
+  await input.fill('不要调用工具，简短描述上传图片的主要颜色。')
+  await expect(side.getByRole('button', { name: /^(Send message|发送消息)$/ })).toBeEnabled()
+  await input.press('Enter')
   await expect.poll(() => userMessageContentsOf(child).at(-1)?.some(block => block.type === 'image')).toBe(true)
   await expect.poll(() => sessionEventsOf(child).some(event => event.seq > beforeImage && event.type === 'turn/end' && event.data.reason.kind === 'completed'), { timeout: 60_000 }).toBe(true)
   await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0, { timeout: 60_000 })

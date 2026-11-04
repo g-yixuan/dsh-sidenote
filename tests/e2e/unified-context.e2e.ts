@@ -16,6 +16,7 @@ async function expand(view: Locator) {
 }
 async function send(view: Locator, text: string) {
   await view.locator('[data-composer-input]').fill(text)
+  await expect(view.getByRole('button', { name: /^(Send message|发送消息|Queue message|加入队列|排队发送)$/ })).toBeEnabled()
   await view.locator('[data-composer-input]').press('Enter')
 }
 

@@ -51,6 +51,7 @@ for (const real of [false, true]) test(`${real ? 'official Flash' : 'native'} ze
     if (real) await side.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
     const question = real ? '先调用 bash 执行 sleep 8，然后只回复主线核验码，不调用其他工具。' : 'How is the main task going? [e2e:hold]'
     await side.locator('[data-composer-input]').fill(question)
+    await expect(side.getByRole('button', { name: /^(Send message|发送消息)$/ })).toBeEnabled()
     await side.locator('[data-composer-input]').press('Enter')
     await expect(sideStop).toBeVisible()
     await expect(side.locator('[data-chat-running]')).toHaveCount(1)
