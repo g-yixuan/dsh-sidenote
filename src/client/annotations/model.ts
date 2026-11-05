@@ -3,9 +3,16 @@
  * (DOM-free, React-free) so the whole lifecycle is unit-testable. One instance
  * per plugin activation.
  *
- * Numbering: a per-session monotonic counter assigns each annotation its
- * display number at creation (①②… rendered as plain digits). Numbers are
- * never reused and never re-packed on delete — 删除不重排.
+ * Numbering（2026-11-06 用户裁定，批内重排）：显示编号属于「待发送批次」。
+ * - active 注释在该会话内按创建顺序连续编号 1..n；删除其中一条后，其后的
+ *   编号自动递减（删除重排），与角标/chip/消息里 `<annotation id="N">` 的
+ *   展示顺序一致。
+ * - markSent 把本批翻为 'sent' 时**冻结**其编号——消息正文里的
+ *   `<annotation id="N">` 与气泡 chip 已按该编号落库，回看必须对得上。
+ *   窗口内新写入的 active 注释重排为 1..n，因此发送后下一批注释重新从 1
+ *   开始，不再沿用本会话的历史最大编号（跨批次可能出现相同数字，各自
+ *   对应不同的消息）。
+ * - 水合时 active 重排 1..n（迁移旧版单调编号），sent 保留落盘编号。
  *
  * State machine per annotation: 'active' (counts in the composer chip, rides
  * the next message via the send interceptor) → 'sent' (the message it was
@@ -18,7 +25,7 @@
 export interface Annotation {
   /** Store-unique identity (monotonic across sessions). */
   readonly id: number
-  /** Per-session display number assigned at creation; never reused. */
+  /** 展示编号：active = 待发送批次内的连续序号（删除重排）；sent = 发送时冻结的编号。 */
   readonly number: number
   readonly sessionId: string
   /** Source is independent of the send target. Missing fields revive legacy main quotes. */
@@ -62,8 +69,10 @@ export interface AnnotationStore {
   setNote(id: number, note: string): void
   remove(id: number): void
   /** 把指定 id 的 active 注释翻为 'sent'（发送拦截器只翻当时拼进消息的
-   *  那批——窗口内新增的注释不得误标，C2 P1-3）。 */
-  markSent(ids: readonly number[]): void
+   *  那批——窗口内新增的注释不得误标，C2 P1-3）。frozenNumbers 是拼协议块时
+   *  写进消息的 `<annotation id>`：发送窗口内若发生删除重排，store 当前编号
+   *  可能已经变化，冻结必须沿用消息里的编号，否则回看对不上。 */
+  markSent(ids: readonly number[], frozenNumbers?: ReadonlyMap<number, number>): void
   get(id: number): Annotation | undefined
   /** All annotations of a session in creation order (active + sent). */
   list(sessionId: string): readonly Annotation[]
@@ -108,11 +117,26 @@ export function createAnnotationStore(
   let annotations: Annotation[] = []
   let nextId = 1
   let version = 0
-  /** Per-session next display number. */
-  const counters = new Map<string, number>()
   const listeners = new Set<() => void>()
   const submissions = new Map<string, { pending: boolean; error?: string }>()
   const idleSubmission = { pending: false }
+
+  /** 一个会话里 active 注释的数量（批内编号 = 数量 + 1）。 */
+  const countActiveOf = (sessionId: string): number =>
+    annotations.reduce((n, a) => n + (a.sessionId === sessionId && a.state === 'active' ? 1 : 0), 0)
+
+  /** 把某会话的 active 注释按创建（id）序重排为 1..n；sent 编号保持冻结。 */
+  const renumberActive = (sessionId: string): void => {
+    const numbers = new Map<number, number>()
+    annotations
+      .filter(a => a.sessionId === sessionId && a.state === 'active')
+      .sort((left, right) => left.id - right.id)
+      .forEach((annotation, index) => { numbers.set(annotation.id, index + 1) })
+    annotations = annotations.map(a => {
+      const number = numbers.get(a.id)
+      return number === undefined || a.number === number ? a : { ...a, number }
+    })
+  }
 
   // localStorage 默认取全局（浏览器环境）；显式传 null = 纯内存（测试）。
   let store = storage ?? null
@@ -123,7 +147,7 @@ export function createAnnotationStore(
   const failedStorageSessions = new Set<string>()
   let hydrationFailed = false
 
-  // ── 启动水合：扫描前缀键，容错 revive；编号计数器取既有最大值 ──
+  // ── 启动水合：扫描前缀键，容错 revive；active 重排 1..n、sent 保留冻结编号 ──
   if (store != null) {
     try {
       const keys: string[] = []
@@ -144,10 +168,11 @@ export function createAnnotationStore(
           const revived = reviveStored(item)
           if (revived === null) continue
           annotations.push(revived)
-          counters.set(revived.sessionId, Math.max(counters.get(revived.sessionId) ?? 0, revived.number))
           nextId = Math.max(nextId, revived.id + 1)
         }
       }
+      // 旧版编号是会话内单调递增的；active 尚未发送，按批内序重排即可迁移。
+      for (const sessionId of new Set(annotations.map(a => a.sessionId))) renumberActive(sessionId)
     } catch (error) {
       hydrationFailed = true
       storageStatus = 'memory'
@@ -200,8 +225,8 @@ export function createAnnotationStore(
       return () => { listeners.delete(fn) }
     },
     add(draft: AnnotationDraft): Annotation {
-      const number = (counters.get(draft.sessionId) ?? 0) + 1
-      counters.set(draft.sessionId, number)
+      // 不变量：active 编号恒为 1..n（add/remove/markSent/水合共同维持）。
+      const number = countActiveOf(draft.sessionId) + 1
       const annotation: Annotation = {
         id: nextId,
         number,
@@ -230,10 +255,12 @@ export function createAnnotationStore(
       const target = annotations.find(a => a.id === id)
       if (target === undefined) return
       annotations = annotations.filter(a => a.id !== id)
+      // 撤回一条待发送注释后，其后编号自动递减（批内连续）。
+      renumberActive(target.sessionId)
       persistTouched([target.sessionId])
       notify()
     },
-    markSent(ids: readonly number[]): void {
+    markSent(ids: readonly number[], frozenNumbers?: ReadonlyMap<number, number>): void {
       if (ids.length === 0) return
       const idSet = new Set(ids)
       if (!annotations.some(a => idSet.has(a.id) && a.state === 'active')) return
@@ -241,8 +268,12 @@ export function createAnnotationStore(
       annotations = annotations.map(a => {
         if (!idSet.has(a.id) || a.state !== 'active') return a
         touched.add(a.sessionId)
-        return { ...a, state: 'sent' }
+        const frozen = frozenNumbers?.get(a.id)
+        return { ...a, state: 'sent' as const, ...(frozen !== undefined ? { number: frozen } : {}) }
       })
+      // sent 编号冻结（消息里的 <annotation id> 与气泡 chip 已按它落库）；
+      // 发送窗口内新增/编辑过的 active 注释重排为 1..n，下一批从 1 开始。
+      for (const sessionId of touched) renumberActive(sessionId)
       persistTouched([...touched])
       notify()
     },
@@ -256,7 +287,7 @@ export function createAnnotationStore(
       return annotations.filter(a => a.sessionId === sessionId && a.state === 'active')
     },
     countActive(sessionId: string): number {
-      return annotations.reduce((n, a) => n + (a.sessionId === sessionId && a.state === 'active' ? 1 : 0), 0)
+      return countActiveOf(sessionId)
     },
     sessions(): readonly string[] {
       return [...new Set(annotations.map(a => a.sessionId))]

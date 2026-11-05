@@ -45,7 +45,7 @@ On DSH 0.2.2, the Sidenote toolbar offers **Quote**, **Add to conversation**, an
 
 ![Annotation and handback chips in one row, with a compact preview for reading the original text and editing the note](assets/context-preview-en.jpg)
 
-Quotes and notes stay complete without being inserted into the body draft. Send a quote on its own, or together with text, images, and `@` references. Repeated selections accumulate annotations; numbered badges at the source help you find each passage.
+Quotes and notes stay complete without being inserted into the body draft. Send a quote on its own, or together with text, images, and `@` references. Repeated selections accumulate annotations; numbered badges at the source help you find each passage. Numbers run consecutively from 1 within the pending batch: removing one re-numbers the ones after it, and once a message is sent the next batch starts at 1 again.
 
 **Selections in the main conversation** can go to the main conversation or a side chat. Main-to-side handoff waits for the chosen tab's actual child session. Press `Esc` to cancel the wait; a failed handoff keeps the note open for retry.
 
