@@ -153,7 +153,7 @@ export async function dragText(page: Page, body: Locator, text: string): Promise
 }
 
 export async function selectModel(page: Page, view: Locator, name: string): Promise<void> {
-  const button = view.getByRole('button', { name: /^(Select model|选择模型)/ })
+  const button = view.getByRole('button', { name: /^(Select model|选择模型|请选择模型)/ })
   if ((await button.getAttribute('aria-label'))?.includes(name)) return
   await button.click()
   const choice = page.getByRole('menuitemradio', { name })
