@@ -224,6 +224,7 @@ export interface WorkspacesService {
 
 export interface SessionInput {
   setDraft(text: string): void
+  insertQuote?(text: string): boolean
   submit(mode?: 'queue' | 'steer'): void
   notify(level: string, text: string): void
 }
@@ -393,6 +394,8 @@ export type KnownSlotKey =
   | 'conversation.input.dock'
   | 'conversation.session.header.utilities'
   | 'settings.general.item'
+  | 'settings.section'
+  | 'settings.section.icon'
   | 'sidebar.right.pane.tab'
   | 'sidebar.right.pane.tab.title'
   | 'sidenote.conversation'
@@ -402,6 +405,7 @@ export type KnownSlotKey =
   | 'conversation.chat.assistant-actions'
   | 'conversation.composer.bar'
   | 'conversation.user.text.node'
+  | 'conversation.chat.text-interaction'
 
 /** The client slots service face (register returns the disposer). */
 export interface SlotsService {

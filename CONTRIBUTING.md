@@ -18,7 +18,7 @@
 
 ## 开发环境
 
-CI 使用 Node.js 22；pnpm 版本以 `package.json` 的 `packageManager` 为准。fork 并 clone 仓库，从最新 `main` 创建主题分支：
+CI 使用 Node.js 24；pnpm 版本以 `package.json` 的 `packageManager` 为准。fork 并 clone 仓库，从最新 `main` 创建主题分支：
 
 ```bash
 git switch -c fix/your-change
@@ -44,7 +44,7 @@ pnpm test
 
 ```bash
 pnpm exec playwright install chromium
-BS_VERSION=none DSH_EXPECTED_VERSION=0.2.1-rc.5 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.1-rc.5 dsh" pnpm test:mount
+BS_VERSION=none DSH_EXPECTED_VERSION=0.2.2-rc.1 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.2-rc.1 dsh" pnpm test:mount
 ```
 
 脚本使用临时 DSH_HOME；[CI](.github/workflows/ci.yml) 从 package.json 的 dshSupport 生成当前系列和已准入 alpha 系列各自最低版与最新已验证版的精确矩阵，所有任务必须通过 host-compatibility 汇总。每日探测 latest／next／alpha 及新增窗口内版本，每周及手动 canary 回归窗口内全部已发布版本。允许安装与已验证版本分别记录；窗口外用户固定最后兼容插件。见[兼容政策](docs/compatibility.md)。

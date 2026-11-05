@@ -4,7 +4,17 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 
-const manifest = () => JSON.parse(readFileSync('package.json', 'utf8'))
+const liveManifest = () => JSON.parse(readFileSync('package.json', 'utf8'))
+/** Previous metadata remains a supported input to the window generator. */
+function manifest() {
+  const value = liveManifest()
+  value.dshSupport = {
+    minimum: '0.2.1-rc.2', verified: ['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5'],
+    alpha: { minimum: '0.2.2-alpha.3', verified: ['0.2.2-alpha.3'] },
+  }
+  value.engines.dsh = value.dsh.engines.dsh = value.peerDependencies['@deepseek-ai/dsh-client-ui-primitives'] = '>=0.2.1-rc.2 <0.2.2-0 || >=0.2.2-alpha.3 <0.2.2-beta'
+  return value
+}
 function resolve(value = manifest(), args: string[] = [], registry?: unknown) {
   const dir = mkdtempSync(join(tmpdir(), 'sidenote-window-'))
   try {
@@ -24,6 +34,16 @@ const hosts = (result: ReturnType<typeof resolve>) => {
 }
 
 describe('current and alpha native host windows', () => {
+  it('admits the new RC series and rejects old hosts for the current plugin', () => {
+    const value = liveManifest()
+    expect(hosts(resolve(value))).toEqual(['0.2.2-rc.1'])
+    for (const version of ['0.2.1-rc.5', '0.2.1', '0.2.2-alpha.3', '0.2.3-alpha.1']) {
+      expect(JSON.parse(resolve(value, ['--candidate', version]).stdout).eligible).toBe(false)
+    }
+    for (const version of ['0.2.2-rc.1', '0.2.2-rc.100', '0.2.2']) {
+      expect(JSON.parse(resolve(value, ['--candidate', version]).stdout).eligible).toBe(true)
+    }
+  })
   it('bounds required PR checks while retaining the full verified inventory', () => {
     expect(hosts(resolve())).toEqual(['0.2.1-rc.2', '0.2.1-rc.5', '0.2.2-alpha.3'])
     expect(hosts(resolve(manifest(), ['--all']))).toEqual(['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.2-alpha.3'])

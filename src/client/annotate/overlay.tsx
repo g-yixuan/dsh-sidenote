@@ -18,7 +18,7 @@ import { IconCheckOutline16, IconTrashOutline16 } from '../host/icons.ts'
 import type { Context } from '../host/contracts.ts'
 import { currentSessionIdOf } from '../host/currentSession.ts'
 import { hostDiagnostics } from '../host/probes.ts'
-import { probeInput } from '../host/input.ts'
+import { insertNativeQuote, probeInput, resolveInput } from '../host/input.ts'
 import { sideChatBridge, type SideChatBridge } from '../bridge.ts'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
@@ -28,6 +28,8 @@ import { FirstUseHint } from './hint.tsx'
 import type { Annotation, AnnotationStore } from '../annotations/model.ts'
 import type { SelectionController, SelectionSnapshot } from './selection.ts'
 import { AnnotationBoundary } from '../annotations/boundary.tsx'
+import type { SidenotePreferences } from '../preferences.ts'
+import { SelectionToolbar } from './SelectionToolbar.tsx'
 import css from './annotate.module.css'
 
 /** Editor state: which annotation is being edited, and where the popover sits. */
@@ -58,6 +60,7 @@ interface OverlayProps {
   readonly ctx: Context
   readonly store: AnnotationStore
   readonly controller: SelectionController
+  readonly preferences: SidenotePreferences
 }
 
 /** Badge anchor of a freshly captured selection (editor placement on create). */
@@ -78,8 +81,9 @@ export function AnnotateOverlay(props: OverlayProps): ReactNode {
   )
 }
 
-function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNode {
+function AnnotateOverlayInner({ ctx, store, controller, preferences }: OverlayProps): ReactNode {
   useLocaleTick()
+  const preference = useSyncExternalStore(preferences.subscribe, preferences.getSnapshot)
   const diagnostics = hostDiagnostics(ctx)
   useSyncExternalStore(diagnostics.subscribe, diagnostics.getSnapshot)
   const selectionState = useSyncExternalStore(
@@ -149,6 +153,7 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
   }, [])
 
   const selection = selectionState.selection
+  const nativeQuoteAvailable = selection !== null && !preference.hidden && typeof resolveInput(ctx, selection.sessionId)?.insertQuote === 'function'
 
   const addToConversation = (snapshot: SelectionSnapshot): void => {
     const anchor = selectionBadgePoint(snapshot)
@@ -220,7 +225,14 @@ function AnnotateOverlayInner({ ctx, store, controller }: OverlayProps): ReactNo
       <FirstUseHint />
       {selection !== null && editor === null && sideDraft === null && viewer === null && (
         <SelectionToolbar
+          key={`${selection.sessionId}:${selection.anchorKey}:${selection.anchorText}:${selection.occurrence}`}
           snapshot={selection}
+          onQuote={nativeQuoteAvailable ? () => {
+            if (!insertNativeQuote(ctx, selection.sessionId, selection.text)) return false
+            controller.clear()
+            window.getSelection()?.removeAllRanges()
+            return true
+          } : undefined}
           addAvailable={selection.source.surface === 'side' || (probeInput(ctx, selection.sessionId).state === 'available' && hostDiagnostics(ctx).getSnapshot().capabilities.some(capability => capability.id === 'dock' && capability.state === 'available'))}
           sideChatAvailable={selection.source.surface === 'main' && sideChatBridge.current !== null}
           onAdd={() => { addToConversation(selection) }}
@@ -469,67 +481,6 @@ export function SideChatNoteEditor(props: {
       </div>
       {failed && <div className={css.editorError}>{t('openSideFailed')}</div>}
       {pending && <div className={css.editorTarget} role="status">{t('sideTargetWaiting')}</div>}
-    </div>
-  )
-}
-
-/** The floating two-button toolbar above a validated selection. */
-function SelectionToolbar(props: {
-  snapshot: SelectionSnapshot
-  sideChatAvailable: boolean
-  onAdd: () => void
-  onAsk: () => void
-  addAvailable: boolean
-}): ReactNode {
-  useLocaleTick()
-  if (!props.snapshot.source.body.isConnected || props.snapshot.range.getClientRects().length === 0) return null
-  const rect = props.snapshot.range.getBoundingClientRect()
-  const clip = sourceClip(props.snapshot.source)
-  const halfWidth = Math.min(props.sideChatAvailable ? 160 : 80, (clip.right - clip.left - 16) / 2)
-  const left = Math.max(clip.left + halfWidth + 8, Math.min(clip.right - halfWidth - 8, rect.left + rect.width / 2))
-  // 上方空间不足（选区贴视口顶部）时翻转到选区下方——工具条绝不能整体出屏。
-  // snapshot.rect 只有 left/top/width（首行矩形），翻转落点取整选区包围盒的底缘。
-  const flipBelow = rect.top < clip.top + 64
-  const selectionBottom = props.snapshot.range.getBoundingClientRect().bottom
-  const top = flipBelow
-    ? Math.max(clip.top + 4, Math.min(clip.bottom - 48, selectionBottom + 10))
-    : Math.max(clip.top + 44, rect.top - 10)
-  return (
-    <div
-      className={flipBelow ? `${css.toolbar} ${css.toolbarBelow}` : css.toolbar}
-      style={{ left, top, maxWidth: Math.max(0, clip.right - clip.left - 16) }}
-      role="toolbar"
-      aria-label={t('toolbarAria')}
-    >
-      <button
-        type="button"
-        className={css.toolbarButton}
-        disabled={!props.addAvailable}
-        title={!props.addAvailable ? t('quoteWorkflowWaiting') : undefined}
-        onMouseDown={(event) => { event.preventDefault() }}
-        onClick={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          props.onAdd()
-        }}
-      >
-        {t('addToConversation')}
-      </button>
-      {props.sideChatAvailable && (
-        <button
-          type="button"
-          className={css.toolbarButton}
-          onMouseDown={(event) => { event.preventDefault() }}
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            props.onAsk()
-          }}
-        >
-          {t('askInSideChat')}
-        </button>
-      )}
-      {!props.addAvailable && <span className={css.toolbarButton} role="status">{t('quoteWorkflowWaiting')}</span>}
     </div>
   )
 }

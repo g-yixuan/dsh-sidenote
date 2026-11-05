@@ -8,6 +8,8 @@
   z-index: 50;
   display: flex;
   align-items: stretch;
+  flex-wrap: wrap;
+  width: max-content;
   background: var(--dsw-alias-bg-layer-1, #ffffff);
   border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
   border-radius: 10px;
@@ -39,6 +41,19 @@
 
 .toolbarButton:hover {
   background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+}
+
+.toolbarButton:focus-visible {
+  outline: 2px solid #2f88ff;
+  outline-offset: -3px;
+}
+
+.toolbarStatus {
+  flex-basis: 100%;
+  padding: 6px 12px;
+  color: var(--dsw-alias-label-secondary, #646a73);
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .badge {

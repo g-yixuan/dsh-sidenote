@@ -41,4 +41,4 @@
 
 ## 兼容窗口变更
 
-发布前运行 `node scripts/host-window.mjs` 核对当前系列及已准入 alpha 系列的最低版、verified 清单与三处安装范围一致；所有边界宿主任务和固定 ci + host-compatibility 必须成功，实际 ruleset 也必须要求这两个检查。新增 verified 记录要有完整功能、相关真实模型及可见浏览器验收证据；未来 RC 和 alpha 的验收记录按实际运行证据更新。alpha 额外准入及当前系列滚动经 PR 和插件发布生效，加入 alpha 后继续维护原 RC 系列。退出系列记录最后兼容插件和精确安装命令；0.2.0-rc.2 固定 0.7.6，历史 0.1 系列仍固定 0.6.5。新规则不追溯修改历史包，npm 标签不按宿主选版本。详见[兼容政策](compatibility.md)。
+发布前运行 `node scripts/host-window.mjs` 核对当前系列及已准入 alpha 系列的最低版、verified 清单与三处安装范围一致；所有边界宿主任务和固定 ci + host-compatibility 必须成功，实际 ruleset 也必须要求这两个检查。新增 verified 记录要有完整功能、相关真实模型及可见浏览器验收证据；未来 RC 和 alpha 的验收记录按实际运行证据更新。alpha 额外准入及当前系列滚动经 PR 和插件发布生效，加入 alpha 后继续维护原 RC 系列。退出系列记录最后兼容插件和精确安装命令；0.2.1 固定 0.8.2，0.2.0-rc.2 固定 0.7.6，历史 0.1 系列仍固定 0.6.5。新规则不追溯修改历史包，npm 标签不按宿主选版本。详见[兼容政策](compatibility.md)。

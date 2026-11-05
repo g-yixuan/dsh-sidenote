@@ -2,19 +2,19 @@
 
 [English](compatibility_EN.md) · 中文
 
-当前开发主线维护 **当前 RC／正式版系列，以及一个经过验收准入的 alpha 系列**，共用宿主原生 Conversation。系列指去掉预发布后缀后的完整版本，例如 `0.2.1`。当前系列从最低兼容 RC 开始覆盖后续 RC 和正式版，alpha 系列从最低兼容 alpha 开始覆盖后续 alpha。
+当前开发主线维护 **当前 RC／正式版系列，可额外维护一个经过验收准入的 alpha 系列**，共用宿主原生 Conversation。系列指去掉预发布后缀后的完整版本，例如 `0.2.1`。当前系列从最低兼容 RC 开始覆盖后续 RC 和正式版，alpha 系列从最低兼容 alpha 开始覆盖后续 alpha。
 
 安装范围与验收证据分别记录。`package.json` 的 `dshSupport` 保存当前系列的 `minimum` 和排序后的 `verified` 清单，可选 `alpha` 保存额外 alpha 系列的同类记录。日常 PR 验收每个系列的最低版与最新已验证版，重复项合并；定期 canary 覆盖中间版本和新增版本。未来 RC 和 alpha 可以先安装，验证记录按实际运行证据更新。
 
 | 系列 | 最低兼容版本 | 已验证的精确版本 | 日常 PR 必需宿主 |
 |---|---|---|---|
-| 当前 RC／正式版：0.2.1 | 0.2.1-rc.2 | rc.2、rc.3、rc.4、rc.5 | 0.2.1-rc.2、0.2.1-rc.5 |
-| alpha：0.2.2 | 0.2.2-alpha.3 | alpha.3 | 0.2.2-alpha.3 |
+| 当前 RC／正式版：0.2.2 | 0.2.2-rc.1 | rc.1 | 0.2.2-rc.1 |
 
-0.2.1 系列自插件 0.8.0 起支持，alpha 范围随包含此改动的下一次插件发布生效。已发布的 0.8.2 包声明为 `>=0.2.1-rc.2 <0.2.2-0`，公开安装以对应 Release 和 npm 包为准。alpha 窗口上界为该系列的 beta，进入 beta／RC／正式版时通过当前系列准入流程。新的基础版本系列需要完整验收后更新范围。
+0.2.2 范围随包含此改动的下一次插件发布生效。已发布的 0.8.2 包声明为 `>=0.2.1-rc.2 <0.2.2-0`，公开安装以对应 Release 和 npm 包为准。DSH 0.2.2 需要 Node.js 24.9 或更新版本。额外 alpha 系列经完整验收后另行准入。
 
 | 窗口外宿主 | 停留方式 |
 |---|---|
+| DSH 0.2.1（rc.2 起） | 固定 dsh-sidenote 0.8.2 |
 | DSH 0.2.0-rc.2 | 固定 dsh-sidenote 0.7.6 |
 | DSH 0.1.7-rc.2 / 0.1.5-rc.2，不装 BS | 固定 dsh-sidenote 0.6.5 |
 | DSH 0.1.1-rc.2 + BS 0.12.3 / 0.18.0 | 固定 dsh-sidenote 0.6.5 及原 BS 版本 |
@@ -26,17 +26,17 @@
 
 ## 旧用户如何停留
 
-在 DSH 0.2.0-rc.2 上固定最后兼容版：
+在 DSH 0.2.1 上固定最后兼容版：
 
 ```bash
-dsh plugin --profile web add --save-exact dsh-sidenote@0.7.6
+dsh plugin --profile web add --save-exact dsh-sidenote@0.8.2
 ```
 
 更早的 0.1 宿主按上表固定 0.6.5。这会在 profile 写入精确依赖，避免按宽泛依赖范围跨过兼容边界。升级到窗口内宿主后，再安装该宿主兼容的新版插件。
 
 机制分三层：
 
-- **仓库**以 `dshSupport` 记录系列下限与已验证版本。`node scripts/host-window.mjs` 校验两处 DSH engines、UI primitives peer 与系列范围一致，并生成精确 CI 矩阵；`--all` 输出全部已验证版本。主线范围为 `>=0.2.1-rc.2 <0.2.2-0 || >=0.2.2-alpha.3 <0.2.2-beta`，分别限定当前系列和已准入的 alpha 系列。0.2.0 的校验依赖 DSH peer，只写根 engines 不足以拦截它。
+- **仓库**以 `dshSupport` 记录系列下限与已验证版本。`node scripts/host-window.mjs` 校验两处 DSH engines、UI primitives peer 与系列范围一致，并生成精确 CI 矩阵；`--all` 输出全部已验证版本。主线范围为 `>=0.2.2-rc.1 <0.2.3-0`，限定当前 0.2.2 RC／正式版系列。0.2.0 的校验依赖 DSH peer，只写根 engines 不足以拦截它。
 - **npm**保留旧包，`latest` 指向当前插件发行版。dist-tag 是版本别名，不按宿主自动选择，不需要下架旧包或另建包名。
 - **DSH 安装器／市场**执行包中声明的范围。0.2.1 市场可从完整索引筛选兼容发行版；CLI 直接安装不兼容目标会拒绝或恢复旧安装，不承诺遍历 npm 全部历史版本。更早安装器的自动回退不作保证。
 
@@ -71,8 +71,8 @@ dsh plugin --profile web add --save-exact dsh-sidenote@0.7.6
 同系列未来 RC 和 alpha 可以在验证完成前安装；遇到真实接口破坏时补适配，必要时通过 PR 收窄范围并写明受影响版本。测试只对实际运行过的版本提供证据，最低版／最新版检查不能代替中间版本的准入与定期回归。`pnpm test:compat` 验证当前兼容构建遭遇不兼容更新时恢复原包；系列退役时另外验证旧宿主拒绝本次新构建，并恢复历史包的精确依赖、包声明和客户端／服务端字节；不把旧宿主继续列入日常功能矩阵。先运行 `pnpm build && pnpm pack`，本次退役检查为：
 
 ```bash
-DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.0-rc.2 dsh" \
-DSH_COMPAT_BASELINE=dsh-sidenote@0.7.6 \
+DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.1-rc.5 dsh" \
+DSH_COMPAT_BASELINE=dsh-sidenote@0.8.2 \
 DSH_COMPAT_REJECTED="file:$PWD/dsh-sidenote-$(node -p 'require("./package.json").version').tgz" \
 pnpm test:compat
 ```

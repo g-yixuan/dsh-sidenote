@@ -15,11 +15,13 @@
 import { createRoot } from 'react-dom/client'
 import type { Context } from '../host/contracts.ts'
 import type { AnnotationStore } from '../annotations/model.ts'
-import { createSelectionController } from './selection.ts'
+import { captureSelection, createSelectionController } from './selection.ts'
 import { AnnotateOverlay } from './overlay.tsx'
 import { createContextChips } from '../annotations/chip.tsx'
 import { registerNativeComposer } from '../annotations/NativeComposer.tsx'
 import { registerUserContext } from '../annotations/NativeUserContext.tsx'
+import { registerNativeQuoteVisibility } from '../host/selection.tsx'
+import type { SidenotePreferences } from '../preferences.ts'
 import type { ReflowStore } from '../reflow.ts'
 
 import { hostDiagnostics } from '../host/probes.ts'
@@ -28,7 +30,7 @@ import { currentSessionIdOf } from '../host/currentSession.ts'
 
 export { currentSessionIdOf }
 
-export function registerAnnotations(ctx: Context, reflow: ReflowStore, store: AnnotationStore): void {
+export function registerAnnotations(ctx: Context, reflow: ReflowStore, store: AnnotationStore, preferences: SidenotePreferences): void {
   ctx.effect(() => {
     try {
       const controller = createSelectionController(() => currentSessionIdOf(ctx))
@@ -38,7 +40,8 @@ export function registerAnnotations(ctx: Context, reflow: ReflowStore, store: An
       host.dataset.dshSidenote = ''
       document.body.appendChild(host)
       const root = createRoot(host)
-      root.render(<AnnotateOverlay ctx={ctx} store={store} controller={controller} />)
+      root.render(<AnnotateOverlay ctx={ctx} store={store} controller={controller} preferences={preferences} />)
+      registerNativeQuoteVisibility(ctx, preferences, sessionId => captureSelection(currentSessionIdOf(ctx))?.sessionId === sessionId)
 
       // 发送携带：原生提交入口在提交瞬间把协议块（注释 + 回流）拼入正文（草稿零污染）。
       registerNativeComposer(ctx, store, reflow)
