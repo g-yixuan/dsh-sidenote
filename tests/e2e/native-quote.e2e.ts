@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { randomUUID } from 'node:crypto'
 import { restartHost } from './host'
-import { openGeneralSettings, dragText, openSideChat, prepareSeedPage, registerSeedWorkspace, selectModel, sessionEventsOf, sideChatOf, userMessagesOf } from './journey'
+import { openGeneralSettings, dragText, loadEarlierUntil, openSideChat, prepareSeedPage, registerSeedWorkspace, selectModel, sessionEventsOf, sideChatOf, userMessagesOf } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
 test.afterEach(async ({ page }, info) => {
@@ -59,7 +59,12 @@ for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}native qu
   const main = page.locator(`[data-conversation-session="${mainId}"]`)
   const model = real ? process.env.DSH_E2E_ACCOUNT_MODEL! : 'Controlled E2E'
   await selectModel(page, main, model)
+  // Keep the quoted source outside the native tail page after a cold restart.
+  if (!real) {
+    for (let index = 0; index < 22; index++) await submit(main, mainId, `Pagination history ${index}`)
+  }
   const source = main.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()
+  await loadEarlierUntil(main, source)
   await dragText(page, source, 'full history snapshot')
   const toolbar = toolbarOf(page)
   await expect(toolbar.getByRole('button')).toHaveCount(3)
@@ -124,7 +129,8 @@ for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}native qu
   await restoredSettings.getByRole('button', { name: 'Sidenote', exact: true }).click()
   await expect(restoredSettings.getByRole('switch', { name: /^(Hide native quote|隐藏原生引用)$/ })).toHaveAttribute('aria-checked', 'true')
   await restoredSettings.getByRole('button', { name: /^(Close(?: settings)?|关闭(?:设置)?)$/i }).click()
-  await dragText(page, main.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first(), 'full history snapshot')
+  await loadEarlierUntil(main, source)
+  await dragText(page, source, 'full history snapshot')
   await expect(toolbar.getByRole('button', { name: quoteAction })).toHaveCount(0)
   await expect(toolbar.getByRole('button')).toHaveCount(2)
   await expect(page.locator('[data-text-interaction-surface] button')).toHaveCount(0)
