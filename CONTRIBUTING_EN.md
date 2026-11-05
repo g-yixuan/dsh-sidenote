@@ -18,7 +18,7 @@ The project focuses on side chats, selection annotations, reflow, and DSH compat
 
 ## Development
 
-CI uses Node.js 22. Use the pnpm version in the `packageManager` field of `package.json`. Fork and clone the repository, then create a topic branch from the latest `main`:
+CI uses Node.js 24. Use the pnpm version in the `packageManager` field of `package.json`. Fork and clone the repository, then create a topic branch from the latest `main`:
 
 ```bash
 git switch -c fix/your-change
@@ -44,7 +44,7 @@ Interaction, session orchestration, and host compatibility changes need relevant
 
 ```bash
 pnpm exec playwright install chromium
-BS_VERSION=none DSH_EXPECTED_VERSION=0.2.1-rc.5 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.1-rc.5 dsh" pnpm test:mount
+BS_VERSION=none DSH_EXPECTED_VERSION=0.2.2-rc.1 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.2-rc.1 dsh" pnpm test:mount
 ```
 
 The script uses a temporary DSH_HOME. [CI](.github/workflows/ci.yml) derives exact minimum/latest verified hosts for both the current series and the admitted alpha series from package.json's dshSupport. All must pass host-compatibility. Daily discovery tracks latest / next / alpha and new in-window versions. Weekly and manual canaries test every published in-window version. Install eligibility and verified evidence are recorded separately; retired hosts pin their last compatible plugin. See the [compatibility policy](docs/compatibility_EN.md).

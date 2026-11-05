@@ -37,7 +37,7 @@ dsh plugin --profile web add dsh-sidenote
 
 打开 DSH Web，点击会话顶栏的 **「侧边」**，或划选一段回复开始。也可输入 `/side` 打开侧聊，用 `Alt+S` 切换主、侧输入焦点。
 
-主线维护 DSH **0.2.1 系列（rc.2 起）**，并增加 **0.2.2 alpha 系列（alpha.3 起）**，共用宿主原生聊天界面。已验证 0.2.1-rc.2／rc.3／rc.4／rc.5 和 0.2.2-alpha.3。同系列后续 RC 或 alpha 允许安装，验收记录按精确版本更新。alpha 支持随包含此改动的下一次插件发布生效，已发布的 0.8.2 仅声明 0.2.1 范围。DSH 0.2.0-rc.2 固定 `dsh-sidenote@0.7.6`，更早宿主固定各自最后兼容包，详见[兼容政策](docs/compatibility.md)。
+主线维护 DSH **0.2.2 系列（rc.1 起）**，复用宿主原生聊天界面。已验证 0.2.2-rc.1，同系列后续 RC 和正式版允许安装，验收记录按精确版本更新。DSH 0.2.2 需要 Node.js 24.9 或更新版本。新范围随包含此改动的下一次插件发布生效，已发布的 0.8.2 支持 0.2.1 系列。DSH 0.2.1 固定 `dsh-sidenote@0.8.2`，0.2.0-rc.2 固定 `dsh-sidenote@0.7.6`，更早宿主固定各自最后兼容包，详见[兼容政策](docs/compatibility.md)。
 
 ## 一个任务，容得下更多思路
 
@@ -85,7 +85,7 @@ dsh plugin --profile web add dsh-sidenote
 
 ## 兼容与帮助
 
-维护窗口覆盖 **当前 RC／正式版系列及一个已准入的 alpha 系列**，侧聊共用原生 Conversation。新增 alpha 系列经完整验收准入，当前 RC 系列继续维护。日常 PR 检查每个系列的最低版和最新已验证版，每日探测 latest／next／alpha 通道及窗口内新增宿主，每周回归全部窗口内版本。当前系列滚动后，退出的旧系列固定最后兼容插件。详见[兼容与维护政策](docs/compatibility.md)；公开安装以对应 Release 为准。
+维护窗口覆盖 **当前 RC／正式版系列，可额外准入一个 alpha 系列**，侧聊共用原生 Conversation。新增 alpha 系列经完整验收准入，当前 RC 系列继续维护。日常 PR 检查每个系列的最低版和最新已验证版，每日探测 latest／next／alpha 通道及窗口内新增宿主，每周回归全部窗口内版本。当前系列滚动后，退出的旧系列固定最后兼容插件。详见[兼容与维护政策](docs/compatibility.md)；公开安装以对应 Release 为准。
 
 遇到问题或有改进建议，欢迎[反馈](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose)，附上 DSH 与插件版本、复现步骤或截图。
 

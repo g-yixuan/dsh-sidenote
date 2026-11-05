@@ -34,6 +34,8 @@ Hidden side chats remain runnable. Reopen them from the recently closed entries 
 
 ## Select and annotate
 
+On DSH 0.2.2, the Sidenote toolbar offers **Quote**, **Add to conversation**, and **Ask in side chat** in the main conversation. Quote inserts a native quote block into the source conversation's composer, where you can add your question. Add to conversation opens the annotation editor so you can write notes for individual passages and send them together. Main and side chats share the same toolbar, annotation editor, and previews.
+
 1. Select a passage in a completed assistant reply.
 2. Choose to add it to the main conversation or ask in a side chat, then write a note.
 3. Click outside the editor or press `Enter` to save a new note; press `Esc` to cancel.
@@ -76,9 +78,13 @@ The saved session keeps the same layout: collapsible inherited context first, fo
 
 ![A side-chat finding ready to accompany the main-thread draft](assets/workflow-en.jpg)
 
+## Sidenote settings
+
+Open DSH settings and select **Sidenote** in the left navigation. **Hide native quote** is on by default, hiding the Quote action in main and side-chat selection menus. Annotations and side-chat questions use their own actions. Turn the switch off when you want native quoting. Changes take effect immediately, are saved in the current host configuration, and survive reloads and restarts. An explicit user setting takes precedence over the default.
+
 ## Installation and troubleshooting
 
-See the [overview](../README_EN.md#install) and [compatibility policy](compatibility_EN.md) for installation and verified versions. Supported native hosts need no BS; outside-window hosts pin the last compatible plugin, 0.6.5. Engine ranges do not imply that every version inside them is verified.
+See the [overview](../README_EN.md#install) and [compatibility policy](compatibility_EN.md) for installation and verified versions. Supported native hosts need no BS. DSH 0.2.1 pins plugin 0.8.2; other outside-window hosts retain the last compatible package listed in the compatibility table. Engine ranges do not imply that every version inside them is verified.
 
 [Report a problem](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose) with your DSH and plugin versions, reproduction steps, or a screenshot. Normal use requires no diagnostic configuration; developer troubleshooting is documented in the [contributing guide](../CONTRIBUTING_EN.md#developer-diagnostics).
 

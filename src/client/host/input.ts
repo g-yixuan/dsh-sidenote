@@ -9,6 +9,12 @@ export function resolveInput(ctx: Context, sessionId: string): SessionInput | un
   return probeInput(ctx, sessionId).input
 }
 
+/** The captured source session owns the quote, even if another pane has focus. */
+export function insertNativeQuote(ctx: Context, sessionId: string, text: string): boolean {
+  try { return resolveInput(ctx, sessionId)?.insertQuote?.(text) ?? false }
+  catch { return false }
+}
+
 /** Shape and real state read share the exact resolver used by both composers. */
 export function probeInput(ctx: Context, sessionId: string): InputProbe {
   const path = 'sessions.scope → conversation.input.for'

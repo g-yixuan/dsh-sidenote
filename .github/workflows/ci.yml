@@ -31,7 +31,7 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -75,7 +75,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies
@@ -129,7 +129,7 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Resolve published hosts once and select regression targets
@@ -153,7 +153,7 @@ jobs:
           node --input-type=module <<'JS'
           import { readFileSync } from 'node:fs'
           const plan = JSON.parse(readFileSync('test-results/host-candidates.json', 'utf8'))
-          const outside = plan.channels.filter(channel => !channel.eligible)
+          const outside = plan.channels.filter(channel => !channel.eligible && !channel.olderThanMinimum)
           if (outside.length) throw new Error('Host series admission required: ' + outside.map(x => x.channel + '=' + x.version).join(', '))
           JS
       - name: Upload discovery evidence
@@ -183,7 +183,7 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Install exact candidate CLI

@@ -9,8 +9,10 @@ import { registerAnnotations } from './annotate/index.tsx'
 import { clearNativeRuntime, setRootContext } from './sidechat/native.ts'
 import { sweepOrphanedSideChatMeta } from './sidechat/metaStore.ts'
 import { registerSideSessionVisibility } from './sidechat/visibility.tsx'
+import { createSidenotePreferences, type SidenoteConfigForm } from './preferences.ts'
+import { registerSidenoteSettings } from './settings.tsx'
 
-export const inject = ['sessions', 'workspaces', 'slots', 'connection', 'locale']
+export const inject = ['sessions', 'workspaces', 'slots', 'connection', 'locale', 'configForms']
 
 export function apply(ctx: Context): void {
   // 侧栏 Tab 的原生面（better-sidebar >= 0.19）与宿主调用都要用插件根 ctx：
@@ -31,6 +33,11 @@ export function apply(ctx: Context): void {
   // （chip + 发送拦截器序列化）。
   const reflow = createReflowStore()
   const annotations = createAnnotationStore()
+  const forms = ctx.get('configForms') as { get(namespace: string): SidenoteConfigForm }
+  // The host configuration namespace is the entry id in cordis.patch.yml.
+  const preferences = createSidenotePreferences(forms.get('side-chat'))
+  ctx.effect(() => () => { preferences.dispose() }, 'dsh-sidenote: preferences')
+  registerSidenoteSettings(ctx, preferences)
   registerSideChat(ctx, reflow, annotations)
-  registerAnnotations(ctx, reflow, annotations)
+  registerAnnotations(ctx, reflow, annotations, preferences)
 }

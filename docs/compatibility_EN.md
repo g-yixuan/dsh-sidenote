@@ -2,19 +2,19 @@
 
 [中文](compatibility.md) · English
 
-The development branch maintains **the current RC/release series and one alpha series admitted through validation**, sharing native Conversation. A series is the complete version without its prerelease suffix, such as `0.2.1`. The current series covers later RCs and the unsuffixed release from its minimum compatible RC. The alpha series covers later alphas from its minimum compatible alpha.
+The development branch maintains **the current RC/release series, with one optional alpha series admitted through validation**, sharing native Conversation. A series is the complete version without its prerelease suffix, such as `0.2.1`. The current series covers later RCs and the unsuffixed release from its minimum compatible RC. The alpha series covers later alphas from its minimum compatible alpha.
 
 Installation eligibility and validation evidence are recorded separately. In `package.json`, `dshSupport` stores the current series' `minimum` and sorted `verified` inventory. The optional `alpha` entry stores the same fields for the additional alpha series. Ordinary PRs test each series' minimum and latest verified host, deduplicated. Periodic canaries cover intermediate and new versions. Future RCs and alphas may be installed before validation, with verification recorded against actual execution evidence.
 
 | Series | Minimum compatible host | Verified exact versions | Required hosts on ordinary PRs |
 |---|---|---|---|
-| Current RC/release: 0.2.1 | 0.2.1-rc.2 | rc.2, rc.3, rc.4, rc.5 | 0.2.1-rc.2, 0.2.1-rc.5 |
-| Alpha: 0.2.2 | 0.2.2-alpha.3 | alpha.3 | 0.2.2-alpha.3 |
+| Current RC/release: 0.2.2 | 0.2.2-rc.1 | rc.1 | 0.2.2-rc.1 |
 
-The 0.2.1 series has been supported since plugin 0.8.0. Alpha support takes effect in the next plugin release containing this change. Published 0.8.2 declares `>=0.2.1-rc.2 <0.2.2-0`. Public installation follows each Release and npm package. The alpha window ends before beta, so beta/RC/release versions require current-series admission. A new base-version series requires full validation before its range is added.
+The 0.2.2 range takes effect in the next plugin release containing this change. Published 0.8.2 declares `>=0.2.1-rc.2 <0.2.2-0`; published installations follow their Release and npm package. DSH 0.2.2 requires Node.js 24.9 or newer. Additional alpha series require validation before admission.
 
 | Retired host | Installation to retain |
 |---|---|
+| DSH 0.2.1 (from rc.2) | Pin dsh-sidenote 0.8.2 |
 | DSH 0.2.0-rc.2 | Pin dsh-sidenote 0.7.6 |
 | DSH 0.1.7-rc.2 / 0.1.5-rc.2, no BS | Pin dsh-sidenote 0.6.5 |
 | DSH 0.1.1-rc.2 + BS 0.12.3 / 0.18.0 | Pin dsh-sidenote 0.6.5 and the original BS version |
@@ -26,17 +26,17 @@ Outside the window, the current branch carries no separate chat interface or per
 
 ## Keeping an older host compatible
 
-On DSH 0.2.0-rc.2, pin its last compatible plugin:
+On DSH 0.2.1, pin its last compatible plugin:
 
 ```bash
-dsh plugin --profile web add --save-exact dsh-sidenote@0.7.6
+dsh plugin --profile web add --save-exact dsh-sidenote@0.8.2
 ```
 
 Earlier 0.1 hosts pin 0.6.5 as listed above. This writes an exact profile dependency so broad dependency updates cannot cross the compatibility boundary. After upgrading into the window, install a compatible newer plugin.
 
 Three layers enforce this policy:
 
-- **Repository:** `dshSupport` records series floors and verified versions. `node scripts/host-window.mjs` checks both DSH engines and the UI primitives peer against the series ranges and generates an exact CI matrix; `--all` emits all verified versions. The development range is `>=0.2.1-rc.2 <0.2.2-0 || >=0.2.2-alpha.3 <0.2.2-beta`, bounding the current series and the admitted alpha series separately. DSH 0.2.0 checks DSH peers, so root engines alone is insufficient.
+- **Repository:** `dshSupport` records series floors and verified versions. `node scripts/host-window.mjs` checks both DSH engines and the UI primitives peer against the series ranges and generates an exact CI matrix; `--all` emits all verified versions. The development range is `>=0.2.2-rc.1 <0.2.3-0`, bounding the current 0.2.2 RC/release series. DSH 0.2.0 checks DSH peers, so root engines alone is insufficient.
 - **npm:** retain historical packages and point `latest` at the current plugin release. Dist-tags are aliases, not host-aware selection; old packages need neither removal nor a new name.
 - **DSH installer/market:** enforce the declared range. The 0.2.1 market can select compatible releases from a complete index. Direct CLI installation rejects incompatible targets or restores the prior installation, without promising to search all historical npm versions. Automatic fallback on earlier installers is unverified.
 
@@ -64,15 +64,15 @@ Reports download only on request and are never uploaded automatically. They cont
 
 Relevant PRs run `ci`, every `plugin-mount` for the minimum and latest verified hosts of both the current and alpha series, and the fixed `host-compatibility` summary. Failed, cancelled, or skipped dependencies cannot pass. Required checks remain ci + host-compatibility. Window changes keep these names; gate-structure changes require updating and reading back the actual ruleset.
 
-Daily canary reads npm's versions and latest / next / alpha tags once. Using the same installation ranges, it deduplicates and runs full journeys for every published version awaiting verification, each series' newest published version, and in-window channel targets. This catches RCs and alphas whose tags advanced between probes. Every Monday, and when host-canary is enabled manually, it tests every published in-window version, including intermediate versions. Channels outside the windows, including an alpha series reaching beta/RC, produce an admission failure while in-window hosts still run. Missing next or alpha tags may be skipped.
+Daily canary reads npm's versions and latest / next / alpha tags once. Using the same installation ranges, it deduplicates and runs full journeys for every published version awaiting verification, each series' newest published version, and in-window channel targets. This catches RCs and alphas whose tags advanced between probes. Every Monday, and when host-canary is enabled manually, it tests every published in-window version, including intermediate versions. Channels older than the current minimum remain in the report and follow the historical compatibility table. Other outside-window channels, including an alpha series reaching beta/RC, produce an admission failure while in-window hosts still run. Missing next or alpha tags may be skipped.
 
 Each host uses official installation, isolated DSH_HOME, actual component versions, and the current bundle digest. Controlled models cover queue, stop, rejection, recovery, and main/side isolation; the separate official Flash lane validates external responses and real tools. Reports distinguish message acceptance from successful model replies. After full functional, relevant real-model, and visible-browser validation, record a new version in `verified` through a PR. Canary does not write verification records, publish plugins, or upgrade user environments, and is outside the required per-PR gate.
 
 Future RCs and alphas within their admitted series may be installed before validation completes. If an interface actually breaks, adapt it or narrow the declared range through a PR identifying the affected versions. Evidence covers only versions actually exercised; minimum/latest checks do not replace intermediate-version admission and periodic regression. `pnpm test:compat` verifies that an incompatible update restores the current compatible build. At series retirement, separately verify that the old host rejects the new build and restores the exact historical dependency, package manifest, and client/server bytes; do not retain the old host in ordinary functional matrices. After `pnpm build && pnpm pack`, run this retirement check:
 
 ```bash
-DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.0-rc.2 dsh" \
-DSH_COMPAT_BASELINE=dsh-sidenote@0.7.6 \
+DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.1-rc.5 dsh" \
+DSH_COMPAT_BASELINE=dsh-sidenote@0.8.2 \
 DSH_COMPAT_REJECTED="file:$PWD/dsh-sidenote-$(node -p 'require("./package.json").version').tgz" \
 pnpm test:compat
 ```

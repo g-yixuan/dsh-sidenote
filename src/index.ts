@@ -6,6 +6,8 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm/message'
 import { isTrustedApiRequest } from './trust-fence.ts'
 import { contextProjection } from './contextProjection.ts'
 
+export { Config } from './settings.ts'
+
 declare module '@deepseek-ai/dsh-llm/message' {
   interface MessageSourceMap {
     'dsh-sidenote': {
@@ -50,6 +52,7 @@ interface WebRuntimeLike {
 interface HostContext {
   get(name: string): unknown
   effect(fn: () => void | (() => void), label?: string): unknown
+  fiber?: unknown
 }
 
 // ── wire 工具（最小集，better-sidebar src/wire.ts 同款） ────────────────────
@@ -167,6 +170,10 @@ export function apply(ctx: unknown): void {
   injectDyn.call(ctx, ['sessionProjections'], (injected) => {
     const registry = injected.get('sessionProjections') as { register(definition: typeof contextProjection): () => void }
     return registry.register(contextProjection)
+  })
+  injectDyn.call(ctx, ['settings'], (injected) => {
+    const settings = injected.get('settings') as { configure(options: { auto: boolean }, owner: unknown): () => void }
+    return settings.configure({ auto: false }, host.fiber)
   })
   injectDyn.call(ctx, ['webServer'], (injected) => {
     const webServer = injected.get('webServer') as WebServerLike | undefined

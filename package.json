@@ -21,7 +21,7 @@
   },
   "engines": {
     "node": ">=20",
-    "dsh": ">=0.2.1-rc.2 <0.2.2-0 || >=0.2.2-alpha.3 <0.2.2-beta"
+    "dsh": ">=0.2.2-rc.1 <0.2.3-0"
   },
   "dsh": {
     "bundle": {
@@ -37,21 +37,14 @@
       "platform": "web"
     },
     "engines": {
-      "dsh": ">=0.2.1-rc.2 <0.2.2-0 || >=0.2.2-alpha.3 <0.2.2-beta"
+      "dsh": ">=0.2.2-rc.1 <0.2.3-0"
     }
   },
   "dshSupport": {
-    "minimum": "0.2.1-rc.2",
+    "minimum": "0.2.2-rc.1",
     "verified": [
-      "0.2.1-rc.2",
-      "0.2.1-rc.3",
-      "0.2.1-rc.4",
-      "0.2.1-rc.5"
-    ],
-    "alpha": {
-      "minimum": "0.2.2-alpha.3",
-      "verified": ["0.2.2-alpha.3"]
-    }
+      "0.2.2-rc.1"
+    ]
   },
   "files": [
     "lib/index.js",
@@ -75,7 +68,7 @@
     "check:arch": "node scripts/check-arch.mjs"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-client-ui-primitives": ">=0.2.1-rc.2 <0.2.2-0 || >=0.2.2-alpha.3 <0.2.2-beta",
+    "@deepseek-ai/dsh-client-ui-primitives": ">=0.2.2-rc.1 <0.2.3-0",
     "cordis": "^4.0.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
@@ -91,6 +84,7 @@
     "@deepseek-ai/dsh-client-ui-primitives": "0.1.5-rc.2",
     "@deepseek-ai/dsh-llm": "0.1.5-rc.2",
     "@deepseek-ai/dsh-tools": "0.1.5-rc.2",
+    "@deepseek-ai/schemastery": "3.19.0",
     "@playwright/test": "^1.50.0",
     "@shikijs/langs": "^4.4.3",
     "@types/mdast": "^4.0.4",

@@ -4,7 +4,17 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 
-const manifest = () => JSON.parse(readFileSync('package.json', 'utf8'))
+const liveManifest = () => JSON.parse(readFileSync('package.json', 'utf8'))
+/** Previous metadata remains a supported input to the window generator. */
+function manifest() {
+  const value = liveManifest()
+  value.dshSupport = {
+    minimum: '0.2.1-rc.2', verified: ['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5'],
+    alpha: { minimum: '0.2.2-alpha.3', verified: ['0.2.2-alpha.3'] },
+  }
+  value.engines.dsh = value.dsh.engines.dsh = value.peerDependencies['@deepseek-ai/dsh-client-ui-primitives'] = '>=0.2.1-rc.2 <0.2.2-0 || >=0.2.2-alpha.3 <0.2.2-beta'
+  return value
+}
 function resolve(value = manifest(), args: string[] = [], registry?: unknown) {
   const dir = mkdtempSync(join(tmpdir(), 'sidenote-window-'))
   try {
@@ -24,6 +34,32 @@ const hosts = (result: ReturnType<typeof resolve>) => {
 }
 
 describe('current and alpha native host windows', () => {
+  it('admits the new RC series and rejects old hosts for the current plugin', () => {
+    const value = liveManifest()
+    expect(hosts(resolve(value))).toEqual(['0.2.2-rc.1'])
+    for (const version of ['0.2.1-rc.5', '0.2.1', '0.2.2-alpha.3', '0.2.3-alpha.1']) {
+      expect(JSON.parse(resolve(value, ['--candidate', version]).stdout).eligible).toBe(false)
+    }
+    for (const version of ['0.2.2-rc.1', '0.2.2-rc.100', '0.2.2']) {
+      expect(JSON.parse(resolve(value, ['--candidate', version]).stdout).eligible).toBe(true)
+    }
+  })
+
+  it('records older channels after rollover and still requires admission for newer series', () => {
+    const registry = {
+      versions: ['0.2.1-rc.5', '0.2.2-alpha.3', '0.2.2-rc.1', '0.2.3-alpha.1'],
+      'dist-tags': { latest: '0.2.1-rc.5', next: '0.2.2-rc.1', alpha: '0.2.2-alpha.3' },
+    }
+    const result = resolve(liveManifest(), [], registry)
+    expect(hosts(result)).toEqual(['0.2.2-rc.1'])
+    const plan = JSON.parse(result.stdout)
+    expect(plan.channels.filter((channel: { eligible: boolean; olderThanMinimum: boolean }) => !channel.eligible && !channel.olderThanMinimum)).toEqual([])
+    registry['dist-tags'].alpha = '0.2.3-alpha.1'
+    const advanced = JSON.parse(resolve(liveManifest(), [], registry).stdout)
+    expect(advanced.channels.filter((channel: { eligible: boolean; olderThanMinimum: boolean }) => !channel.eligible && !channel.olderThanMinimum)).toEqual([
+      { channel: 'alpha', version: '0.2.3-alpha.1', eligible: false, verified: false, olderThanMinimum: false },
+    ])
+  })
   it('bounds required PR checks while retaining the full verified inventory', () => {
     expect(hosts(resolve())).toEqual(['0.2.1-rc.2', '0.2.1-rc.5', '0.2.2-alpha.3'])
     expect(hosts(resolve(manifest(), ['--all']))).toEqual(['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.2-alpha.3'])
@@ -53,8 +89,8 @@ describe('current and alpha native host windows', () => {
     expect(hosts(result)).toEqual(['0.2.1-rc.6', '0.2.1-rc.7', '0.2.2-alpha.3'])
     const plan = JSON.parse(result.stdout)
     expect(plan.unverified).toEqual(['0.2.1-rc.6', '0.2.1-rc.7'])
-    expect(plan.channels).toContainEqual({ channel: 'next', version: '0.2.2-beta.1', eligible: false, verified: false })
-    expect(plan.channels).toContainEqual({ channel: 'alpha', version: '0.2.2-alpha.3', eligible: true, verified: true })
+    expect(plan.channels).toContainEqual({ channel: 'next', version: '0.2.2-beta.1', eligible: false, verified: false, olderThanMinimum: false })
+    expect(plan.channels).toContainEqual({ channel: 'alpha', version: '0.2.2-alpha.3', eligible: true, verified: true, olderThanMinimum: false })
     expect(hosts(resolve(manifest(), ['--all'], registry))).toEqual(registry.versions.slice(1))
   })
 

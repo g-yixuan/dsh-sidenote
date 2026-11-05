@@ -22,3 +22,5 @@ minimumReleaseAgeExclude:
   - tldts
   - tldts-core
   - bidi-js
+  - '@deepseek-ai/cosmokit@1.9.0'
+  - '@deepseek-ai/schemastery@3.19.0'
