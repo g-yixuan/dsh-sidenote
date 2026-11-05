@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { randomUUID } from 'node:crypto'
+import { restartHost } from './host'
 import { openGeneralSettings, dragText, openSideChat, prepareSeedPage, registerSeedWorkspace, selectModel, sessionEventsOf, sideChatOf, userMessagesOf } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
@@ -114,6 +115,15 @@ for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}native qu
   await expect(side).toHaveAttribute('data-sidenote-chat-session', childId)
   await expect(side.locator('[data-composer-quote]')).toHaveCount(1)
   await expect(side.getByRole('button', { name: /1 annotation|1 条注释/ })).toBeVisible()
+  await restartHost(page)
+  await expect(side).toHaveAttribute('data-sidenote-chat-session', childId)
+  await expect(side.locator('[data-composer-quote]')).toHaveCount(1)
+  await expect(side.getByRole('button', { name: /1 annotation|1 条注释/ })).toBeVisible()
+  await openGeneralSettings(page)
+  const restoredSettings = page.getByRole('dialog', { name: /^(Settings|设置)$/ })
+  await restoredSettings.getByRole('button', { name: 'Sidenote', exact: true }).click()
+  await expect(restoredSettings.getByRole('switch', { name: /^(Hide native quote|隐藏原生引用)$/ })).toHaveAttribute('aria-checked', 'true')
+  await restoredSettings.getByRole('button', { name: /^(Close(?: settings)?|关闭(?:设置)?)$/i }).click()
   await dragText(page, main.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first(), 'full history snapshot')
   await expect(toolbar.getByRole('button', { name: quoteAction })).toHaveCount(0)
   await expect(toolbar.getByRole('button')).toHaveCount(2)
