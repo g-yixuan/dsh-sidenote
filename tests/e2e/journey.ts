@@ -111,7 +111,8 @@ export async function revealForReading(page: Page, target: Locator): Promise<voi
       const top = viewport.top + 12
       const bottom = (scroll.querySelector('[data-composer-seat]')?.getBoundingClientRect().top ?? viewport.bottom) - 12
       const end = rect.top + Math.min(rect.height, bottom - top)
-      return { x: viewport.left + viewport.width / 2, y: (top + bottom) / 2,
+      // The content center can open a portaled quote preview that consumes the wheel.
+      return { x: viewport.left + 8, y: (top + bottom) / 2,
         delta: rect.top < top ? rect.top - top : end > bottom ? end - bottom : 0 }
     })
     if (Math.abs(view.delta) <= 2) return

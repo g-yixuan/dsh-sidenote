@@ -37,7 +37,7 @@ dsh plugin --profile web add dsh-sidenote
 
 Open DSH Web and click **Side** in the session header, or select a passage in a reply. You can also open a side chat with `/side` and switch focus between main and side inputs with `Alt+S`.
 
-The main branch maintains **DSH 0.2.2 (from rc.1)** using the native conversation interface. Version 0.2.2-rc.1 is verified, and later RCs and the unsuffixed release in that series may be installed, with verification recorded against exact versions. DSH 0.2.2 requires Node.js 24.9 or newer. The new range takes effect in the next plugin release containing this change. Published 0.8.2 supports the 0.2.1 series. DSH 0.2.1 users pin `dsh-sidenote@0.8.2`, 0.2.0-rc.2 pins `dsh-sidenote@0.7.6`, and earlier hosts retain their last compatible package. See the [compatibility policy](docs/compatibility_EN.md).
+The main branch maintains **DSH 0.2.2 (from rc.1)** using the native conversation interface. Version 0.2.2-rc.1 is verified, and later RCs and the unsuffixed release in that series may be installed, with verification recorded against exact versions. DSH 0.2.2 requires Node.js 24.9 or newer. This range applies from plugin 0.8.3. Version 0.8.2 supports the 0.2.1 series. DSH 0.2.1 users pin `dsh-sidenote@0.8.2`, 0.2.0-rc.2 pins `dsh-sidenote@0.7.6`, and earlier hosts retain their last compatible package. See the [compatibility policy](docs/compatibility_EN.md).
 
 ## One task. Room to explore.
 

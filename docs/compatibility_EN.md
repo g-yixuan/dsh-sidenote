@@ -10,7 +10,7 @@ Installation eligibility and validation evidence are recorded separately. In `pa
 |---|---|---|---|
 | Current RC/release: 0.2.2 | 0.2.2-rc.1 | rc.1 | 0.2.2-rc.1 |
 
-The 0.2.2 range takes effect in the next plugin release containing this change. Published 0.8.2 declares `>=0.2.1-rc.2 <0.2.2-0`; published installations follow their Release and npm package. DSH 0.2.2 requires Node.js 24.9 or newer. Additional alpha series require validation before admission.
+The 0.2.2 range applies from plugin 0.8.3. Version 0.8.2 declares `>=0.2.1-rc.2 <0.2.2-0`, and published installations follow their Release and npm package. DSH 0.2.2 requires Node.js 24.9 or newer. Additional alpha series require validation before admission.
 
 | Retired host | Installation to retain |
 |---|---|
