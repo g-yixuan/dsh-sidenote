@@ -27,7 +27,7 @@ export function createSidenotePreferences(form: SidenoteConfigForm): SidenotePre
   let failed = false
   const read = () => {
     const state = form.getSnapshot()
-    return { hidden: state.value?.hideNativeQuote === true, status: state.status, writable: state.writable, saving, failed }
+    return { hidden: state.value?.hideNativeQuote ?? true, status: state.status, writable: state.writable, saving, failed }
   }
   let snapshot = read()
   const publish = (): void => {

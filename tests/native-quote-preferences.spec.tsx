@@ -2,6 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Config } from '../src/settings.ts'
 import type { Context } from '../src/client/host/contracts.ts'
 import { registerNativeQuoteVisibility } from '../src/client/host/selection.tsx'
 import { createSidenotePreferences, type SidenoteConfigForm } from '../src/client/preferences.ts'
@@ -11,9 +12,9 @@ import { createSidenotePreferences, type SidenoteConfigForm } from '../src/clien
 const cleanup: (() => void)[] = []
 afterEach(() => { for (const dispose of cleanup.splice(0).reverse()) dispose(); document.body.replaceChildren() })
 
-function preferenceFixture() {
+function preferenceFixture(initial?: ReturnType<SidenoteConfigForm['getSnapshot']>) {
   const listeners = new Set<() => void>()
-  let state: ReturnType<SidenoteConfigForm['getSnapshot']> = { status: 'ready', value: { hideNativeQuote: false }, writable: true }
+  let state: ReturnType<SidenoteConfigForm['getSnapshot']> = initial ?? { status: 'ready', value: { hideNativeQuote: false }, writable: true }
   const publish = (hidden: boolean): void => {
     state = { ...state, value: { hideNativeQuote: hidden } }
     for (const listener of listeners) listener()
@@ -29,6 +30,15 @@ function preferenceFixture() {
 }
 
 describe('native quotation preferences', () => {
+  it('hides native quotes by default while honoring an explicit opt-out', () => {
+    expect(Config({}).hideNativeQuote.get()).toBe(true)
+    expect(Config({ hideNativeQuote: false }).hideNativeQuote.get()).toBe(false)
+    const { preferences, publish } = preferenceFixture({ status: 'loading', value: undefined, writable: false })
+    expect(preferences.getSnapshot().hidden).toBe(true)
+    publish(false)
+    expect(preferences.getSnapshot().hidden).toBe(false)
+  })
+
   it('follows host changes and retains the accepted value after failed writes', async () => {
     const { form, preferences, publish } = preferenceFixture()
     await preferences.setHidden(true)

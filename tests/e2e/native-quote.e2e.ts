@@ -40,6 +40,20 @@ async function submit(view: Locator, id: string, text: string, append = false): 
   expect(sessionEventsOf(id).findLast(event => event.type === 'turn/end')?.data.reason.kind).toBe('completed')
 }
 
+test('native quotation is hidden by default in a fresh host profile', async ({ page }) => {
+  await prepareSeedPage(page)
+  await openGeneralSettings(page)
+  const dialog = page.getByRole('dialog', { name: /^(Settings|设置)$/ })
+  await dialog.getByRole('button', { name: 'Sidenote', exact: true }).click()
+  await expect(dialog.getByRole('switch', { name: /^(Hide native quote|隐藏原生引用)$/ })).toHaveAttribute('aria-checked', 'true')
+  await page.screenshot({ path: 'test-results/sidenote-default-hidden.png' })
+  await dialog.getByRole('button', { name: /^(Close(?: settings)?|关闭(?:设置)?)$/i }).click()
+  const source = page.locator('[data-conversation-session]').first().locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()
+  await dragText(page, source, 'full history snapshot')
+  await expect(toolbarOf(page).getByRole('button')).toHaveCount(2)
+  await expect(toolbarOf(page).getByRole('button', { name: quoteAction })).toHaveCount(0)
+})
+
 for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}native quotation and Sidenote settings stay consistent in main and side`, async ({ page }) => {
   test.skip(real && !process.env.DSH_E2E_ACCOUNT_MODEL, 'Requires an isolated native DeepSeek account')
   test.setTimeout(300_000)

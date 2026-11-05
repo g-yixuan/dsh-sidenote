@@ -80,7 +80,7 @@ The saved session keeps the same layout: collapsible inherited context first, fo
 
 ## Sidenote settings
 
-Open DSH settings and select **Sidenote** in the left navigation. Enable **Hide native quote** to hide the Quote action in main and side-chat selection menus. Annotations and side-chat questions use their own actions. This switch is off by default. Changes take effect immediately, are saved in the current host configuration, and survive reloads and restarts.
+Open DSH settings and select **Sidenote** in the left navigation. **Hide native quote** is on by default, hiding the Quote action in main and side-chat selection menus. Annotations and side-chat questions use their own actions. Turn the switch off when you want native quoting. Changes take effect immediately, are saved in the current host configuration, and survive reloads and restarts. An explicit user setting takes precedence over the default.
 
 ## Installation and troubleshooting
 
