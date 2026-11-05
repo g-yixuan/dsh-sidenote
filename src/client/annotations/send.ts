@@ -24,6 +24,8 @@ export async function submitAnnotations(options: {
   cancelInputRollback(input)
   const parts = [...(options.leadingBlocks ?? [])]
   if (annotations.length > 0) parts.push(buildProtocolBlock(annotations))
+  // 拼块瞬间的 wire 编号；发送窗口内若发生删除重排，冻结仍沿用这里的编号。
+  const wireNumbers = new Map(annotations.map(annotation => [annotation.id, annotation.number] as const))
   const block = parts.join('\n\n')
   if (block === '') return false
   const draftBeforeWait = input.state.getSnapshot()
@@ -47,8 +49,15 @@ export async function submitAnnotations(options: {
     }
     receipt.submit(options.mode)
     await receipt.outcome
-    // Edits/new quotes made while admission was in flight remain active.
-    store.markSent(annotations.filter(annotation => store.get(annotation.id) === annotation).map(annotation => annotation.id))
+    // Edits/new quotes made while admission was in flight remain active. A
+    // concurrent delete re-numbers the remaining quotes (new objects, same
+    // content) and is NOT an edit, so identity alone must not decide this:
+    // the wire number frozen below is the one written into the message.
+    store.markSent(annotations.filter(annotation => {
+      const current = store.get(annotation.id)
+      return current !== undefined && current.state === 'active'
+        && (current === annotation || (current.note === annotation.note && current.text === annotation.text))
+    }).map(annotation => annotation.id), wireNumbers)
     return true
   } catch (error) {
     rollbackInputPrefix(input, prefix, staged ? () => {

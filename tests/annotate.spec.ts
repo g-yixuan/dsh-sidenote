@@ -1,6 +1,6 @@
 /**
- * 纯函数单测：注释 store（增删 / 编号不重排 / 计数 / sent 迁移 / 持久化）、
- * 协议块 v2 序列化与反解析（发送给模型的数据形态）、截断。
+ * 纯函数单测：注释 store（增删 / 批内重排 / 发送后重新排序 / 计数 / sent 迁移 /
+ * 持久化）、协议块 v2 序列化与反解析（发送给模型的数据形态）、截断。
  * 全部为 node 环境的纯函数测试（无 jsdom 依赖）。
  */
 import { describe, expect, it } from 'vitest'
@@ -89,16 +89,61 @@ describe('annotation store', () => {
     expect(new Set([a1.id, a2.id, b1.id]).size).toBe(3)
   })
 
-  it('does not renumber after deletion (删除不重排)', () => {
+  it('re-packs active numbers after deletion (撤回后按顺序自动递减)', () => {
     const store = createAnnotationStore()
-    store.add(draft('s1', '一'))
+    const first = store.add(draft('s1', '一'))
     const second = store.add(draft('s1', '二'))
-    store.remove(store.list('s1')[0]!.id)
-    expect(store.list('s1').map(a => a.number)).toEqual([2])
-    // 新建继续递增，不复用已删除的编号
     const third = store.add(draft('s1', '三'))
-    expect(third.number).toBe(3)
-    expect(second.number).toBe(2)
+    store.remove(second.id)
+    expect(store.list('s1').map(a => a.number)).toEqual([1, 2])
+    expect(store.get(first.id)?.number).toBe(1)
+    expect(store.get(third.id)?.number).toBe(2)
+    // 其他会话的编号不受影响
+    expect(store.add(draft('s2', '丁')).number).toBe(1)
+    // 新建接着本批末位 +1
+    expect(store.add(draft('s1', '五')).number).toBe(3)
+  })
+
+  it('a sent batch freezes its numbers and the next batch restarts at 1 (发送后重新排序)', () => {
+    const store = createAnnotationStore()
+    const first = store.add(draft('s1', '一'))
+    const second = store.add(draft('s1', '二'))
+    store.markSent([first.id, second.id])
+    expect(store.get(first.id)).toMatchObject({ state: 'sent', number: 1 })
+    expect(store.get(second.id)).toMatchObject({ state: 'sent', number: 2 })
+    const nextFirst = store.add(draft('s1', '三'))
+    const nextSecond = store.add(draft('s1', '四'))
+    expect([nextFirst.number, nextSecond.number]).toEqual([1, 2])
+    // 已发送批次的编号不随新批次改变（与消息里的 <annotation id> 对齐）
+    expect(store.get(first.id)?.number).toBe(1)
+    expect(store.get(second.id)?.number).toBe(2)
+  })
+
+  it('quotes created while a batch is in flight stay active and renumber to 1', () => {
+    const store = createAnnotationStore()
+    const first = store.add(draft('s1', '一'))
+    const second = store.add(draft('s1', '二'))
+    const late = store.add(draft('s1', '发送窗口内新增'))
+    expect(late.number).toBe(3)
+    store.markSent([first.id, second.id])
+    expect(store.get(late.id)).toMatchObject({ state: 'active', number: 1 })
+    expect(store.get(first.id)?.number).toBe(1)
+    expect(store.get(second.id)?.number).toBe(2)
+  })
+
+  it('markSent freezes explicitly supplied wire numbers after a mid-flight re-rank', () => {
+    const store = createAnnotationStore()
+    const first = store.add(draft('s1', '一'))
+    const second = store.add(draft('s1', '二'))
+    store.remove(first.id)
+    expect(store.get(second.id)?.number).toBe(1)
+    // 拼块时的 wire 编号是 2：冻结必须沿用它，而不是删除重排后的 1。
+    store.markSent([second.id], new Map([[second.id, 2]]))
+    expect(store.get(second.id)).toMatchObject({ state: 'sent', number: 2 })
+    // 未提供冻结编号时沿用当前编号。
+    const third = store.add(draft('s1', '三'))
+    store.markSent([third.id])
+    expect(store.get(third.id)).toMatchObject({ state: 'sent', number: 1 })
   })
 
   it('counts only active annotations per session (chip count)', () => {
@@ -233,20 +278,49 @@ describe('store 持久化（localStorage 注入替身）', () => {
     expect(storage.map.size).toBe(0)
   })
 
-  it('刷新后水合恢复：编号续接、状态保留', () => {
+  it('deletion persists the re-packed numbers', () => {
+    const storage = fakeStorage()
+    const store = createAnnotationStore(() => 1, storage)
+    store.add(draft('s1', '一'))
+    const second = store.add(draft('s1', '二'))
+    store.add(draft('s1', '三'))
+    store.remove(second.id)
+    const stored = JSON.parse(storage.getItem('dsh-sidenote:annotations:v1:s1')!) as Array<{ number: number }>
+    expect(stored.map(item => item.number)).toEqual([1, 2])
+  })
+
+  it('刷新后水合恢复：sent 编号冻结、active 重排', () => {
     const storage = fakeStorage()
     const first = createAnnotationStore(() => 1, storage)
-    first.add(draft('s1', '甲'))
+    const a = first.add(draft('s1', '甲'))
     const b = first.add(draft('s1', '乙', '注'))
-    first.markSent(first.list('s1').map(a => a.id))
+    first.markSent([a.id])
     const second = createAnnotationStore(() => 2, storage)
     expect(second.list('s1')).toHaveLength(2)
-    expect(second.list('s1').every(a => a.state === 'sent')).toBe(true)
-    // 编号续接（不复用 1/2）
+    expect(second.get(a.id)).toMatchObject({ state: 'sent', number: 1 })
+    // 乙 尚未发送：水合按批内序重排为 1（旧版这里是 2）
+    expect(second.get(b.id)).toMatchObject({ state: 'active', number: 1 })
     const c = second.add(draft('s1', '丙'))
-    expect(c.number).toBe(3)
+    expect(c.number).toBe(2)
     // id 也不与水合的撞车
     expect(c.id).toBeGreaterThan(b.id)
+  })
+
+  it('migrates legacy monotonic numbers: active re-packed, sent kept as stored', () => {
+    const storage = fakeStorage()
+    storage.setItem('dsh-sidenote:annotations:v1:s1', JSON.stringify([
+      { id: 1, number: 2, sessionId: 's1', anchorKey: 'k', text: '旧一', anchorText: '旧一', occurrence: 0, note: '', state: 'sent', createdAt: 1 },
+      { id: 2, number: 5, sessionId: 's1', anchorKey: 'k', text: '旧二', anchorText: '旧二', occurrence: 0, note: '', state: 'sent', createdAt: 2 },
+      { id: 3, number: 7, sessionId: 's1', anchorKey: 'k', text: '待一', anchorText: '待一', occurrence: 0, note: '', state: 'active', createdAt: 3 },
+      { id: 4, number: 8, sessionId: 's1', anchorKey: 'k', text: '待二', anchorText: '待二', occurrence: 0, note: '', state: 'active', createdAt: 4 },
+    ]))
+    const store = createAnnotationStore(() => 1, storage)
+    expect(store.list('s1').map(item => [item.text, item.number, item.state])).toEqual([
+      ['旧一', 2, 'sent'],
+      ['旧二', 5, 'sent'],
+      ['待一', 1, 'active'],
+      ['待二', 2, 'active'],
+    ])
   })
 
   it('畸形持久化数据被容错丢弃', () => {

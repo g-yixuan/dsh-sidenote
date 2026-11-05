@@ -115,6 +115,22 @@ describe('controlled quote admission', () => {
     expect(h.store.get(h.quote.id)?.state).toBe('sent')
   })
 
+  it('freezes the wire number when a delete re-ranks the batch during admission', async () => {
+    const h = harness()
+    const extra = h.store.add({ sessionId: 'child', anchorKey: 'b', text: '第二条引用', anchorText: '第二条引用', occurrence: 0, note: '第二条注解' })
+    const result = h.send()
+    // 发送窗口内删除第一条：store 里第二条按删除重排变成 1，但消息里仍是 id=2。
+    h.store.remove(h.quote.id)
+    expect(h.store.get(extra.id)?.number).toBe(1)
+    await vi.waitFor(() => expect(h.submitted).toHaveBeenCalledOnce())
+    h.session.set({ ...h.session.getSnapshot(), nodes: [...h.session.getSnapshot().nodes, { kind: 'user', seq: 2, content: [{ type: 'text', text: h.sentText() }] }] })
+    expect(await result).toBe(true)
+    expect(h.sentText()).toContain('<annotation id="1">')
+    expect(h.sentText()).toContain('<annotation id="2">')
+    // 冻结编号取消息里的 2，与气泡 chip 的反解析一致。
+    expect(h.store.get(extra.id)).toMatchObject({ state: 'sent', number: 2 })
+  })
+
   it('new or edited quotes and the next body remain active after the old batch is accepted', async () => {
     const h = harness()
     const result = h.send()
