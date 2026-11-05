@@ -321,6 +321,7 @@ for (const surface of ['main', 'side'] as const) {
     for (const [index, wire] of [annotation, reflow + '\n\n引用正文', reflow + '\n\n' + annotation + '\n\nhi'].entries()) {
       if (index === 2) await conversation.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
       await input.fill(wire)
+      await expect(conversation.getByRole('button', { name: /^(Send|Send message|发送|发送消息)$/ })).toBeEnabled()
       await input.press('Enter')
       await expect.poll(() => userMessagesOf(sessionId).some(text => text === wire)).toBe(true)
       const row = conversation.locator('[data-chat-flow-kind="user"]').filter({ has: page.locator('[data-dsh-sidenote-bubble]') }).last()
