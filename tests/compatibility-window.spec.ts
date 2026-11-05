@@ -44,6 +44,22 @@ describe('current and alpha native host windows', () => {
       expect(JSON.parse(resolve(value, ['--candidate', version]).stdout).eligible).toBe(true)
     }
   })
+
+  it('records older channels after rollover and still requires admission for newer series', () => {
+    const registry = {
+      versions: ['0.2.1-rc.5', '0.2.2-alpha.3', '0.2.2-rc.1', '0.2.3-alpha.1'],
+      'dist-tags': { latest: '0.2.1-rc.5', next: '0.2.2-rc.1', alpha: '0.2.2-alpha.3' },
+    }
+    const result = resolve(liveManifest(), [], registry)
+    expect(hosts(result)).toEqual(['0.2.2-rc.1'])
+    const plan = JSON.parse(result.stdout)
+    expect(plan.channels.filter((channel: { eligible: boolean; olderThanMinimum: boolean }) => !channel.eligible && !channel.olderThanMinimum)).toEqual([])
+    registry['dist-tags'].alpha = '0.2.3-alpha.1'
+    const advanced = JSON.parse(resolve(liveManifest(), [], registry).stdout)
+    expect(advanced.channels.filter((channel: { eligible: boolean; olderThanMinimum: boolean }) => !channel.eligible && !channel.olderThanMinimum)).toEqual([
+      { channel: 'alpha', version: '0.2.3-alpha.1', eligible: false, verified: false, olderThanMinimum: false },
+    ])
+  })
   it('bounds required PR checks while retaining the full verified inventory', () => {
     expect(hosts(resolve())).toEqual(['0.2.1-rc.2', '0.2.1-rc.5', '0.2.2-alpha.3'])
     expect(hosts(resolve(manifest(), ['--all']))).toEqual(['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.2-alpha.3'])
@@ -73,8 +89,8 @@ describe('current and alpha native host windows', () => {
     expect(hosts(result)).toEqual(['0.2.1-rc.6', '0.2.1-rc.7', '0.2.2-alpha.3'])
     const plan = JSON.parse(result.stdout)
     expect(plan.unverified).toEqual(['0.2.1-rc.6', '0.2.1-rc.7'])
-    expect(plan.channels).toContainEqual({ channel: 'next', version: '0.2.2-beta.1', eligible: false, verified: false })
-    expect(plan.channels).toContainEqual({ channel: 'alpha', version: '0.2.2-alpha.3', eligible: true, verified: true })
+    expect(plan.channels).toContainEqual({ channel: 'next', version: '0.2.2-beta.1', eligible: false, verified: false, olderThanMinimum: false })
+    expect(plan.channels).toContainEqual({ channel: 'alpha', version: '0.2.2-alpha.3', eligible: true, verified: true, olderThanMinimum: false })
     expect(hosts(resolve(manifest(), ['--all'], registry))).toEqual(registry.versions.slice(1))
   })
 

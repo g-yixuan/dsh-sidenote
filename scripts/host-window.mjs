@@ -47,7 +47,13 @@ if (mode === '--candidate') {
   const latest = series.map(entry => published.findLast(version => semver.coerce(version).version === semver.coerce(entry.minimum).version))
   const channels = ['latest', 'next', 'alpha'].flatMap(channel => {
     const version = registry['dist-tags'][channel]
-    return version ? [{ channel, version, eligible: eligible(version), verified: verified.has(version) }] : []
+    return version ? [{
+      channel,
+      version,
+      eligible: eligible(version),
+      verified: verified.has(version),
+      olderThanMinimum: semver.valid(version) !== null && semver.lt(version, support.minimum),
+    }] : []
   })
   const targets = all ? published : published.filter(version => !verified.has(version) || latest.includes(version) || channels.some(channel => channel.version === version))
   console.log(JSON.stringify({ channels, unverified: published.filter(version => !verified.has(version)), matrix: matrix(targets) }))

@@ -64,7 +64,7 @@ dsh plugin --profile web add --save-exact dsh-sidenote@0.8.2
 
 每个相关 PR 运行 `ci`、当前系列和 alpha 系列各自最低版与最新已验证版的全部 `plugin-mount` 任务，以及固定 `host-compatibility` 汇总。失败、取消或跳过均不放行；required checks 仍为 ci + host-compatibility。窗口滚动不改变检查名，门槛结构变化时同步并回读实际 ruleset。
 
-每日 canary 一次读取 npm 的版本清单和 latest／next／alpha 标签，按相同安装范围筛选候选，去重后对每个尚未记入 `verified` 的已发布版本、每个系列的最新已发布版及窗口内通道目标运行完整 journey。两次探测之间被新标签替代的 RC 和 alpha 也会纳入。每周一及手动启用 host-canary 时，回归窗口内全部已发布版本，包括中间版本。通道指向窗口外系列或 alpha 系列进入 beta／RC 时，保存候选并明确失败提示准入，同时继续验证窗口内宿主；缺少 next 或 alpha 可跳过。
+每日 canary 一次读取 npm 的版本清单和 latest／next／alpha 标签，按相同安装范围筛选候选，去重后对每个尚未记入 `verified` 的已发布版本、每个系列的最新已发布版及窗口内通道目标运行完整 journey。两次探测之间被新标签替代的 RC 和 alpha 也会纳入。每周一及手动启用 host-canary 时，回归窗口内全部已发布版本，包括中间版本。低于当前最低版本的旧通道保留在报告中，按历史兼容表处理。其他窗口外通道或 alpha 系列进入 beta／RC 时，保存候选并明确失败提示准入，同时继续验证窗口内宿主；缺少 next 或 alpha 可跳过。
 
 每组使用官方安装通道、隔离 DSH_HOME、实际组件版本与当前构建摘要。受控模型验证队列、停止、拒绝、恢复及主侧隔离；官方 Flash lane 单独验证外部模型和真实工具执行。报告区分消息接受与模型回答成功。新版本通过完整功能、相关真实模型及可见浏览器验证后，通过 PR 写入 `verified`；canary 不自动写验收记录、不发布插件、不升级用户环境，也不属于每条 PR 的必需门槛。
 
