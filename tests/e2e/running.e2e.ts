@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, userMessageContentsOf, sessionEventsOf, selectModel } from './journey'
+import { dragText, openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, userMessageContentsOf, sessionEventsOf, selectModel } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
 test.afterEach(async ({ page }, info) => {
@@ -15,23 +15,7 @@ test.afterEach(async ({ page }, info) => {
 
 async function addSideQuote(page: Page, note: string): Promise<void> {
   const quote = page.locator('[data-chat-flow-kind="assistant-step"] li').filter({ hasText: 'full history snapshot' }).first()
-  await quote.scrollIntoViewIfNeeded()
-  const points = await quote.evaluate(el => {
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
-    const needle = 'full history snapshot'
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const at = (node.textContent ?? '').indexOf(needle)
-      if (at < 0) continue
-      const range = document.createRange()
-      range.setStart(node, at); range.setEnd(node, at + needle.length)
-      const rect = range.getBoundingClientRect()
-      return { x1: rect.left + 0.1, x2: rect.right - 0.1, y: rect.top + rect.height / 2 }
-    }
-    return null
-  })
-  expect(points).not.toBeNull()
-  await page.mouse.move(points!.x1, points!.y)
-  await page.mouse.down(); await page.mouse.move(points!.x2, points!.y, { steps: 10 }); await page.mouse.up()
+  await dragText(page, quote, 'full history snapshot')
   const overlay = page.locator('[data-dsh-sidenote]')
   await overlay.getByText(/^(Ask in side chat|在侧边聊天中提问)$/).click()
   await overlay.locator('input').fill(note)

@@ -55,8 +55,13 @@ for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}native qu
     await settings.getByRole('button', { name: /^(Close(?: settings)?|关闭(?:设置)?)$/i }).click()
   }
   await setHidden(page, false)
-  const mainId = process.env.DSH_E2E_SEED_SESSION!
-  const main = page.locator(`[data-conversation-session="${mainId}"]`)
+  const seedId = process.env.DSH_E2E_SEED_SESSION!
+  const seedMessages = userMessagesOf(seedId)
+  const seed = page.locator(`[data-conversation-session="${seedId}"]`)
+  await seed.getByRole('button', { name: /^(Branch into a new conversation|在新对话中分支)$/ }).first().click()
+  const main = page.locator('[data-conversation-session]').first()
+  await expect(main).not.toHaveAttribute('data-conversation-session', seedId)
+  const mainId = (await main.getAttribute('data-conversation-session'))!
   const model = real ? process.env.DSH_E2E_ACCOUNT_MODEL! : 'Controlled E2E'
   await selectModel(page, main, model)
   // Keep the quoted source outside the native tail page after a cold restart.
@@ -152,6 +157,7 @@ for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}native qu
   await setHidden(page, false)
   await dragText(page, side.locator('[data-chat-flow-kind="assistant-step"]').last(), real ? answerMarker : 'complete assistant response')
   await expect(toolbar.getByRole('button', { name: quoteAction })).toBeVisible()
+  expect(userMessagesOf(seedId)).toEqual(seedMessages)
   expect(errors).toEqual([])
 })
 
