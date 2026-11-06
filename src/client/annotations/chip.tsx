@@ -21,7 +21,7 @@ function AnnotationDetail({ item, store, pending, onEdit }: { item: Annotation; 
   const cancelled = useRef(false)
   const save = () => { if (!cancelled.current) store.setNote(item.id, note); setEditing(false) }
   return <li className={css.contextItem}>
-    <span className={css.contextNumber}>{item.number}.</span>
+    <span className={css.contextNumber}>{item.localNumber}.</span>
     <div className={css.contextContent}>
       <div className={css.contextLabel}>{t('selectedText')}</div>
       <div className={css.contextText}>{item.text}</div>
@@ -36,7 +36,7 @@ function AnnotationDetail({ item, store, pending, onEdit }: { item: Annotation; 
         if (editing) save()
         else { cancelled.current = false; setNote(item.note); setEditing(true); onEdit() }
       }}>{editing ? <IconCheckOutline16 size={16} /> : <IconEditOutline16 size={16} />}</button>
-      <button type="button" className={css.contextAction} disabled={pending} aria-label={t('removeAria', { n: item.number })} title={t('removeTitle')} onClick={() => { store.remove(item.id) }}><IconTrashOutline16 size={16} /></button>
+      <button type="button" className={css.contextAction} disabled={pending} aria-label={t('removeAria', { n: item.localNumber })} title={t('removeTitle')} onClick={() => { store.remove(item.id) }}><IconTrashOutline16 size={16} /></button>
     </div>
   </li>
 }
