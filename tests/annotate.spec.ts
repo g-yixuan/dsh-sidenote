@@ -3,7 +3,7 @@
  * 协议块 v2 序列化与反解析（发送给模型的数据形态）、截断、选区校验。
  * 全部为 node 环境的纯函数测试（无 jsdom 依赖）。
  */
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { createAnnotationStore } from '../src/client/annotations/model.ts'
 import type { AnnotationDraft } from '../src/client/annotations/model.ts'
 import {
@@ -80,6 +80,9 @@ describe('currentSessionIdOf（0.1.5 current / 0.1.7 DOM 双源）', () => {
 })
 
 describe('annotation store', () => {
+  // 真实 localStorage 环境（--localstorage-file）下隔离各测试；无 localStorage 时是空操作。
+  beforeEach(() => { globalThis.localStorage?.clear() })
+
   it('assigns per-session numbers in creation order, starting at 1', () => {
     const store = createAnnotationStore()
     const a1 = store.add(draft('s1', '甲'))
@@ -87,6 +90,8 @@ describe('annotation store', () => {
     const b1 = store.add(draft('s2', '丙'))
     expect([a1.number, a2.number]).toEqual([1, 2])
     expect(b1.number).toBe(1)
+    // 局部编号同样按创建序从 1 连续
+    expect([a1.localNumber, a2.localNumber]).toEqual([1, 2])
     expect(new Set([a1.id, a2.id, b1.id]).size).toBe(3)
   })
 
@@ -96,10 +101,31 @@ describe('annotation store', () => {
     const second = store.add(draft('s1', '二'))
     store.remove(store.list('s1')[0]!.id)
     expect(store.list('s1').map(a => a.number)).toEqual([2])
-    // 新建继续递增，不复用已删除的编号
+    // 全局编号继续递增，不复用已删除的编号（历史消息引用稳定）
     const third = store.add(draft('s1', '三'))
     expect(third.number).toBe(3)
     expect(second.number).toBe(2)
+    // 局部编号则紧凑重排：剩下的 active 前移，新建接着排
+    expect(store.get(second.id)!.localNumber).toBe(1)
+    expect(store.get(third.id)!.localNumber).toBe(2)
+  })
+
+  it('局部编号每轮从 1 连续，发送时冻结（用户视角不漏号）', () => {
+    const store = createAnnotationStore()
+    const first = store.add(draft('s1', '甲'))
+    const second = store.add(draft('s1', '乙'))
+    store.markSent([first.id, second.id])
+    // 发送后局部号冻结在 1/2，全局号也不动
+    expect([first.localNumber, second.localNumber]).toEqual([1, 2])
+    expect([first.number, second.number]).toEqual([1, 2])
+    // 新一轮：局部从 1 重新开始，全局续接不复用（历史引用稳定）
+    const third = store.add(draft('s1', '丙'))
+    expect(third.localNumber).toBe(1)
+    expect(third.number).toBe(3)
+    // 删除后剩余 active 紧凑重排
+    store.remove(third.id)
+    store.add(draft('s1', '丁'))
+    expect(store.listActive('s1').map(a => a.localNumber)).toEqual([1])
   })
 
   it('counts only active annotations per session (chip count)', () => {

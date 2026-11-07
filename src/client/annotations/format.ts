@@ -32,8 +32,10 @@ import { t } from '../locales.ts'
 export interface QuoteItem {
   readonly text: string
   readonly note: string
-  /** 展示编号（与角标一致），作为 <annotation id> 供模型引用。 */
+  /** 全局编号，作为 <annotation id> 供模型跨消息稳定引用。 */
   readonly number?: number
+  /** 用户侧局部编号（每轮从 1 连续），wire 上以 local 属性带给模型。 */
+  readonly localNumber?: number
 }
 
 /** 协议头（双语）：zh「我批注了以下 2 处内容：」/ en 见 locales。 */
@@ -44,10 +46,12 @@ export function protocolHeader(n: number): string {
 /** One annotation's XML block（无注解时省略 <note>）。 */
 export function formatAnnotationXml(index: number, item: QuoteItem): string {
   const id = item.number ?? index
+  // local 属性仅在确有局部编号时输出（旧调用方/测试数据可以不带）。
+  const localAttr = item.localNumber === undefined ? '' : ` local="${item.localNumber}"`
   const note = item.note.trim()
   return note === ''
-    ? `<annotation id="${id}">\n<quote>${item.text}</quote>\n</annotation>`
-    : `<annotation id="${id}">\n<quote>${item.text}</quote>\n<note>${note}</note>\n</annotation>`
+    ? `<annotation id="${id}"${localAttr}>\n<quote>${item.text}</quote>\n</annotation>`
+    : `<annotation id="${id}"${localAttr}>\n<quote>${item.text}</quote>\n<note>${note}</note>\n</annotation>`
 }
 
 /** 注释协议块 = 头部句 + 每个注释一个 XML 块（行间无空行，与正文空一行）。 */
@@ -82,7 +86,7 @@ export interface ProtocolPrefix {
   readonly reflows: readonly ParsedRefFlow[]
 }
 
-const ANNOTATION_RE = /<annotation id="(\d+)">\s*<quote>([\s\S]*?)<\/quote>\s*(?:<note>([\s\S]*?)<\/note>\s*)?<\/annotation>/y
+const ANNOTATION_RE = /<annotation id="(\d+)"(?: local="(\d+)")?>\s*<quote>([\s\S]*?)<\/quote>\s*(?:<note>([\s\S]*?)<\/note>\s*)?<\/annotation>/y
 const REFLOW_RE = /<reflow\s+source="([^"]*)"(?:\s+reason="([^"]*)")?\s*>([\s\S]*?)<\/reflow>/y
 
 /**
@@ -130,7 +134,8 @@ export function splitProtocolPrefix(text: string): ProtocolPrefix | null {
       ANNOTATION_RE.lastIndex = cursor
       const m = ANNOTATION_RE.exec(text)
       if (m === null) break
-      annotations.push({ id: Number(m[1]), quote: m[2] ?? '', note: (m[3] ?? '').trim() })
+      // m[1]=全局 id，m[2]=可选 local 局部号（旧消息无此属性），m[3]=quote，m[4]=note。
+      annotations.push({ id: Number(m[1]), quote: m[3] ?? '', note: (m[4] ?? '').trim() })
       cursor = skipBlank(text, ANNOTATION_RE.lastIndex)
     }
     if (annotations.length > 0) {
