@@ -30,6 +30,7 @@ import { t } from '../locales.ts'
  */
 
 export interface QuoteItem {
+  readonly sessionId?: string
   readonly text: string
   readonly note: string
   /** 全局编号，作为 <annotation id> 供模型跨消息稳定引用。 */
@@ -48,13 +49,14 @@ export function formatAnnotationXml(index: number, item: QuoteItem): string {
   const id = item.number ?? index
   // local 属性仅在确有局部编号时输出（旧调用方/测试数据可以不带）。
   const localAttr = item.localNumber === undefined ? '' : ` local="${item.localNumber}"`
+  const scopeAttr = item.sessionId === undefined ? '' : ` scope="${encodeURIComponent(item.sessionId)}"`
   const note = item.note.trim()
   return note === ''
-    ? `<annotation id="${id}"${localAttr}>\n<quote>${item.text}</quote>\n</annotation>`
-    : `<annotation id="${id}"${localAttr}>\n<quote>${item.text}</quote>\n<note>${note}</note>\n</annotation>`
+    ? `<annotation id="${id}"${localAttr}${scopeAttr}>\n<quote>${item.text}</quote>\n</annotation>`
+    : `<annotation id="${id}"${localAttr}${scopeAttr}>\n<quote>${item.text}</quote>\n<note>${note}</note>\n</annotation>`
 }
 
-const ANNOTATION_NUMBERING_GUIDANCE = 'Annotation ids stay stable within this conversation. Local numbers apply only to this message. When replying, refer to the quoted words or note to make references clear.'
+const ANNOTATION_NUMBERING_GUIDANCE = 'Annotation ids stay stable within their session scope. Local numbers apply only to this message. Identify annotations by quoted words or notes in replies. Keep ids and scopes internal.'
 
 /** 注释协议块 = 头部句 + 每个注释一个 XML 块（行间无空行，与正文空一行）。 */
 export function buildProtocolBlock(items: readonly QuoteItem[]): string {
@@ -90,7 +92,7 @@ export interface ProtocolPrefix {
   readonly reflows: readonly ParsedRefFlow[]
 }
 
-const ANNOTATION_RE = /<annotation id="(\d+)"(?: local="(\d+)")?>\s*<quote>([\s\S]*?)<\/quote>\s*(?:<note>([\s\S]*?)<\/note>\s*)?<\/annotation>/y
+const ANNOTATION_RE = /<annotation id="(\d+)"(?: local="(\d+)")?(?: scope="[^"]*")?>\s*<quote>([\s\S]*?)<\/quote>\s*(?:<note>([\s\S]*?)<\/note>\s*)?<\/annotation>/y
 const REFLOW_RE = /<reflow\s+source="([^"]*)"(?:\s+reason="([^"]*)")?\s*>([\s\S]*?)<\/reflow>/y
 
 /**

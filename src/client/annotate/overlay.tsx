@@ -12,7 +12,7 @@
  * so the selection survives until the click commits) and failure-safe (an
  * error boundary around the tree; layout math is wrapped in anchor.ts).
  */
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { IconCheckOutline16, IconTrashOutline16 } from '../host/icons.ts'
 import type { Context } from '../host/contracts.ts'
@@ -43,6 +43,18 @@ interface EditorState {
 }
 
 interface Bounds { left: number; top: number; right: number; bottom: number }
+
+/** 两种新建注解入口共用紧凑的多行输入高度。 */
+function useAutoGrowingNote(note: string) {
+  const input = useRef<HTMLTextAreaElement | null>(null)
+  useLayoutEffect(() => {
+    const element = input.current
+    if (!element) return
+    element.style.height = 'auto'
+    element.style.height = `${Math.min(element.scrollHeight, 110)}px`
+  }, [note])
+  return input
+}
 
 /** 「Ask in side chat」的注解收集态：先弹编辑器（与「Add to conversation」一致，
  *  允许空注解），保存后经 bridge 等待真实子会话，创建共享注释对象；正文保持干净。 */
@@ -385,6 +397,7 @@ export function SideChatNoteEditor(props: {
 }): ReactNode {
   useLocaleTick()
   const [note, setNote] = useState('')
+  const noteInputRef = useAutoGrowingNote(note)
   const [failed, setFailed] = useState(false)
   const [pending, setPending] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -443,12 +456,14 @@ export function SideChatNoteEditor(props: {
   const top = popoverTop(props.y, 120, props.bounds)
 
   return (
-    <div ref={rootRef} className={css.editorAsk} style={{ left, top, width }}>
+    <div ref={rootRef} className={css.editorAsk} style={{ left, top, width, maxHeight: (props.bounds?.bottom ?? window.innerHeight) - top - 8, overflowY: 'auto' }}>
       {props.targetTitle !== undefined && props.targetTitle !== '' && (
         <div className={css.editorTarget}>{t('sendToTarget', { title: props.targetTitle })}</div>
       )}
       <div className={css.editorAskRow}>
-        <input
+        <textarea
+          ref={noteInputRef}
+          rows={1}
           className={css.editorInput}
           value={note}
           placeholder={t('sideNotePlaceholder')}
@@ -461,7 +476,7 @@ export function SideChatNoteEditor(props: {
             setFailed(false)
           }}
           onKeyDown={(event) => {
-            if (event.key !== 'Enter') return
+            if (event.key !== 'Enter' || event.shiftKey) return
             // IME 保护：组合中（候选窗未提交）的 Enter 属于输入法，不能算确认。
             if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
             event.preventDefault()
@@ -587,17 +602,7 @@ export function AnnotationEditor(props: {
   const noteRef = useRef(note)
   noteRef.current = note
 
-  // 新建态输入框升级为自适应高度的 textarea：内容超过一行时自动长高
-  //（上限 5 行，再多内部滚动），长注解不再被单行输入框截断展示。
-  const noteInputRef = useRef<HTMLTextAreaElement | null>(null)
-  useEffect(() => {
-    const el = noteInputRef.current
-    if (el === null) return
-    el.style.height = 'auto'
-    const content = el.scrollHeight
-    el.style.height = `${Math.min(content, 110)}px`
-    el.style.overflowY = content > 110 ? 'auto' : 'hidden'
-  }, [note, props.mode])
+  const noteInputRef = useAutoGrowingNote(note)
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -636,7 +641,7 @@ export function AnnotationEditor(props: {
 
   if (props.mode === 'new') {
     return (
-      <div ref={rootRef} className={props.targetTitle === undefined ? css.editorNew : css.editorAsk} style={{ left, top, width }}>
+      <div ref={rootRef} className={props.targetTitle === undefined ? css.editorNew : css.editorAsk} style={{ left, top, width, maxHeight: (props.bounds?.bottom ?? window.innerHeight) - top - 8, overflowY: 'auto' }}>
         {props.targetTitle !== undefined && <div className={css.editorTarget}>{t('sendToTarget', { title: props.targetTitle })}</div>}
         <div className={css.editorAskRow} style={{ flex: 1 }}>
         <textarea
@@ -646,7 +651,6 @@ export function AnnotationEditor(props: {
           placeholder={t('notePlaceholder')}
           rows={1}
           autoFocus
-          style={{ resize: 'none', fontFamily: 'inherit', padding: 0 }}
           onChange={(event) => { setNote(event.target.value) }}
           onKeyDown={(event) => {
             if (event.key !== 'Enter' || event.shiftKey) return

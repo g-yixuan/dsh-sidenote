@@ -97,7 +97,7 @@
   padding: 6px 8px 6px 12px;
   background: var(--dsw-alias-bg-layer-1, #ffffff);
   border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
-  border-radius: 999px;
+  border-radius: 18px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
 }
 
@@ -114,6 +114,12 @@
 }
 
 .editorInput {
+  min-height: 21px;
+  max-height: 110px;
+  padding: 0;
+  resize: none;
+  overflow-y: auto;
+  font-family: inherit;
   flex: auto;
   min-width: 0;
   border: none;
@@ -243,12 +249,11 @@
 
 /* bridge 失败的内联错误（编辑器保持打开，注解不丢）。 */
 .editorError {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 12px;
+  padding: 2px 2px 0;
   color: #e5484d;
   font-size: 12px;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* sent 态角标：灰底只读（resolve 语义——已随消息发出，仅可回看）。 */

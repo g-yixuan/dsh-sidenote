@@ -248,6 +248,22 @@ describe('protocol block v3（XML 形态）', () => {
     expect(splitProtocolPrefix(older)?.annotations).toEqual(parsed.annotations)
   })
 
+
+  it('scopes stable ids to their owning session when a side chat inherits main history', () => {
+    const store = createAnnotationStore(() => 1, null)
+    const main = store.add(draft('parent', '主线引用'))
+    const child = store.add(draft('child', '侧聊引用'))
+    expect(main.number).toBe(child.number)
+    const parentWire = buildProtocolBlock([main])
+    const childWire = buildProtocolBlock([child])
+    expect(parentWire).toContain('id="1" local="1" scope="parent"')
+    expect(childWire).toContain('id="1" local="1" scope="child"')
+    expect(splitProtocolPrefix(childWire)?.annotations).toMatchObject([{ id: 1, localNumber: 1, quote: '侧聊引用' }])
+    const escaped = buildProtocolBlock([{ text: '原文', note: '', number: 2, localNumber: 1, sessionId: 'a"<b' }])
+    expect(escaped).toContain('scope="a%22%3Cb"')
+    expect(splitProtocolPrefix(escaped)?.annotations[0]?.quote).toBe('原文')
+  })
+
   it('protocol header regex matches both locales, rejects lookalikes', () => {
     expect(PROTOCOL_HEADER_RE.test('我批注了以下 2 处内容：')).toBe(true)
     expect(PROTOCOL_HEADER_RE.test('I annotated 1 passage(s) of the conversation above:')).toBe(true)

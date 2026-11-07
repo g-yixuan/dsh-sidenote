@@ -18,9 +18,9 @@ function mount(save: (note: string) => boolean = () => true) {
     root.render(<SideChatNoteEditor x={40} y={40} onSave={handler} onCancel={onCancel} />)
   })
   render()
-  const input = host.querySelector('input')!
+  const input = host.querySelector('textarea')!
   const type = (text: string) => act(() => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, text)
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(input, text)
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
   const outside = () => act(() => { document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
@@ -80,6 +80,17 @@ describe('side-chat note editor', () => {
     v.render(next); v.outside()
     expect(v.onSave).not.toHaveBeenCalled()
     expect(next).toHaveBeenCalledExactlyOnceWith('正确目标')
+    v.unmount()
+  })
+
+
+  it('keeps multi-line notes and lets Shift+Enter insert a newline before saving', () => {
+    const v = mount()
+    v.type('第一行\n第二行')
+    v.key('Enter', { shiftKey: true })
+    expect(v.onSave).not.toHaveBeenCalled()
+    v.key('Enter')
+    expect(v.onSave).toHaveBeenCalledExactlyOnceWith('第一行\n第二行')
     v.unmount()
   })
 
