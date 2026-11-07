@@ -597,7 +597,7 @@ export function AnnotationEditor(props: {
     const content = el.scrollHeight
     el.style.height = `${Math.min(content, 110)}px`
     el.style.overflowY = content > 110 ? 'auto' : 'hidden'
-  })
+  }, [note, props.mode])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {

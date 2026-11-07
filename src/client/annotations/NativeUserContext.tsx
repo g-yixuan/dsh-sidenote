@@ -110,7 +110,7 @@ export function SentContext({ protocol, interactive = true }: { protocol: Protoc
   return <span className={css.sentChips} data-dsh-sidenote-bubble data-sidenote-no-quote>
     {protocol.annotations.length > 0 && <ContextChip label={t('sentChipLabel', { n: protocol.annotations.length })} icon={<IconListPenOutline16 size={12} />} interactive={interactive}>
       <ul className={css.contextList}>{protocol.annotations.map(annotation => <li className={css.contextItem} key={annotation.id}>
-        <span className={css.contextNumber}>{annotation.id}.</span><div className={css.contextContent}>
+        <span className={css.contextNumber}>{annotation.localNumber ?? annotation.id}.</span><div className={css.contextContent}>
           <div className={css.contextLabel}>{t('selectedText')}</div><div className={css.contextText}>{annotation.quote}</div>
           {annotation.note && <><div className={css.contextLabel}>{t('userComment')}</div><div className={css.contextText}>{annotation.note}</div></>}
         </div>

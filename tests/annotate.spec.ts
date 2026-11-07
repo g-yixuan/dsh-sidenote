@@ -128,6 +128,19 @@ describe('annotation store', () => {
     expect(store.listActive('s1').map(a => a.localNumber)).toEqual([1])
   })
 
+
+  it('freezes the submitted local numbers and restarts quotes added during admission', () => {
+    const store = createAnnotationStore(() => 1, null)
+    const first = store.add(draft('s1', '一'))
+    const second = store.add(draft('s1', '二'))
+    const late = store.add(draft('s1', '新增'))
+    store.remove(first.id)
+    expect(store.get(second.id)).toMatchObject({ number: 2, localNumber: 1 })
+    store.markSent([second.id], new Map([[second.id, 2]]))
+    expect(store.get(second.id)).toMatchObject({ state: 'sent', number: 2, localNumber: 2 })
+    expect(store.get(late.id)).toMatchObject({ state: 'active', number: 3, localNumber: 1 })
+  })
+
   it('counts only active annotations per session (chip count)', () => {
     const store = createAnnotationStore()
     store.add(draft('s1', '一'))
@@ -222,6 +235,19 @@ describe('protocol block v3（XML 形态）', () => {
     expect(msg.slice(parsed!.length)).toBe('正文')
   })
 
+
+  it('round-trips the local number and numbering guidance without consuming the body', () => {
+    const wire = buildProtocolBlock([{ text: '第二批原文', note: '说明', number: 8, localNumber: 1 }])
+    expect(wire).toContain('Local numbers apply only to this message.')
+    expect(wire).toContain('<annotation id="8" local="1">')
+    const text = wire + '\n\n当前问题'
+    const parsed = splitProtocolPrefix(text)!
+    expect(parsed.annotations).toEqual([{ id: 8, localNumber: 1, quote: '第二批原文', note: '说明' }])
+    expect(text.slice(parsed.length)).toBe('当前问题')
+    const older = wire.split('\n').filter(line => !line.startsWith('Annotation ids stay')).join('\n')
+    expect(splitProtocolPrefix(older)?.annotations).toEqual(parsed.annotations)
+  })
+
   it('protocol header regex matches both locales, rejects lookalikes', () => {
     expect(PROTOCOL_HEADER_RE.test('我批注了以下 2 处内容：')).toBe(true)
     expect(PROTOCOL_HEADER_RE.test('I annotated 1 passage(s) of the conversation above:')).toBe(true)
@@ -274,6 +300,24 @@ describe('store 持久化（localStorage 注入替身）', () => {
     expect(c.number).toBe(3)
     // id 也不与水合的撞车
     expect(c.id).toBeGreaterThan(b.id)
+  })
+
+  it('migrates legacy monotonic numbers: stable ids kept, active display re-packed', () => {
+    const storage = fakeStorage()
+    storage.setItem('dsh-sidenote:annotations:v1:s1', JSON.stringify([
+      { id: 1, number: 2, sessionId: 's1', anchorKey: 'k', text: '旧一', anchorText: '旧一', occurrence: 0, note: '', state: 'sent', createdAt: 1 },
+      { id: 2, number: 5, sessionId: 's1', anchorKey: 'k', text: '旧二', anchorText: '旧二', occurrence: 0, note: '', state: 'sent', createdAt: 2 },
+      { id: 3, number: 7, sessionId: 's1', anchorKey: 'k', text: '待一', anchorText: '待一', occurrence: 0, note: '', state: 'active', createdAt: 3 },
+      { id: 4, number: 8, sessionId: 's1', anchorKey: 'k', text: '待二', anchorText: '待二', occurrence: 0, note: '', state: 'active', createdAt: 4 },
+    ]))
+    const store = createAnnotationStore(() => 1, storage)
+    expect(store.list('s1').map(item => [item.text, item.number, item.localNumber, item.state])).toEqual([
+      ['旧一', 2, 2, 'sent'],
+      ['旧二', 5, 5, 'sent'],
+      ['待一', 7, 1, 'active'],
+      ['待二', 8, 2, 'active'],
+    ])
+    expect(store.add(draft('s1', '下一条'))).toMatchObject({ number: 9, localNumber: 3 })
   })
 
   it('畸形持久化数据被容错丢弃', () => {

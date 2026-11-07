@@ -84,8 +84,8 @@ test('compatibility report is visible, observes real admission, and exports soft
   await dragText(page, body, 'full history snapshot')
   const overlay = page.locator('[data-dsh-sidenote]')
   await overlay.getByRole('button', { name: /^(Add to conversation|添加到对话)$/ }).click()
-  await expect(overlay.locator('input')).toBeVisible()
-  await overlay.locator('input').press('Enter')
+  await expect(overlay.locator('textarea')).toBeVisible()
+  await overlay.locator('textarea').press('Enter')
   await input.press('Enter')
   await expect.poll(() => userMessagesOf(child).some(text => text.includes('diagnostics ordinary body') && text.includes('<annotation'))).toBe(true)
   await page.getByRole('button', { name: /^(Compatibility diagnostics|兼容诊断)/ }).click()
@@ -112,7 +112,7 @@ if (process.env.DSH_E2E_CAPABILITY_FAULT) test('missing side input is visible, r
   await dragText(page, body, 'full history snapshot')
   const overlay = page.locator('[data-dsh-sidenote]')
   await overlay.getByText(/^(Add to conversation|添加到对话)$/).click()
-  await overlay.locator('input').fill('retained quote note'); await overlay.locator('input').press('Enter')
+  await overlay.locator('textarea').fill('retained quote note'); await overlay.locator('textarea').press('Enter')
   // Change the real facade after the composer has cached it, then send before
   // the debounced status observer can be relied on to re-render React.
   await page.getByRole('button', { name: 'Simulate missing side input', exact: true }).click()
@@ -147,7 +147,7 @@ if (process.env.DSH_E2E_CAPABILITY_FAULT) test('missing main input cannot silent
   await dragText(page, source, 'full history snapshot')
   const overlay = page.locator('[data-dsh-sidenote]')
   await overlay.getByText(/^(Add to conversation|添加到对话)$/).click()
-  await overlay.locator('input').fill('main quote to retain'); await overlay.locator('input').press('Enter')
+  await overlay.locator('textarea').fill('main quote to retain'); await overlay.locator('textarea').press('Enter')
   const input = page.locator('[data-composer-seat] [data-composer-input], [data-composer-seat] textarea').first()
   await input.fill('main body blocked with its quote')
   await page.getByRole('button', { name: 'Simulate missing main input', exact: true }).click()

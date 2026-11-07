@@ -54,10 +54,13 @@ export function formatAnnotationXml(index: number, item: QuoteItem): string {
     : `<annotation id="${id}"${localAttr}>\n<quote>${item.text}</quote>\n<note>${note}</note>\n</annotation>`
 }
 
+const ANNOTATION_NUMBERING_GUIDANCE = 'Annotation ids stay stable within this conversation. Local numbers apply only to this message. When replying, refer to the quoted words or note to make references clear.'
+
 /** 注释协议块 = 头部句 + 每个注释一个 XML 块（行间无空行，与正文空一行）。 */
 export function buildProtocolBlock(items: readonly QuoteItem[]): string {
   return [
     protocolHeader(items.length),
+    ...(items.some(item => item.localNumber !== undefined) ? [ANNOTATION_NUMBERING_GUIDANCE] : []),
     ...items.map((item, i) => formatAnnotationXml(i + 1, item)),
   ].join('\n')
 }
@@ -68,6 +71,7 @@ export function buildProtocolBlock(items: readonly QuoteItem[]): string {
 export const PROTOCOL_HEADER_RE = /^(?:我批注了以下 (\d+) 处内容：|I annotated (\d+) passage\(s\) of the conversation above:)$/
 
 export interface ParsedAnnotation {
+  readonly localNumber?: number
   readonly id: number
   readonly quote: string
   /** '' = 无注解。 */
@@ -130,12 +134,13 @@ export function splitProtocolPrefix(text: string): ProtocolPrefix | null {
   const headerMatch = /^([^\n]*)\n/.exec(rest)
   if (headerMatch !== null && PROTOCOL_HEADER_RE.test(headerMatch[1] ?? '')) {
     let cursor = pos + headerMatch[0].length
+    if (text.startsWith(ANNOTATION_NUMBERING_GUIDANCE + '\n', cursor)) cursor += ANNOTATION_NUMBERING_GUIDANCE.length + 1
     for (;;) {
       ANNOTATION_RE.lastIndex = cursor
       const m = ANNOTATION_RE.exec(text)
       if (m === null) break
       // m[1]=全局 id，m[2]=可选 local 局部号（旧消息无此属性），m[3]=quote，m[4]=note。
-      annotations.push({ id: Number(m[1]), quote: m[3] ?? '', note: (m[4] ?? '').trim() })
+      annotations.push({ id: Number(m[1]), ...(m[2] === undefined ? {} : { localNumber: Number(m[2]) }), quote: m[3] ?? '', note: (m[4] ?? '').trim() })
       cursor = skipBlank(text, ANNOTATION_RE.lastIndex)
     }
     if (annotations.length > 0) {

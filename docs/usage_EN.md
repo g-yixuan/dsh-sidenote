@@ -47,6 +47,8 @@ On DSH 0.2.2, the Sidenote toolbar offers **Quote**, **Add to conversation**, an
 
 Quotes and notes stay complete without being inserted into the body draft. Send a quote on its own, or together with text, images, and `@` references. Repeated selections accumulate annotations; numbered badges at the source help you find each passage. Badge numbers are round-local — the current batch counts 1..k contiguously, deletion compacts the rest, and sent numbers freeze.
 
+Model context keeps a stable reference ID within the conversation and a separate display number for this message. Replies are guided to refer to the quoted words or note for clear cross-turn references. New notes support multiple lines, with `Shift+Enter` for a line break and `Enter` to save.
+
 **Selections in the main conversation** can go to the main conversation or a side chat. Main-to-side handoff waits for the chosen tab's actual child session. Press `Esc` to cancel the wait; a failed handoff keeps the note open for retry.
 
 **Selections in a side chat** go only to that side chat, including selections in its inherited history. Partial text, paragraphs, lists, and code are supported. Streaming replies, cross-message selections, reasoning, and interface controls are excluded.

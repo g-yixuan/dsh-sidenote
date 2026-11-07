@@ -97,6 +97,18 @@ describe.each([true, false])('sent context inside the native user bubble (UserTe
     expect(bubble.contains(host.querySelector('[data-dsh-sidenote-bubble]'))).toBe(true)
   })
 
+
+  it('uses the message-local number in its preview and hides numbering guidance', () => {
+    const wire = buildProtocolBlock([{ text: '第二批引用', note: '说明', number: 8, localNumber: 1 }]) + '\n\n当前问题'
+    const { host } = mount(wire, modern)
+    expect(host.querySelector('[data-native-body]')?.textContent).toBe('当前问题')
+    act(() => { host.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click() })
+    const panel = document.querySelector('[data-sidenote-sent-preview]')!
+    expect(panel.textContent).toContain('1.')
+    expect(panel.textContent).not.toContain('8.')
+    expect(panel.textContent).not.toContain('Annotation ids')
+  })
+
   it('retains a native bubble when annotations are the entire user message', () => {
     const { host } = mount(annotation, modern)
     const bubble = host.querySelector('[data-native-bubble]')!

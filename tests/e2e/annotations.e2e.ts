@@ -49,7 +49,7 @@ async function selectQuote(page: Page): Promise<void> {
 async function addQuote(page: Page): Promise<void> {
   await selectQuote(page)
   await page.locator(OVERLAY).getByText(/^(Add to conversation|添加到对话)$/).click()
-  await expect(page.locator(`${OVERLAY} input`)).toBeVisible()
+  await expect(page.locator(`${OVERLAY} textarea`)).toBeVisible()
 }
 
 test.describe('annotation editor lifecycle', () => {
@@ -60,12 +60,12 @@ test.describe('annotation editor lifecycle', () => {
     const ask = async () => {
       await selectQuote(page)
       await overlay.getByText(/^(Ask in side chat|在侧边聊天中提问)$/).click()
-      await expect(overlay.locator('input')).toBeVisible()
+      await expect(overlay.locator('textarea')).toBeVisible()
     }
     await ask()
-    await overlay.locator('input').fill('侧边外点保存的完整注解')
+    await overlay.locator('textarea').fill('侧边外点保存的完整注解')
     await composerOf(page).click()
-    await expect(overlay.locator('input')).toHaveCount(0)
+    await expect(overlay.locator('textarea')).toHaveCount(0)
     const side = sideChatOf(page)
     await expect(side).toHaveCount(1, { timeout: 30_000 })
     const childId = await side.getAttribute('data-sidenote-chat-session')
@@ -78,15 +78,15 @@ test.describe('annotation editor lifecycle', () => {
 
     await ask()
     await composerOf(page).click()
-    await expect(overlay.locator('input')).toHaveCount(0)
+    await expect(overlay.locator('textarea')).toHaveCount(0)
     await expect.poll(childItems).toHaveLength(2)
     expect((await childItems())[1]).toMatchObject({ text: 'full history snapshot', note: '', state: 'active' })
     await expect(sideInput).toHaveText('')
     const beforeCancel = await childItems()
     await ask()
-    await overlay.locator('input').fill('Escape 要放弃的注解')
+    await overlay.locator('textarea').fill('Escape 要放弃的注解')
     await page.keyboard.press('Escape')
-    await expect(overlay.locator('input')).toHaveCount(0)
+    await expect(overlay.locator('textarea')).toHaveCount(0)
     expect(await childItems()).toEqual(beforeCancel)
     await expect(sideInput).toHaveText('')
 
@@ -107,7 +107,7 @@ test.describe('annotation editor lifecycle', () => {
   test('empty note survives composer click and reload', async ({ page }) => {
     await addQuote(page)
     await composerOf(page).click()
-    await expect(page.locator(`${OVERLAY} input`)).toHaveCount(0)
+    await expect(page.locator(`${OVERLAY} textarea`)).toHaveCount(0)
     await expect(chipOf(page)).toBeVisible()
     expect(await items(page)).toMatchObject([{ note: '', state: 'active' }])
     await page.reload()
@@ -118,10 +118,10 @@ test.describe('annotation editor lifecycle', () => {
 
   test('typed note survives composer click, reload and Enter submission', async ({ page }) => {
     await addQuote(page)
-    await page.locator(`${OVERLAY} input`).fill('刚输入的中文注解')
+    await page.locator(`${OVERLAY} textarea`).fill('刚输入的中文注解')
     const composer = composerOf(page)
     await composer.click()
-    await expect(page.locator(`${OVERLAY} input`)).toHaveCount(0)
+    await expect(page.locator(`${OVERLAY} textarea`)).toHaveCount(0)
     expect(await items(page)).toMatchObject([{ note: '刚输入的中文注解', state: 'active' }])
     await expect(chipOf(page)).toBeVisible()
     await expect(composer).not.toContainText('刚输入的中文注解')
@@ -142,18 +142,18 @@ test.describe('annotation editor lifecycle', () => {
 
   test('Escape explicitly discards a new annotation', async ({ page }) => {
     await addQuote(page)
-    await page.locator(`${OVERLAY} input`).fill('要放弃的注解')
+    await page.locator(`${OVERLAY} textarea`).fill('要放弃的注解')
     await page.keyboard.press('Escape')
-    await expect(page.locator(`${OVERLAY} input`)).toHaveCount(0)
+    await expect(page.locator(`${OVERLAY} textarea`)).toHaveCount(0)
     await expect(chipOf(page)).toHaveCount(0)
     expect(await items(page)).toEqual([])
   })
 
   test('clicking inside keeps editor open; outside edit preserves saved note', async ({ page }) => {
     await addQuote(page)
-    await page.locator(`${OVERLAY} input`).click()
-    await expect(page.locator(`${OVERLAY} input`)).toBeVisible()
-    await page.locator(`${OVERLAY} input`).fill('已保存注解')
+    await page.locator(`${OVERLAY} textarea`).click()
+    await expect(page.locator(`${OVERLAY} textarea`)).toBeVisible()
+    await page.locator(`${OVERLAY} textarea`).fill('已保存注解')
     await page.locator(OVERLAY).getByRole('button', { name: /^(Save note|确认注解)$/ }).click()
     await page.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first().scrollIntoViewIfNeeded()
     await page.locator(OVERLAY).getByRole('button', { name: '1', exact: true }).click()
@@ -167,10 +167,10 @@ test.describe('annotation editor lifecycle', () => {
 
   test('switching from new annotation to an existing badge must not save into the previous annotation', async ({ page }) => {
     await addQuote(page)
-    await page.locator(`${OVERLAY} input`).fill('第一条原始注解')
+    await page.locator(`${OVERLAY} textarea`).fill('第一条原始注解')
     await page.locator(OVERLAY).getByRole('button', { name: /^(Save note|确认注解)$/ }).click()
     await addQuote(page)
-    await page.locator(`${OVERLAY} input`).fill('第二条新建草稿')
+    await page.locator(`${OVERLAY} textarea`).fill('第二条新建草稿')
     await page.locator(OVERLAY).getByRole('button', { name: '1', exact: true }).click()
     const editor = page.locator(`${OVERLAY} textarea`)
     await expect(editor).toHaveValue('第一条原始注解')
@@ -187,7 +187,7 @@ test.describe('annotation editor lifecycle', () => {
   test('main annotation keeps a native side-chat reference through serialization', async ({ page }) => {
     await openSideChat(page)
     await addQuote(page)
-    await page.locator(`${OVERLAY} input`).fill('原生引用应完整保留')
+    await page.locator(`${OVERLAY} textarea`).fill('原生引用应完整保留')
     const composer = composerOf(page)
     await composer.click()
     await composer.pressSequentially('@')
@@ -214,9 +214,9 @@ test.describe('annotation editor lifecycle', () => {
     await input.fill('attachment quote admission')
     await selectQuote(page)
     await page.locator(OVERLAY).getByText(/^(Ask in side chat|在侧边聊天中提问)$/).click()
-    await page.locator(`${OVERLAY} input`).fill('图片与引用一起发送')
-    await page.locator(`${OVERLAY} input`).press('Enter')
-    await expect(page.locator(`${OVERLAY} input`)).toHaveCount(0)
+    await page.locator(`${OVERLAY} textarea`).fill('图片与引用一起发送')
+    await page.locator(`${OVERLAY} textarea`).press('Enter')
+    await expect(page.locator(`${OVERLAY} textarea`)).toHaveCount(0)
     await expect(input).toHaveText('attachment quote admission')
     // Browser File intake → native draft registry → native serializer → host log.
     await side.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
@@ -279,9 +279,9 @@ test('real malformed-image rejection keeps quote and clean body, then retries on
   await selectControlledModel(page)
   await selectQuote(page)
   await page.locator(OVERLAY).getByText(/^(Ask in side chat|在侧边聊天中提问)$/).click()
-  await page.locator(`${OVERLAY} input`).fill('失败后需要保留的注解')
-  await page.locator(`${OVERLAY} input`).press('Enter')
-  await expect(page.locator(`${OVERLAY} input`)).toHaveCount(0)
+  await page.locator(`${OVERLAY} textarea`).fill('失败后需要保留的注解')
+  await page.locator(`${OVERLAY} textarea`).press('Enter')
+  await expect(page.locator(`${OVERLAY} textarea`)).toHaveCount(0)
   const input = side.locator('[data-composer-input]')
   const body = 'retry after actual host rejection'
   await input.fill(body)

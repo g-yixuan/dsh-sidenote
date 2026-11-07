@@ -130,6 +130,19 @@ describe('AnnotationEditor 关闭语义', () => {
     view.unmount()
   })
 
+
+  it('新建态保留多行，Shift+Enter 换行、IME Enter 不保存、Enter 保存', () => {
+    const view = mountEditor('new')
+    const input = view.host.querySelector('textarea')!
+    typeNote(input, '第一行\n第二行')
+    act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true })) })
+    act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true })) })
+    expect(view.onSave).not.toHaveBeenCalled()
+    act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+    expect(view.onSave).toHaveBeenCalledWith('第一行\n第二行')
+    view.unmount()
+  })
+
   it('重开态点外部 = 取消（只关编辑器，已有注解不受影响）', () => {
     const view = mountEditor('edit', '已有注解')
     clickOutside()
