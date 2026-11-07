@@ -11,6 +11,7 @@ import { sweepOrphanedSideChatMeta } from './sidechat/metaStore.ts'
 import { registerSideSessionVisibility } from './sidechat/visibility.tsx'
 import { createSidenotePreferences, type SidenoteConfigForm } from './preferences.ts'
 import { registerSidenoteSettings } from './settings.tsx'
+import { initializeFinalReplies, type ReplyDefaultsForm } from './host/replyDefaults.ts'
 
 export const inject = ['sessions', 'workspaces', 'slots', 'connection', 'locale', 'configForms']
 
@@ -33,10 +34,15 @@ export function apply(ctx: Context): void {
   // （chip + 发送拦截器序列化）。
   const reflow = createReflowStore()
   const annotations = createAnnotationStore()
-  const forms = ctx.get('configForms') as { get(namespace: string): SidenoteConfigForm }
+  const forms = ctx.get('configForms') as {
+    get(namespace: 'side-chat'): SidenoteConfigForm & ReplyDefaultsForm<{ finalRepliesDefaultAttempted?: boolean }>
+    get(namespace: 'ui-chat'): ReplyDefaultsForm<{ foldedReplies: 'all' | 'final' }>
+  }
   // The host configuration namespace is the entry id in cordis.patch.yml.
-  const preferences = createSidenotePreferences(forms.get('side-chat'))
+  const form = forms.get('side-chat')
+  const preferences = createSidenotePreferences(form)
   ctx.effect(() => () => { preferences.dispose() }, 'dsh-sidenote: preferences')
+  ctx.effect(() => initializeFinalReplies(form, forms.get('ui-chat')), 'dsh-sidenote: final replies default')
   registerSidenoteSettings(ctx, preferences)
   registerSideChat(ctx, reflow, annotations)
   registerAnnotations(ctx, reflow, annotations, preferences)
