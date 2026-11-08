@@ -104,6 +104,37 @@ test('side local selection saves outside, reanchors after reload, and sends full
   expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)).toEqual(parentBefore)
 })
 
+test('side native answer badge reanchors after reload when reasoning shares its message key', async ({ page }) => {
+  await prepareSeedPage(page)
+  const child = await openSideChat(page)
+  const side = sideChatOf(page)
+  await selectModel(page, side, 'Controlled E2E')
+  const input = side.locator('[data-composer-input]')
+  await input.fill('Native reply with reasoning [e2e:signed-thinking]')
+  await input.press('Enter')
+  await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
+  const answer = side.locator('[data-sidenote-quote-body]').filter({ hasText: 'Controlled E2E reply.' }).first()
+  await dragText(page, answer, 'complete assistant response')
+  const overlay = page.locator('[data-dsh-sidenote]')
+  await overlay.getByRole('button', { name: /^(Add to conversation|添加到对话)$/ }).click()
+  await overlay.locator('textarea').fill('本侧聊原生回复的注解')
+  await overlay.locator('textarea').press('Enter')
+  await input.fill('Review this annotation')
+  await input.press('Enter')
+  await expect.poll(() => userMessagesOf(child).some(text => text.includes('<note>本侧聊原生回复的注解</note>'))).toBe(true)
+  const records = () => page.evaluate(id => JSON.parse(localStorage.getItem('dsh-sidenote:annotations:v1:' + id) ?? '[]'), child)
+  await expect.poll(records).toMatchObject([{ state: 'sent', sourceSessionId: child, sourceSurface: 'side' }])
+  for (const reload of [false, true]) {
+    if (reload) await restoreSameSide(page, child)
+    await revealForReading(page, answer)
+    const badge = overlay.getByTitle(/^(Sent annotation 1 \(view only\)|已发送的注释 1（只读回看）)$/)
+    await expect(badge).toBeVisible()
+    await badge.click()
+    await expect(overlay).toContainText('本侧聊原生回复的注解')
+    await page.keyboard.press('Escape')
+  }
+})
+
 test('streaming side replies and cross-message selections stay ineligible; a stopped complete reply can be quoted', async ({ page }) => {
   await prepareSeedPage(page)
   const parentBefore = userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)

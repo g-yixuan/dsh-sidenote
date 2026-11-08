@@ -92,6 +92,23 @@ describe('scoped assistant selection', () => {
     expect(store.get(annotation.id)?.state).toBe('active')
   })
 
+  it.each([0, 80])('reanchors a native side answer when its same-key reasoning layer has height %s', height => {
+    const a = side('child', 'a:1', 'same phrase')
+    const reasoning = document.createElement('div')
+    reasoning.dataset.chatFlowKind = 'assistant-step'
+    reasoning.dataset.chatGroupPart = 'reasoning'
+    reasoning.dataset.chatAnchorKey = 'native-reasoning'
+    reasoning.innerHTML = '<div data-sidenote-message-role="assistant" data-sidenote-message-key="a:1"><div data-sidenote-quote-body>reasoning text</div></div>'
+    a.view.prepend(reasoning)
+    const body = reasoning.querySelector<HTMLElement>('[data-sidenote-quote-body]')!
+    body.getClientRects = () => [rect(0, 0, 400, height)] as unknown as DOMRectList
+    const store = createAnnotationStore(() => 1, null)
+    const annotation = store.add({ sessionId: 'child', sourceSurface: 'side', anchorKey: 'a:1', text: 'same phrase', anchorText: 'same phrase', occurrence: 0, note: '' })
+    expect(resolveRange(annotation, new Map(), 'parent')?.startContainer).toBe(a.body.firstChild)
+    select(body.firstChild!)
+    expect(captureSelection('parent')).toBeNull()
+  })
+
   it('ambiguous visible copies after refresh do not choose another pane', () => {
     side('child'); side('child')
     const store = createAnnotationStore(() => 1, null)
