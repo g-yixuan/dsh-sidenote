@@ -15,13 +15,14 @@ export async function planHostValidation({ eventName, event, ref, environment, g
     // A failed or unfinished rerun must not resurrect an older green result.
     const run = runs.find(candidate => candidate.head_sha === sha && candidate.path === '.github/workflows/ci.yml')
     if (!run) return
+    if (run.status === 'completed' && run.conclusion !== 'success') throw new Error('Latest validation failed or was cancelled')
     const age = now - Date.parse(run.updated_at)
     if (run.status !== 'completed' || run.conclusion !== 'success'
       || !Number.isFinite(age) || age < 0 || age > 24 * 60 * 60 * 1000) return
     const { jobs } = await api(`actions/runs/${run.id}/jobs?per_page=100`)
     const ci = jobs.find(job => job.name === 'ci')
     const gate = jobs.find(job => job.name === 'host-compatibility')
-    if (ci?.conclusion !== 'success' || gate?.conclusion !== 'success') return
+    if (ci?.conclusion !== 'success' || gate?.conclusion !== 'success') throw new Error('Required validation gates did not succeed')
     if (gate.steps.some(step => step.conclusion === 'success'
       && ['full', 'smoke'].some(mode => step.name === `Validated ${mode} tree ${expectedTree} environment ${environment}`))) {
       return { run: run.id, commit: sha, tree: expectedTree }

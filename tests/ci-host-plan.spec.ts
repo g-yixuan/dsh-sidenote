@@ -8,7 +8,7 @@ function fixture(options: {
   eventName?: string; ref?: string; files?: string; before?: object; after?: object;
   sourceTree?: string; sourceMode?: string; sourceEnvironment?: string; ci?: string; gate?: string; step?: string;
   conclusion?: string; updated?: string; head?: string; merged?: boolean; apiError?: boolean;
-  baseRun?: boolean;
+  baseRun?: boolean; baseFailed?: boolean;
 } = {}) {
   const eventName = options.eventName ?? 'pull_request'
   const git = vi.fn((...args: string[]) => {
@@ -30,7 +30,7 @@ function fixture(options: {
     if (path.startsWith('actions/workflows/')) {
       const sha = new URLSearchParams(path.split('?')[1]).get('head_sha')
       return { workflow_runs: options.baseRun === false && sha === 'base' ? [] : [{
-        id: 42, head_sha: options.head ?? sha, status: 'completed', conclusion: options.conclusion ?? 'success',
+        id: 42, head_sha: options.head ?? sha, status: 'completed', conclusion: options.baseFailed && sha === 'base' ? 'failure' : options.conclusion ?? 'success',
         path: '.github/workflows/ci.yml', updated_at: options.updated ?? '2026-11-09T00:30:00Z',
       }] }
     }
@@ -114,5 +114,11 @@ describe('host validation plan', () => {
     })
     expect(await planHostValidation(input)).toMatchObject({ mode: 'full' })
     expect(input.api).not.toHaveBeenCalledWith('actions/runs/42/jobs?per_page=100')
+  })
+
+  it('does not bypass a failed main run with a green PR when checking a release base', async () => {
+    const input = fixture({ baseFailed: true })
+    expect(await planHostValidation(input)).toMatchObject({ mode: 'full' })
+    expect(input.api).not.toHaveBeenCalledWith('commits/base/pulls?per_page=100')
   })
 })

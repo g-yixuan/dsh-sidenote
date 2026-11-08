@@ -3,6 +3,7 @@ name: CI
 permissions:
   contents: read
   actions: read
+  pull-requests: read
 
 on:
   push:
