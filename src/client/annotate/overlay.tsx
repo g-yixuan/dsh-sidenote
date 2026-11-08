@@ -22,7 +22,7 @@ import { insertNativeQuote, probeInput, resolveInput } from '../host/input.ts'
 import { sideChatBridge, type SideChatBridge } from '../bridge.ts'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
-import { badgeAnchorOf, gutterAnchorOf, highlightRectsOf, resolveRange, spreadBadgePoint, type CachedRange } from './anchor.ts'
+import { badgeAnchorOf, gutterAnchorOf, highlightRectsOf, resolveRanges, spreadBadgePoint, type CachedRange } from './anchor.ts'
 import { quoteSourceOf, sourceClip, focusSourceComposer } from '../annotations/source.ts'
 import { FirstUseHint } from './hint.tsx'
 import type { Annotation, AnnotationStore } from '../annotations/model.ts'
@@ -165,10 +165,10 @@ function AnnotateOverlayInner({ ctx, store, controller, preferences }: OverlayPr
       text: snapshot.text,
       anchorText: snapshot.anchorText,
       occurrence: snapshot.occurrence,
+      anchors: snapshot.anchors,
       note: '',
     })
-    const cached = snapshot.range.cloneRange()
-    rangeCache.current.set(annotation.id, { range: cached, view: snapshot.source.view })
+    rangeCache.current.set(annotation.id, { ranges: snapshot.ranges.map(range => range.cloneRange()), view: snapshot.source.view })
     setEditor({ annotationId: annotation.id, mode: 'new', x: anchor.x, y: anchor.y, bounds: sourceClip(snapshot.source),
       ...(snapshot.source.surface === 'side' ? { targetTitle: snapshot.source.view.dataset.sidenoteViewTitle } : {}) })
     controller.clear()
@@ -195,9 +195,9 @@ function AnnotateOverlayInner({ ctx, store, controller, preferences }: OverlayPr
       const annotation = store.add({
         sessionId: target.childId, sourceSessionId: snapshot.sessionId, sourceSurface: 'main',
         anchorKey: snapshot.anchorKey, text: snapshot.text, anchorText: snapshot.anchorText,
-        occurrence: snapshot.occurrence, note,
+        occurrence: snapshot.occurrence, anchors: snapshot.anchors, note,
       })
-      rangeCache.current.set(annotation.id, { range: snapshot.range.cloneRange(), view: snapshot.source.view })
+      rangeCache.current.set(annotation.id, { ranges: snapshot.ranges.map(range => range.cloneRange()), view: snapshot.source.view })
       setSideDraft(current => current === sideDraft ? null : current)
       return true
     } catch { return false }
@@ -258,7 +258,7 @@ function AnnotateOverlayInner({ ctx, store, controller, preferences }: OverlayPr
           onSave={(note) => {
             store.setNote(editingAnnotation.id, note)
             closeEditor()
-            const range = rangeCache.current.get(editingAnnotation.id)?.range
+            const range = rangeCache.current.get(editingAnnotation.id)?.ranges[0]
             const source = range === undefined ? null : quoteSourceOf(range.startContainer, currentSessionId)
             if (source !== null) requestAnimationFrame(() => {
               // Enter leaves focus on body after unmount. An outside click may
@@ -504,13 +504,14 @@ function BadgeLayer(props: {
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const highlightId = props.editingId ?? hoveredId
   for (const annotation of annotations) {
-    const range = resolveRange(annotation, props.cache, props.sessionId)
-    if (range === null) continue
+    const ranges = resolveRanges(annotation, props.cache, props.sessionId)
+    if (ranges === null) continue
+    const range = ranges[0]!
     const source = quoteSourceOf(range.startContainer, props.sessionId)
     if (source === null) continue
     const clip = sourceClip(source)
     if (annotation.id === highlightId) {
-      const rects = highlightRectsOf(range).map(rect => {
+      const rects = ranges.flatMap(highlightRectsOf).map(rect => {
         const left = Math.max(rect.left, clip.left), top = Math.max(rect.top, clip.top)
         return { left, top, width: Math.min(rect.left + rect.width, clip.right) - left, height: Math.min(rect.top + rect.height, clip.bottom) - top }
       }).filter(rect => rect.width > 0 && rect.height > 0)

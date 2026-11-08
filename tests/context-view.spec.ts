@@ -6,13 +6,13 @@ it('keeps rich history identities and image-only requests independent of native 
   const image = { id: 'image-1' }
   const history = contextEntriesOf([
     { kind: 'user', seq: 1, content: [{ type: 'image', attachment: image }] },
-    { kind: 'assistant', seq: 2, blocks: [{ kind: 'reasoning', text: 'inspect' }, { kind: 'text', text: '**answer**' }] },
+    { kind: 'assistant', seq: 2, turn: 3, blocks: [{ kind: 'reasoning', text: 'inspect' }, { kind: 'text', text: '**answer**' }] },
     { kind: 'tool-result', seq: 3, call: { name: 'read', argsRaw: '{"path":"a"}' }, content: [{ type: 'text', text: 'result' }] },
   ])
   expect(history).toEqual([
     { key: '1:request', kind: 'request', text: '', images: [image] },
     { key: '2:thinking', kind: 'thinking', text: 'inspect' },
-    { key: '2:reply', messageKey: 'a:2', kind: 'reply', text: '**answer**' },
+    { key: '2:reply', messageKey: 'a:2', turn: 3, kind: 'reply', text: '**answer**' },
     { key: '3:tool', kind: 'tool', toolName: 'read', text: '调用：{"path":"a"}\nresult' },
   ])
 })

@@ -1,4 +1,4 @@
-import { elementOf, mainMessageOf, mainAnchorBodies, nativeAssistantBodies, NON_QUOTE, quoteClipOf, focusMainComposer, focusSideComposer } from '../host/dom.ts'
+import { elementOf, mainMessageOf, mainAnchorBodies, nativeAssistantBodies, MAIN_ASSISTANT, NON_QUOTE, PROCESS_UI, quoteNodeVisible, quoteClipOf, focusMainComposer, focusSideComposer } from '../host/dom.ts'
 
 export interface QuoteSource {
   body: HTMLElement
@@ -8,19 +8,22 @@ export interface QuoteSource {
   surface: 'main' | 'side'
   streaming: boolean
   key?: string
+  turn?: string
 }
 
 /** Explicit side bodies are the sole exception to the legacy sidebar exclusion. */
 export function quoteSourceOf(node: Node, currentSessionId: string): QuoteSource | null {
   const element = elementOf(node)
-  if (element?.closest(NON_QUOTE) !== null) return null
+  if (!element || element.closest(`${NON_QUOTE}, ${PROCESS_UI}`) !== null) return null
   const body = element?.closest<HTMLElement>('[data-sidenote-quote-body]')
   if (body !== undefined && body !== null) {
     const anchor = body.closest<HTMLElement>('[data-sidenote-message-key][data-sidenote-message-role="assistant"]')
     const view = body.closest<HTMLElement>('[data-sidenote-chat-session]')
     const sessionId = view?.dataset.sidenoteChatSession
     if (!sessionId || anchor === null || view === null) return null
-    return { body, anchor, view, sessionId, surface: 'side', key: anchor.dataset.sidenoteMessageKey, streaming: body.dataset.sidenoteStreaming === 'true' }
+    return { body, anchor, view, sessionId, surface: 'side', key: anchor.dataset.sidenoteMessageKey,
+      turn: body.dataset.sidenoteTurn ?? body.closest<HTMLElement>('[data-chat-turn]')?.dataset.chatTurn,
+      streaming: body.dataset.sidenoteStreaming === 'true' }
   }
   const native = mainMessageOf(node, currentSessionId)
   const side = element?.closest<HTMLElement>('[data-sidenote-chat-session]')
@@ -34,11 +37,56 @@ export function sourceKey(source: QuoteSource): string | undefined {
 }
 
 export function sourceBodies(sessionId: string, surface: 'main' | 'side', anchorKey: string, currentSessionId: string): HTMLElement[] {
-  if (surface === 'main') return mainAnchorBodies(sessionId, anchorKey, currentSessionId)
-  return [...document.querySelectorAll<HTMLElement>('[data-sidenote-quote-body]'), ...nativeAssistantBodies()].filter(body => {
+  const bodies = surface === 'main' ? mainAnchorBodies(sessionId, anchorKey, currentSessionId)
+    : [...document.querySelectorAll<HTMLElement>('[data-sidenote-quote-body]'), ...nativeAssistantBodies().filter(body => !body.querySelector('[data-sidenote-quote-body]'))]
+  return bodies.filter(body => {
     const source = quoteSourceOf(body, currentSessionId)
-    return source?.surface === 'side' && source.sessionId === sessionId && sourceKey(source) === anchorKey
+    return source?.surface === surface && source.sessionId === sessionId && sourceKey(source) === anchorKey
   })
+}
+
+/** Admit the complete visible selection, never silently drop process content. */
+export function quoteSourcesOfRange(range: Range, currentSessionId: string): QuoteSource[] | null {
+  const root = range.commonAncestorContainer
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  const sources: QuoteSource[] = []
+  const seen = new Set<HTMLElement>()
+  for (let node = root.nodeType === Node.TEXT_NODE ? root : walker.nextNode(); node; node = walker.nextNode()) {
+    if (!range.intersectsNode(node) || !quoteNodeVisible(node)) continue
+    const start = node === range.startContainer ? range.startOffset : 0
+    const end = node === range.endContainer ? range.endOffset : node.textContent!.length
+    if (node.textContent!.slice(start, end).trim() === '') continue
+    const element = elementOf(node)!
+    if (element.closest(PROCESS_UI)) return null
+    if (element.closest(NON_QUOTE)) {
+      // Code copy/language controls inside a reply keep their existing exclusion.
+      const body = element.closest(`[data-sidenote-quote-body], ${MAIN_ASSISTANT}`)
+      if (body && quoteSourceOf(body, currentSessionId)) continue
+      return null
+    }
+    const source = quoteSourceOf(node, currentSessionId)
+    if (!source || source.streaming) return null
+    const first = sources[0]
+    if (first && (source.view !== first.view || source.sessionId !== first.sessionId || source.surface !== first.surface)) return null
+    if (seen.has(source.body)) continue
+    if (first && (!first.turn || source.turn !== first.turn || !first.key || !source.key)) return null
+    sources.push(source)
+    seen.add(source.body)
+  }
+  return sources.length ? sources : null
+}
+
+/** Trim each stored fragment to the actual selected text, excluding surrounding UI. */
+export function quoteRangeOf(body: HTMLElement, selection: Range): Range | null {
+  const nodes = quoteTextNodes(body).filter(node => selection.intersectsNode(node)
+    && (node !== selection.startContainer || selection.startOffset < node.length)
+    && (node !== selection.endContainer || selection.endOffset > 0))
+  const first = nodes[0], last = nodes.at(-1)
+  if (!first || !last) return null
+  const range = document.createRange()
+  range.setStart(first, first === selection.startContainer ? selection.startOffset : 0)
+  range.setEnd(last, last === selection.endContainer ? selection.endOffset : last.length)
+  return range
 }
 
 /** The same text-node projection is used at capture and when rebuilding anchors.
@@ -47,7 +95,7 @@ export function quoteTextNodes(body: HTMLElement): Text[] {
   const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT)
   const nodes: Text[] = []
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    if (node.parentElement?.closest(NON_QUOTE) !== null) continue
+    if (node.parentElement?.closest(`${NON_QUOTE}, ${PROCESS_UI}`) !== null || !quoteNodeVisible(node)) continue
     if (node.parentElement !== null && getComputedStyle(node.parentElement).userSelect === 'none') continue
     nodes.push(node as Text)
   }
@@ -66,7 +114,7 @@ export function projectedRangeText(body: HTMLElement, range: Range): string {
 export function selectedQuoteText(range: Range, browserText: string, anchorText: string): string {
   if (browserText.replace(/\s/g, '') === anchorText.replace(/\s/g, '')) return browserText
   const fragment = range.cloneContents()
-  for (const element of fragment.querySelectorAll(NON_QUOTE)) element.remove()
+  for (const element of fragment.querySelectorAll(`${NON_QUOTE}, ${PROCESS_UI}, [hidden], [data-turn-process-hidden], [data-turn-process-inline]`)) element.remove()
   const textOf = (node: Node): string => {
     if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
     if (node instanceof Element && node.tagName === 'BR') return '\n'

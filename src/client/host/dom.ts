@@ -2,6 +2,18 @@
  * Main message markers and composer seats have no public replacement API. */
 export const MAIN_ASSISTANT = '[data-chat-flow-kind="assistant-step"]'
 export const NON_QUOTE = 'button, [role="button"], input, textarea, select, [contenteditable="true"], [data-code-block-banner], [data-variant="think"], [data-sidenote-no-quote]'
+export const PROCESS_UI = '[data-variant="think"], [data-chat-group-part="reasoning"], [data-chat-flow-kind="tool-call"], [data-chat-flow-kind="tool-result"], [data-chat-flow-kind="turn-process"], [data-context-kind="thinking"], [data-context-kind="tool"]'
+
+/** Collapsed process rows can remain mounted, including during their animation. */
+export function quoteNodeVisible(node: Node): boolean {
+  for (let element = elementOf(node); element !== null; element = element.parentElement) {
+    if (element.matches('[hidden], [data-turn-process-hidden], [data-turn-process-inline]')) return false
+    if (element instanceof HTMLDetailsElement && !element.open && !element.querySelector(':scope > summary')?.contains(node)) return false
+    const style = getComputedStyle(element)
+    if (style.display === 'none' || style.visibility === 'hidden') return false
+  }
+  return true
+}
 
 export function nativeAssistantBodies(root: ParentNode = document): HTMLElement[] {
   return [...root.querySelectorAll<HTMLElement>(MAIN_ASSISTANT)]
@@ -21,6 +33,7 @@ export function mainMessageOf(node: Node, currentSessionId: string) {
   return {
     body, view: conversation ?? document.body,
     anchor, key: anchor.dataset.chatAnchorKey,
+    turn: body.closest<HTMLElement>('[data-chat-turn]')?.dataset.chatTurn,
     sessionId, surface: 'main' as const,
     streaming: body.hasAttribute('data-streaming') || body.querySelector('[data-streaming]') !== null,
   }

@@ -5,13 +5,14 @@ import { inheritedBoundaryOf } from '../host/chat.ts'
 export interface ContextEntry extends SnapshotEntry {
   key: string
   messageKey?: string
+  turn?: number
   images?: readonly unknown[]
 }
 
 export function contextEntriesOf(nodes: readonly unknown[]): ContextEntry[] {
   const committedSeq = Math.max(-1, ...nodes.filter(value => (value as { kind: string }).kind === 'checkpoint').map(value => (value as { seq: number }).seq))
   const result = nodes.flatMap(value => {
-    const node = value as { seq: number; kind: string; content?: readonly { type?: string; attachment?: unknown }[]; blocks?: readonly { kind?: string; attachment?: unknown }[] }
+    const node = value as { seq: number; kind: string; turn?: number; content?: readonly { type?: string; attachment?: unknown }[]; blocks?: readonly { kind?: string; attachment?: unknown }[] }
     const entries = snapshotEntriesOf([node], undefined, -1, [], committedSeq)
     // Native assistant/tool images are not part of text-only progress blocks.
     const images = [...(node.content ?? []), ...(node.blocks ?? [])]
@@ -23,7 +24,7 @@ export function contextEntriesOf(nodes: readonly unknown[]): ContextEntry[] {
       const key = usedKeys.has(baseKey) ? `${baseKey}:${index}` : baseKey
       usedKeys.add(baseKey)
       return { ...entry, key,
-        ...(node.kind === 'assistant' && entry.kind === 'reply' ? { messageKey: `a:${node.seq}` } : {}),
+        ...(node.kind === 'assistant' && entry.kind === 'reply' ? { messageKey: `a:${node.seq}`, turn: node.turn } : {}),
         ...(node.kind !== 'user' && node.kind !== 'steering' && images.length && index === entries.length - 1 ? { images } : {}),
       }
     })

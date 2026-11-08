@@ -9,7 +9,7 @@
  * render; nothing here may throw into the page.
  */
 import type { Annotation } from '../annotations/model.ts'
-import { quoteSourceOf, quoteTextNodes, projectedRangeText, sourceBodies, sourceKey, sourceClip } from '../annotations/source.ts'
+import { quoteSourceOf, quoteSourcesOfRange, quoteTextNodes, projectedRangeText, sourceBodies, sourceKey, sourceClip } from '../annotations/source.ts'
 
 /** The badge anchor point: right edge of the selection rects, first-line height. */
 export interface BadgeAnchor {
@@ -68,35 +68,45 @@ function rangeOfOccurrence(root: HTMLElement, text: string, occurrence: number):
  * are still connected, otherwise a re-anchored one (cached on success).
  * Returns null when the anchor is gone — callers skip rendering, never throw.
  */
-export interface CachedRange { range: Range; view: HTMLElement }
+export interface CachedRange { ranges: readonly Range[]; view: HTMLElement }
 
-export function resolveRange(annotation: Annotation, cache: Map<number, CachedRange>, currentSessionId = ''): Range | null {
+export function resolveRanges(annotation: Annotation, cache: Map<number, CachedRange>, currentSessionId = ''): readonly Range[] | null {
   try {
     const sessionId = annotation.sourceSessionId ?? annotation.sessionId
     const surface = annotation.sourceSurface ?? 'main'
-    const valid = (range: Range, view: HTMLElement): boolean => {
+    const anchors = annotation.anchors ?? [annotation]
+    const valid = (ranges: readonly Range[], view: HTMLElement): boolean => ranges.length === anchors.length && ranges.every((range, index) => {
       if (!range.startContainer.isConnected || !range.endContainer.isConnected) return false
-      const source = quoteSourceOf(range.startContainer, currentSessionId)
-      const end = quoteSourceOf(range.endContainer, currentSessionId)
-      return source !== null && end?.body === source.body && source.view === view
+      const sources = quoteSourcesOfRange(range, currentSessionId)
+      const source = sources?.[0]
+      const anchor = anchors[index]!
+      return sources?.length === 1 && source !== undefined && source.view === view
         && source.sessionId === sessionId && source.surface === surface
-        && sourceKey(source) === annotation.anchorKey && !source.streaming
-        && projectedRangeText(source.body, range) === annotation.anchorText
-    }
+        && sourceKey(source) === anchor.anchorKey
+        && projectedRangeText(source.body, range) === anchor.anchorText
+    })
     const cached = cache.get(annotation.id)
-    if (cached !== undefined && valid(cached.range, cached.view)) return cached.range
+    if (cached !== undefined && valid(cached.ranges, cached.view)) return cached.ranges
     cache.delete(annotation.id)
-    if (annotation.anchorKey === undefined || annotation.anchorText === '') return null
-    const bodies = sourceBodies(sessionId, surface, annotation.anchorKey, currentSessionId)
-      .filter(body => body.getClientRects().length > 0)
-    // Multiple visible copies without the original view are ambiguous.
-    if (bodies.length !== 1) return null
-    const body = bodies[0]!
-    const source = quoteSourceOf(body, currentSessionId)
-    if (source === null || source.streaming) return null
-    const range = rangeOfOccurrence(body, annotation.anchorText, annotation.occurrence)
-    if (range !== null) cache.set(annotation.id, { range, view: source.view })
-    return range
+    const ranges: Range[] = []
+    let view: HTMLElement | undefined
+    for (const anchor of anchors) {
+      if (!anchor.anchorKey || !anchor.anchorText) return null
+      const bodies = sourceBodies(sessionId, surface, anchor.anchorKey, currentSessionId)
+        .filter(body => body.getClientRects().length > 0)
+      // Multiple visible copies without the original view are ambiguous.
+      if (bodies.length !== 1) return null
+      const body = bodies[0]!
+      const source = quoteSourceOf(body, currentSessionId)
+      if (!source || (view && source.view !== view)) return null
+      view = source.view
+      const range = rangeOfOccurrence(body, anchor.anchorText, anchor.occurrence)
+      if (!range) return null
+      ranges.push(range)
+    }
+    if (!view || !valid(ranges, view)) return null
+    cache.set(annotation.id, { ranges, view })
+    return ranges
   } catch { return null }
 }
 

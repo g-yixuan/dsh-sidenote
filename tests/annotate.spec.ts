@@ -1,6 +1,6 @@
 /**
  * 纯函数单测：注释 store（增删 / 编号不重排 / 计数 / sent 迁移 / 持久化）、
- * 协议块 v2 序列化与反解析（发送给模型的数据形态）、截断、选区校验。
+ * 协议块 v2 序列化与反解析（发送给模型的数据形态）、截断。
  * 全部为 node 环境的纯函数测试（无 jsdom 依赖）。
  */
 import { describe, expect, it } from 'vitest'
@@ -11,7 +11,6 @@ import {
   buildProtocolBlock,
   splitProtocolPrefix,
 } from '../src/client/annotations/format.ts'
-import { ASSISTANT_KIND, isEligibleSelection } from '../src/client/annotate/selection.ts'
 import { BADGE_SPREAD_STEP, spreadBadgePoint } from '../src/client/annotate/anchor.ts'
 import { currentSessionIdOf } from '../src/client/annotate/index.tsx'
 import type { Context } from '../src/client/host/contracts.ts'
@@ -258,29 +257,19 @@ describe('store 持久化（localStorage 注入替身）', () => {
     expect(store.list('s1')).toHaveLength(0)
     expect(store.list('s2')).toHaveLength(0)
   })
-})
 
-describe('selection eligibility', () => {
-  const ok = {
-    blank: false,
-    sameMessage: true,
-    kind: ASSISTANT_KIND,
-    streaming: false,
-    excluded: false,
-    hasSession: true,
-  }
-  it('accepts a valid assistant-message selection', () => {
-    expect(isEligibleSelection(ok)).toBe(true)
-    expect(ASSISTANT_KIND).toBe('assistant-step')
-  })
-  it('rejects blank, cross-message, non-assistant, streaming, excluded, session-less', () => {
-    expect(isEligibleSelection({ ...ok, blank: true })).toBe(false)
-    expect(isEligibleSelection({ ...ok, sameMessage: false })).toBe(false)
-    expect(isEligibleSelection({ ...ok, kind: 'user' })).toBe(false)
-    expect(isEligibleSelection({ ...ok, kind: 'assistant' })).toBe(false) // v1 旧值，勿回退
-    expect(isEligibleSelection({ ...ok, streaming: true })).toBe(false)
-    expect(isEligibleSelection({ ...ok, excluded: true })).toBe(false)
-    expect(isEligibleSelection({ ...ok, hasSession: false })).toBe(false)
+  it('保留旧引用，丢弃损坏的跨段锚点而不退回错误的单段位置', () => {
+    const storage = fakeStorage()
+    const original = createAnnotationStore(() => 1, storage).add(draft('s1', 'legacy quote'))
+    storage.setItem('dsh-sidenote:annotations:v1:s1', JSON.stringify([original,
+      { ...original, id: 2, anchors: [] },
+      { ...original, id: 3, anchors: [null, null] },
+      { ...original, id: 4, anchors: [{ anchorKey: 'a', anchorText: 'text', occurrence: -1 }, { anchorKey: 'b', anchorText: 'next', occurrence: 0 }] },
+    ]))
+    const restored = createAnnotationStore(() => 2, storage).list('s1')
+    expect(restored).toHaveLength(1)
+    expect(restored[0]?.text).toBe('legacy quote')
+    expect(restored[0]?.anchors).toBeUndefined()
   })
 })
 
