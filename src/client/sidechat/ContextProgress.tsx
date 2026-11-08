@@ -35,7 +35,7 @@ const ProgressEntry = memo(function ProgressEntry({ entry, live, loadImage }: { 
   </div>
   if (!process) return <div className={css.progressEntry} data-context-kind={entry.kind} data-context-key={entry.key}>
     {entry.kind === 'checkpoint' && <span className={css.contextHint}>{t('contextcheckpoint')}</span>}
-    <div data-sidenote-quote-body={entry.messageKey ? '' : undefined} data-sidenote-message-role={entry.messageKey ? 'assistant' : undefined} data-sidenote-message-key={entry.messageKey} data-sidenote-streaming={live && unfinished ? 'true' : 'false'}>
+    <div data-sidenote-quote-body={entry.messageKey ? '' : undefined} data-sidenote-message-role={entry.messageKey ? 'assistant' : undefined} data-sidenote-message-key={entry.messageKey} data-sidenote-turn={entry.turn === undefined ? undefined : `history:${entry.turn}`} data-sidenote-streaming={live && unfinished ? 'true' : 'false'}>
       <MarkdownText text={entry.text} streaming={live && unfinished} labels={labels} />
     </div>
     {status}

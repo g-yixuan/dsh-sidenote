@@ -46,11 +46,19 @@ export function apply(ctx) {
       if (!hasToolResult && text.includes('[e2e:question]')) call = { name: 'ask_user_question', arguments: { questions: [{ id: 'layout', question: 'Which native layout should we use?', options: [{ label: 'Compact', description: 'Keep the narrow sidebar' }, { label: 'Spacious', description: 'Use more space' }] }] } }
       if (!hasToolResult && text.includes('[e2e:approval]')) call = { name: 'bash', arguments: { description: 'Write isolated E2E marker', command: "printf 'approved native side tool\\n' > ../approval-target.txt", sandbox_permissions: 'danger-full-access', justification: 'Create only the isolated E2E marker after explicit approval.' } }
       if (!hasToolResult && text.includes('[e2e:long-tool]')) call = { name: 'read', arguments: { file_path: 'long-tool.txt' } }
+      if (!hasToolResult && text.includes('[e2e:body-selection]')) call = { name: 'read', arguments: { file_path: 'body-selection.txt' } }
       if (call) {
+        const index = text.includes('[e2e:body-selection]') ? 1 : 0
+        if (index) {
+          const progress = 'PRE-CONTROLLED'
+          yield { type: 'block-start', index: 0, blockType: 'text' }
+          yield { type: 'text-delta', index: 0, text: progress }
+          yield { type: 'block-end', index: 0, block: { type: 'text', text: progress } }
+        }
         const block = { type: 'tool-call', id: 'sidenote-e2e-' + lastHuman, name: call.name, arguments: JSON.stringify(call.arguments) }
-        yield { type: 'block-start', index: 0, blockType: 'tool-call' }
-        yield { type: 'tool-call-delta', index: 0, id: block.id, name: block.name, argumentsDelta: block.arguments }
-        yield { type: 'block-end', index: 0, block }
+        yield { type: 'block-start', index, blockType: 'tool-call' }
+        yield { type: 'tool-call-delta', index, id: block.id, name: block.name, argumentsDelta: block.arguments }
+        yield { type: 'block-end', index, block }
         yield { type: 'finish', reason: { kind: 'tool-calls' } }
         return
       }
@@ -62,7 +70,9 @@ export function apply(ctx) {
         yield { type: 'block-end', index: 0, block: { type: 'reasoning', text: thinking } }
       }
       let reply = 'Controlled E2E reply. This complete assistant response supports quote selection.\n\nSecond paragraph preserves the full selected text.'
-      if (text === '[e2e:reflow] Remember the conclusion code SIDENOTE_SIDE_BLUE.') {
+      if (text.includes('[e2e:body-selection]')) {
+        reply = 'POST-CONTROLLED'
+      } else if (text === '[e2e:reflow] Remember the conclusion code SIDENOTE_SIDE_BLUE.') {
         reply = 'Remembered SIDENOTE_SIDE_BLUE in this side conversation.'
       } else if (text === '[e2e:reflow] Return the remembered code as the final conclusion.') {
         const remembered = users.some(message => message.content.some(block => block.type === 'text' && questionBody(block.text) === '[e2e:reflow] Remember the conclusion code SIDENOTE_SIDE_BLUE.'))

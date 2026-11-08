@@ -4,18 +4,19 @@
  * toolbar through a small external-store controller. Mirrors the
  * production-proven dsh-sidebar-qa contract, narrowed to assistant messages:
  *
- * - both selection endpoints must sit in the SAME `[data-chat-flow-kind=
- *   "assistant-step"]` message node (跨消息划选不弹);
+ * - completed reply bodies in one view and Turn may be selected together;
+ * - selected visible process/tool UI invalidates the whole selection;
  * - `[data-streaming]` messages (still streaming) are excluded;
  * - explicit side assistant bodies are admitted; other sidebar/plugin UI is
- *   excluded; both endpoints belong to the same message and source view;
+ *   excluded; every selected reply belongs to the same source view;
  * - quote text is kept complete, while anchor offsets use one DOM projection.
  *
  * These are DSH-internal DOM attributes rather than a public contract — an
  * upstream redesign silently degrades the feature (no popup), never crashes.
  */
 
-import { quoteSourceOf, projectedRangeText, selectedQuoteText, sourceKey, type QuoteSource } from '../annotations/source.ts'
+import { quoteSourcesOfRange, quoteRangeOf, projectedRangeText, selectedQuoteText, sourceKey, type QuoteSource } from '../annotations/source.ts'
+import type { AnnotationAnchor } from '../annotations/model.ts'
 
 /** One validated selection, ready for the toolbar. */
 export interface SelectionSnapshot {
@@ -27,36 +28,18 @@ export interface SelectionSnapshot {
   readonly anchorKey: string | undefined
   /** 0-based ordinal of this selection among identical texts in the anchor. */
   readonly occurrence: number
+  readonly anchors?: readonly AnnotationAnchor[]
   /** Bounding box for toolbar placement. */
   readonly rect: { readonly left: number; readonly top: number; readonly width: number }
   /** A live clone of the selection range (badge anchor until re-render). */
   readonly range: Range
+  readonly ranges: readonly Range[]
   readonly sessionId: string
   readonly source: QuoteSource
 }
 
 export interface SelectionState {
   readonly selection: SelectionSnapshot | null
-}
-
-/** The assistant message node kind (v1 实测纠正值 — 勿引旧值 `assistant`). */
-export const ASSISTANT_KIND = 'assistant-step'
-
-/** Pure validation of one candidate selection (unit-tested without DOM). */
-export function isEligibleSelection(input: {
-  readonly blank: boolean
-  readonly sameMessage: boolean
-  readonly kind: string
-  readonly streaming: boolean
-  readonly excluded: boolean
-  readonly hasSession: boolean
-}): boolean {
-  return !input.blank
-    && input.sameMessage
-    && input.kind === ASSISTANT_KIND
-    && !input.streaming
-    && !input.excluded
-    && input.hasSession
 }
 
 /**
@@ -86,20 +69,31 @@ export function captureSelection(currentSessionId: string): SelectionSnapshot | 
   const sel = window.getSelection()
   if (sel === null || sel.isCollapsed || sel.rangeCount === 0) return null
   const range = sel.getRangeAt(0)
-  const source = quoteSourceOf(range.startContainer, currentSessionId)
-  const end = quoteSourceOf(range.endContainer, currentSessionId)
-  if (source === null || end === null || source.body !== end.body || source.view !== end.view || source.streaming) return null
-  const anchorText = projectedRangeText(source.body, range)
+  const sources = quoteSourcesOfRange(range, currentSessionId)
+  if (!sources) return null
+  const ranges = sources.map(source => quoteRangeOf(source.body, range))
+  if (ranges.some(fragment => fragment === null)) return null
+  const fragments = ranges as Range[]
+  const anchors = sources.map((source, index) => {
+    const anchorText = projectedRangeText(source.body, fragments[index]!)
+    return { anchorKey: sourceKey(source), anchorText, occurrence: occurrenceOf(source.body, fragments[index]!, anchorText) }
+  })
+  const source = sources[0]!
+  const anchorText = anchors.map(anchor => anchor.anchorText).join('')
   if (anchorText.trim() === '') return null
-  const text = selectedQuoteText(range, sel.toString(), anchorText)
+  const browserText = sel.toString()
+  const text = browserText.replace(/\s/g, '') === anchorText.replace(/\s/g, '') ? browserText
+    : fragments.map((fragment, index) => selectedQuoteText(fragment, fragment.toString(), anchors[index]!.anchorText)).join('\n\n')
   const rect = range.getBoundingClientRect()
   return {
     text,
     anchorText,
     anchorKey: sourceKey(source),
-    occurrence: occurrenceOf(source.body, range, anchorText),
+    occurrence: anchors[0]!.occurrence,
+    ...(anchors.length > 1 ? { anchors } : {}),
     rect: { left: rect.left, top: rect.top, width: rect.width },
     range: range.cloneRange(),
+    ranges: fragments,
     sessionId: source.sessionId,
     source,
   }
@@ -141,6 +135,8 @@ export function createSelectionController(getSessionId: () => string): Selection
       || (selection !== null && next !== null && (
         selection.anchorText !== next.anchorText
         || selection.anchorKey !== next.anchorKey
+        || selection.occurrence !== next.occurrence
+        || JSON.stringify(selection.anchors) !== JSON.stringify(next.anchors)
         || selection.sessionId !== next.sessionId
         || selection.source.view !== next.source.view
         || selection.source.surface !== next.source.surface
