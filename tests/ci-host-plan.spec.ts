@@ -100,4 +100,19 @@ describe('host validation plan', () => {
     expect(await planHostValidation(input)).toMatchObject({ mode: 'full' })
     expect(input.api).not.toHaveBeenCalled()
   })
+
+  it('does not reuse an older success when the latest rerun failed', async () => {
+    const input = fixture({ eventName: 'push' })
+    const original = input.api.getMockImplementation()!
+    input.api.mockImplementation(async path => {
+      const response = await original(path)
+      if ('workflow_runs' in response) {
+        const success = response.workflow_runs![0]!
+        return { workflow_runs: [{ ...success, id: 43, conclusion: 'failure' }, success] }
+      }
+      return response
+    })
+    expect(await planHostValidation(input)).toMatchObject({ mode: 'full' })
+    expect(input.api).not.toHaveBeenCalledWith('actions/runs/42/jobs?per_page=100')
+  })
 })

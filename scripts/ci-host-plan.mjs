@@ -11,19 +11,20 @@ export async function planHostValidation({ eventName, event, ref, environment, g
   const full = { mode: 'full', commit, tree, environment, reason: 'No matching recent validation; run every host journey.' }
   if (!environment) return { ...full, reason: 'Runner image is unknown; run every host journey.' }
   async function validatedRun(sha, expectedTree) {
-    const { workflow_runs: runs } = await api(`actions/workflows/ci.yml/runs?head_sha=${sha}&status=success&per_page=10`)
-    for (const run of runs) {
-      const age = now - Date.parse(run.updated_at)
-      if (run.head_sha !== sha || run.status !== 'completed' || run.conclusion !== 'success'
-        || run.path !== '.github/workflows/ci.yml' || !Number.isFinite(age) || age < 0 || age > 24 * 60 * 60 * 1000) continue
-      const { jobs } = await api(`actions/runs/${run.id}/jobs?per_page=100`)
-      const ci = jobs.find(job => job.name === 'ci')
-      const gate = jobs.find(job => job.name === 'host-compatibility')
-      if (ci?.conclusion !== 'success' || gate?.conclusion !== 'success') continue
-      if (gate.steps.some(step => step.conclusion === 'success'
-        && ['full', 'smoke'].some(mode => step.name === `Validated ${mode} tree ${expectedTree} environment ${environment}`))) {
-        return { run: run.id, commit: sha, tree: expectedTree }
-      }
+    const { workflow_runs: runs } = await api(`actions/workflows/ci.yml/runs?head_sha=${sha}&per_page=10`)
+    // A failed or unfinished rerun must not resurrect an older green result.
+    const run = runs.find(candidate => candidate.head_sha === sha && candidate.path === '.github/workflows/ci.yml')
+    if (!run) return
+    const age = now - Date.parse(run.updated_at)
+    if (run.status !== 'completed' || run.conclusion !== 'success'
+      || !Number.isFinite(age) || age < 0 || age > 24 * 60 * 60 * 1000) return
+    const { jobs } = await api(`actions/runs/${run.id}/jobs?per_page=100`)
+    const ci = jobs.find(job => job.name === 'ci')
+    const gate = jobs.find(job => job.name === 'host-compatibility')
+    if (ci?.conclusion !== 'success' || gate?.conclusion !== 'success') return
+    if (gate.steps.some(step => step.conclusion === 'success'
+      && ['full', 'smoke'].some(mode => step.name === `Validated ${mode} tree ${expectedTree} environment ${environment}`))) {
+      return { run: run.id, commit: sha, tree: expectedTree }
     }
   }
   async function mergedPRValidation(sha, expectedTree) {
