@@ -36,7 +36,7 @@ async function processOpen(page: Page, view: Locator, turn: number, open: boolea
 
 async function addQuote(page: Page, note: string) {
   await toolbarOf(page).getByRole('button', { name: /^(Add to conversation|添加到对话)$/ }).click()
-  const editor = page.locator('[data-dsh-sidenote] input')
+  const editor = page.locator('[data-dsh-sidenote] textarea')
   await editor.fill(note); await editor.press('Enter')
 }
 
@@ -152,7 +152,7 @@ for (const real of [false, true]) test(`${real ? 'official Flash main' : 'native
     await dragBetween(page, first, pre, last, post)
     await toolbarOf(page).getByRole('button', { name: /^(Ask in side chat|在侧边聊天中提问)$/ }).click()
     const sideNote = 'SIDE-' + randomUUID()
-    const editor = page.locator('[data-dsh-sidenote] input')
+    const editor = page.locator('[data-dsh-sidenote] textarea')
     await editor.fill(sideNote); await editor.press('Enter')
     const side = sideChatOf(page)
     await expect(side.locator('[data-composer-input]')).toBeVisible()

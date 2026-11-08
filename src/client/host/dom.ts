@@ -1,7 +1,7 @@
 /** Internal conversation DOM seams, validated by the pinned host journeys.
  * Main message markers and composer seats have no public replacement API. */
 export const MAIN_ASSISTANT = '[data-chat-flow-kind="assistant-step"]'
-export const NON_QUOTE = 'button, [role="button"], input, textarea, select, [contenteditable="true"], [data-code-block-banner], [data-variant="think"], [data-sidenote-no-quote]'
+export const NON_QUOTE = 'button, [role="button"], input, textarea, select, [contenteditable="true"], [data-code-block-banner], [data-variant="think"], [data-chat-group-part="reasoning"], [data-sidenote-no-quote]'
 export const PROCESS_UI = '[data-variant="think"], [data-chat-group-part="reasoning"], [data-chat-flow-kind="tool-call"], [data-chat-flow-kind="tool-result"], [data-chat-flow-kind="turn-process"], [data-context-kind="thinking"], [data-context-kind="tool"]'
 
 /** Collapsed process rows can remain mounted, including during their animation. */

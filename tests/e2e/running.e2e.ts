@@ -1,13 +1,15 @@
 import { expect, test, type Page } from '@playwright/test'
+import { randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { createHostApi, hostRpc } from './host'
 import { dragText, openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, userMessageContentsOf, sessionEventsOf, selectModel } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
 test.afterEach(async ({ page }, info) => {
   const dir = process.env.DSH_E2E_EVIDENCE_DIR ?? 'test-results'
   mkdirSync(dir, { recursive: true })
-  const name = info.title.startsWith('busy fork') ? `busy-fork-${info.title.includes('image') ? 'image' : 'text'}` : 'native-queue-steer'
+  const name = info.title.startsWith('busy fork') ? `busy-fork-${info.title.includes('image') ? 'image' : 'text'}` : info.title.startsWith('older queued annotation') ? 'native-repeated-batch' : 'native-queue-steer'
   if (info.title.startsWith('busy fork')) await sideChatOf(page).locator('[data-sidenote-main-context] > button').scrollIntoViewIfNeeded()
   await page.screenshot({ path: join(dir, name + '.png') })
   if (info.status !== info.expectedStatus) writeFileSync(join(dir, name + '.yml'), await page.locator('body').ariaSnapshot())
@@ -18,9 +20,9 @@ async function addSideQuote(page: Page, note: string): Promise<void> {
   await dragText(page, quote, 'full history snapshot')
   const overlay = page.locator('[data-dsh-sidenote]')
   await overlay.getByText(/^(Ask in side chat|在侧边聊天中提问)$/).click()
-  await overlay.locator('input').fill(note)
-  await overlay.locator('input').press('Enter')
-  await expect(overlay.locator('input')).toHaveCount(0)
+  await overlay.locator('textarea').fill(note)
+  await overlay.locator('textarea').press('Enter')
+  await expect(overlay.locator('textarea')).toHaveCount(0)
 }
 
 test('native Queue acceptance, Stop preserving queued quotes, and explicit Steer', async ({ page }) => {
@@ -63,6 +65,55 @@ test('native Queue acceptance, Stop preserving queued quotes, and explicit Steer
   expect(userMessagesOf(child).find(text => text.includes('steered annotation body'))).toContain('<note>native steer quote</note>')
   expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)).toEqual(parentBefore)
   if (await stop.isVisible()) await stop.click()
+})
+
+test('older queued annotation cannot confirm a repeated batch before native admission', async ({ page }) => {
+  await prepareSeedPage(page)
+  const child = await openSideChat(page)
+  const side = sideChatOf(page)
+  await selectModel(page, side, 'Controlled E2E')
+  const input = side.locator('[data-composer-input]')
+  const stop = side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })
+  const records = () => page.evaluate(id => JSON.parse(localStorage.getItem('dsh-sidenote:annotations:v1:' + id) ?? '[]'), child)
+  const oldBody = 'old queued annotation body', newBody = 'new repeated annotation body'
+  await input.fill('Hold before repeated annotations [e2e:hold]'); await input.press('Enter')
+  await expect(stop).toBeVisible()
+  await addSideQuote(page, 'same annotation repeated')
+  await input.fill(oldBody); await input.press('Enter')
+  await expect.poll(records).toMatchObject([{ number: 1, state: 'sent' }])
+  await stop.click(); await expect(stop).toHaveCount(0)
+  await addSideQuote(page, 'same annotation repeated')
+
+  let release!: () => void
+  const pending = new Promise<void>(resolve => { release = resolve })
+  const request = page.waitForRequest('**/api/session/prompt')
+  await page.route('**/api/session/prompt', async route => { await pending; await route.abort('failed') })
+  const api = await createHostApi()
+  try {
+    await input.fill(newBody); await input.press('Enter')
+    await request
+    // A second client wakes the real Inbox while this browser's send is pending.
+    await hostRpc(api, 'session.prompt', { requestId: randomUUID(), sessionId: child, mode: 'queue', content: [{ type: 'text', text: 'Resume the old annotation queue' }] })
+    await expect.poll(() => userMessagesOf(child).filter(text => text.includes(oldBody))).toHaveLength(1)
+    await expect(side.locator('[data-chat-flow-kind="user"]').filter({ hasText: oldBody })).toBeVisible()
+    await expect.poll(records).toMatchObject([{ number: 1, state: 'sent' }, { number: 1, state: 'active' }])
+    release()
+    await expect(side.getByRole('alert')).toBeVisible()
+    await expect(input).toHaveText(newBody)
+    expect(await records()).toMatchObject([{ state: 'sent' }, { state: 'active' }])
+    expect(userMessagesOf(child).some(text => text.includes(newBody))).toBe(false)
+  } finally {
+    release()
+    await page.unrouteAll({ behavior: 'wait' })
+    await api.dispose()
+  }
+  await expect(stop).toHaveCount(0)
+  await input.press('Enter')
+  await expect.poll(records).toMatchObject([{ number: 1, state: 'sent' }, { number: 1, state: 'sent' }])
+  await expect.poll(() => userMessagesOf(child).filter(text => text.includes(newBody))).toHaveLength(1)
+  const repeated = userMessagesOf(child).filter(text => text.includes('<note>same annotation repeated</note>'))
+  expect(repeated).toHaveLength(2)
+  for (const text of repeated) expect(text).toContain('<annotation id="1">')
 })
 
 for (const withImage of [false, true]) test(`busy fork keeps the parent running and consumes its progress snapshot once after acceptance (${withImage ? 'image + text' : 'text'})`, async ({ page }) => {

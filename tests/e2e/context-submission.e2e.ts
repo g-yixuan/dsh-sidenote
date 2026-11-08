@@ -15,9 +15,9 @@ async function addNote(page: Page, main: Locator, note: string) {
   await dragText(page, quote, 'full history snapshot')
   const overlay = page.locator('[data-dsh-sidenote]')
   await overlay.getByText(/^(Add to conversation|添加到对话)$/).click()
-  await overlay.locator('input').fill(note)
-  await overlay.locator('input').press('Enter')
-  await expect(overlay.locator('input')).toHaveCount(0)
+  await overlay.locator('textarea').fill(note)
+  await overlay.locator('textarea').press('Enter')
+  await expect(overlay.locator('textarea')).toHaveCount(0)
 }
 
 async function preview(page: Page, row: Locator, label: RegExp, expected: string) {

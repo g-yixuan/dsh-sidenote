@@ -81,8 +81,8 @@ function clickOutside(): void {
 }
 
 /** 受控 input 输入：原生 value setter + input 事件（React onChange 的接通方式）。 */
-function typeNote(input: HTMLInputElement, value: string): void {
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+function typeNote(input: HTMLTextAreaElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
   act(() => {
     setter?.call(input, value)
     input.dispatchEvent(new Event('input', { bubbles: true }))
@@ -92,7 +92,7 @@ function typeNote(input: HTMLInputElement, value: string): void {
 describe('AnnotationEditor 关闭语义', () => {
   it('新建态点外部 = 确认，并带上刚输入的注解（引用不再凭空消失）', () => {
     const view = mountEditor('new')
-    const input = view.host.querySelector('input')
+    const input = view.host.querySelector('textarea')
     expect(input).not.toBeNull()
     typeNote(input!, '这里有问题')
     clickOutside()
@@ -122,10 +122,23 @@ describe('AnnotationEditor 关闭语义', () => {
 
   it('编辑器内部点击不关闭（写注解时不被外点判定误伤）', () => {
     const view = mountEditor('new')
-    const input = view.host.querySelector('input')!
+    const input = view.host.querySelector('textarea')!
     act(() => { input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
     expect(view.onSave).not.toHaveBeenCalled()
     expect(view.onCancel).not.toHaveBeenCalled()
+    view.unmount()
+  })
+
+
+  it('新建态保留多行，Shift+Enter 换行、IME Enter 不保存、Enter 保存', () => {
+    const view = mountEditor('new')
+    const input = view.host.querySelector('textarea')!
+    typeNote(input, '第一行\n第二行')
+    act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true })) })
+    act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true })) })
+    expect(view.onSave).not.toHaveBeenCalled()
+    act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+    expect(view.onSave).toHaveBeenCalledWith('第一行\n第二行')
     view.unmount()
   })
 

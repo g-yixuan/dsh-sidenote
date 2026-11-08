@@ -97,6 +97,18 @@ describe.each([true, false])('sent context inside the native user bubble (UserTe
     expect(bubble.contains(host.querySelector('[data-dsh-sidenote-bubble]'))).toBe(true)
   })
 
+
+  it('reads the original display number and hides guidance in legacy preview messages', () => {
+    const wire = '我批注了以下 1 处内容：\nAnnotation ids stay stable within their session scope. Local numbers apply only to this message. Identify annotations by quoted words or notes in replies. Keep ids and scopes internal.\n<annotation id="8" local="1" scope="s1">\n<quote>第二批引用</quote>\n<note>说明</note>\n</annotation>' + '\n\n当前问题'
+    const { host } = mount(wire, modern)
+    expect(host.querySelector('[data-native-body]')?.textContent).toBe('当前问题')
+    act(() => { host.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click() })
+    const panel = document.querySelector('[data-sidenote-sent-preview]')!
+    expect(panel.textContent).toContain('1.')
+    expect(panel.textContent).not.toContain('8.')
+    expect(panel.textContent).not.toContain('Annotation ids')
+  })
+
   it('retains a native bubble when annotations are the entire user message', () => {
     const { host } = mount(annotation, modern)
     const bubble = host.querySelector('[data-native-bubble]')!

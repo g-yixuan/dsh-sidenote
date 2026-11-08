@@ -80,7 +80,7 @@ for (const real of [false, true]) test(`${real ? 'official Flash ' : ''}folded r
   await expect(toolbar).toBeVisible()
   await page.screenshot({ path: `test-results/reply-default-${real ? 'flash' : 'controlled'}-selection.png` })
   await toolbar.getByRole('button', { name: /^(Add to conversation|添加到对话)$/ }).click()
-  await page.locator('[data-dsh-sidenote] input').press('Enter')
+  await page.locator('[data-dsh-sidenote] textarea').press('Enter')
   const followup = '不要调用工具，只回复：引用核验通过'
   const beforeFollowup = sessionEventsOf(mainId).at(-1)!.seq
   await main.locator('[data-composer-input]').fill(followup)

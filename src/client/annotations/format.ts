@@ -32,7 +32,7 @@ import { t } from '../locales.ts'
 export interface QuoteItem {
   readonly text: string
   readonly note: string
-  /** 展示编号（与角标一致），作为 <annotation id> 供模型引用。 */
+  /** 本条消息中的编号，与原文角标一致。 */
   readonly number?: number
 }
 
@@ -82,7 +82,7 @@ export interface ProtocolPrefix {
   readonly reflows: readonly ParsedRefFlow[]
 }
 
-const ANNOTATION_RE = /<annotation id="(\d+)">\s*<quote>([\s\S]*?)<\/quote>\s*(?:<note>([\s\S]*?)<\/note>\s*)?<\/annotation>/y
+const ANNOTATION_RE = /<annotation id="(\d+)"(?: local="(\d+)")?(?: scope="[^"]*")?>\s*<quote>([\s\S]*?)<\/quote>\s*(?:<note>([\s\S]*?)<\/note>\s*)?<\/annotation>/y
 const REFLOW_RE = /<reflow\s+source="([^"]*)"(?:\s+reason="([^"]*)")?\s*>([\s\S]*?)<\/reflow>/y
 
 /**
@@ -126,11 +126,15 @@ export function splitProtocolPrefix(text: string): ProtocolPrefix | null {
   const headerMatch = /^([^\n]*)\n/.exec(rest)
   if (headerMatch !== null && PROTOCOL_HEADER_RE.test(headerMatch[1] ?? '')) {
     let cursor = pos + headerMatch[0].length
+    // 只读兼容旧预览消息；新消息沿用原始协议，不附加编号指令。
+    const legacyGuidance = /^Annotation ids stay stable within (?:their session scope|this conversation)\.[^\n]*\n/.exec(text.slice(cursor))
+    if (legacyGuidance) cursor += legacyGuidance[0].length
     for (;;) {
       ANNOTATION_RE.lastIndex = cursor
       const m = ANNOTATION_RE.exec(text)
       if (m === null) break
-      annotations.push({ id: Number(m[1]), quote: m[2] ?? '', note: (m[3] ?? '').trim() })
+      // 旧预览消息有 local 属性时，沿用当时显示的编号。
+      annotations.push({ id: Number(m[2] ?? m[1]), quote: m[3] ?? '', note: (m[4] ?? '').trim() })
       cursor = skipBlank(text, ANNOTATION_RE.lastIndex)
     }
     if (annotations.length > 0) {

@@ -57,13 +57,28 @@ say "scratch home: ${DSH_HOME}"
 SERVER_PID=""
 cleanup() {
   local code=$?
+  local active_pid="" pid attempt keep_home="${KEEP_HOME:-}"
   # A recovery test can replace the host. The fixture records the actual Node
   # PID even when DSH_CMD starts through an npx wrapper.
   if [ -f "$SCRATCH/server.pid" ]; then
-    local active_pid
     active_pid="$(cat "$SCRATCH/server.pid")"
-    if [[ "$active_pid" =~ ^[0-9]+$ ]] && [ "$active_pid" -gt 1 ]; then kill "$active_pid" 2>/dev/null || true; fi
   fi
+  for pid in "$active_pid" "$SERVER_PID"; do
+    [[ "$pid" =~ ^[0-9]+$ ]] && [ "$pid" -gt 1 ] || continue
+    kill "$pid" 2>/dev/null || true
+    # The restarted host is not this shell's child: wait cannot join it.
+    # Let shutdown writes finish before copying evidence or removing its home.
+    for ((attempt = 0; attempt < 100; attempt++)); do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 0.1
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+      warn "宿主未在 10 秒内退出（PID $pid），保留 $SCRATCH"
+      code=1
+      keep_home=1
+    fi
+  done
+  if [ -n "$SERVER_PID" ] && ! kill -0 "$SERVER_PID" 2>/dev/null; then wait "$SERVER_PID" 2>/dev/null || true; fi
   if [ -f "$SCRATCH/host-inventory.json" ]; then
     if ! node - "$SCRATCH/host-inventory.json" "$SCRATCH/runtime-inventory.json" <<'JS'
 const fs = require('node:fs')
@@ -76,19 +91,15 @@ JS
     mkdir -p "$ROOT/test-results"
     cp "$SCRATCH/host-inventory.json" "$ROOT/test-results/host-inventory.json"
   fi
-  if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
-    kill "$SERVER_PID" 2>/dev/null || true
-    wait "$SERVER_PID" 2>/dev/null || true
-  fi
   if [ "$code" -ne 0 ] && [ -f "$WEB_LOG" ]; then
     mkdir -p "$ROOT/test-results"
     sed -E 's/(\?token=)[A-Za-z0-9_-]+/\1[redacted]/g' "$WEB_LOG" > "$ROOT/test-results/host-web.log"
     cat "$ROOT/test-results/host-web.log" >&2
   fi
-  if [ -z "${KEEP_HOME:-}" ]; then
+  if [ -z "$keep_home" ]; then
     rm -rf "$SCRATCH"
   else
-    warn "KEEP_HOME 已设置，保留 $SCRATCH"
+    warn "保留 $SCRATCH"
   fi
   exit "$code"
 }

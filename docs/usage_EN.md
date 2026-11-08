@@ -45,13 +45,17 @@ On DSH 0.2.2, the Sidenote toolbar offers **Quote**, **Add to conversation**, an
 
 ![Annotation and handback chips in one row, with a compact preview for reading the original text and editing the note](assets/context-preview-en.jpg)
 
-Quotes and notes stay complete without being inserted into the body draft. Send a quote on its own, or together with text, images, and `@` references. Repeated selections accumulate annotations; numbered badges at the source help you find each passage.
+Quotes and notes stay complete without being inserted into the body draft. Send a quote on its own, or together with text, images, and `@` references. Repeated selections accumulate annotations; numbered badges at the source help you find each passage. Badge numbers are round-local — the current batch counts 1..k contiguously, deletion compacts the rest, and sent numbers freeze.
+
+Each message starts annotation numbering at 1, and model context uses the same numbers as the badges. Sent badges keep their numbers, turn gray, and remain clickable for review. New notes support multiple lines, with `Shift+Enter` for a line break and `Enter` to save.
 
 The same selection rules apply to **All replies** and **Final answer only**, using only currently visible content. A selection containing reasoning, tool cards, process disclosure controls, or user messages is rejected in full; collapsed, hidden process content does not count as mixed content. Selections across sessions, main/side views, or turns are unsupported. A reply that is still streaming is temporarily ineligible; earlier completed progress replies need not wait for the whole turn to finish. Code, lists, and tables remain quotable, excluding code-copy controls.
 
 **Selections in the main conversation** can go to the main conversation or a side chat. Main-to-side handoff waits for the chosen tab's actual child session. Press `Esc` to cancel the wait; a failed handoff keeps the note open for retry.
 
 **Selections in a side chat** go only to that side chat, including selections in its inherited history. Partial text, paragraphs, lists, code, and multiple reply bodies in the same turn are supported.
+
+Badges and highlights appear only in the conversation receiving the annotation: main-to-main and side-to-the-same-side selections show badges. Selecting main text to ask in a side chat leaves no badge in main and creates no source badge in the side chat. The full quote and note remain in the target side chat’s annotation chip and sent-message preview. Same-conversation badges stay within the visible source area; folded sources remain available through annotation previews.
 
 After a reload, cross-reply quotes locate each original fragment separately, with badges and highlights clipped to their source view. If a display-setting change or folding hides part of the source, the badge and highlight temporarily disappear while the full quote remains available. They return when the original text is visible again, without attaching to similar text elsewhere.
 

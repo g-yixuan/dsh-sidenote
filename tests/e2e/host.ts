@@ -129,6 +129,7 @@ export async function createHostApi(): Promise<APIRequestContext> {
  * descriptor`); extend this map before calling any further method. */
 const SLASH_ARGS_KEY: Record<string, string> = {
   'workspace.create': 'request',
+  'session.prompt': 'request',
 }
 
 /** One host-RPC protocol attempt. */

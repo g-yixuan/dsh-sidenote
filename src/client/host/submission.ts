@@ -67,7 +67,8 @@ export async function prepareSubmission(ctx: Context, sessionId: string, input: 
     const inbox = inboxFaceOf(binding)
     const nodes = (): readonly Message[] => chat.getLegacy()?.nodes as readonly Message[] ?? []
     const maxSeq = Math.max(-1, ...nodes().map(node => node.seq ?? -1))
-    const queueIds = new Set(queuedMessages(binding, inbox).map(message => message.messageId ?? message.id))
+    const queuedBefore = queuedMessages(binding, inbox)
+    const queueIds = new Set(queuedBefore.map(message => message.messageId ?? message.id))
     const previousError = binding.session.getSnapshot().promptError
     const previousNoticeSeq = input.notices?.getSnapshot()?.seq ?? -1
     const off: (() => void)[] = []
@@ -103,7 +104,13 @@ export async function prepareSubmission(ctx: Context, sessionId: string, input: 
     }
     const check = (): void => {
       if (!submitted || settled) return
-      if (nodes().some(node => (node.kind === 'user' || node.kind === 'steering') && (node.seq ?? -1) > maxSeq && matches(node))
+      if (nodes().some(node => {
+        const id = node.messageId ?? node.id
+        // 队列转历史会获得新 seq，但仍是发送前的旧消息。
+        // 无身份的旧投影遇到相同待发内容时，不能据此确认本次提交。
+        return (node.kind === 'user' || node.kind === 'steering') && (node.seq ?? -1) > maxSeq && matches(node)
+          && (id === undefined ? !queuedBefore.some(matches) : !queueIds.has(id))
+      })
         || queuedMessages(binding!, inbox).some(message => {
           const id = message.messageId ?? message.id
           return id !== undefined && !queueIds.has(id) && matches(message)

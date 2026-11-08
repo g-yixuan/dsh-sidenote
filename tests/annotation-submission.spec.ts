@@ -20,7 +20,7 @@ function harness(modern = false) {
   const store = createAnnotationStore(() => 1, null)
   const quote = store.add({ sessionId: 'child', sourceSessionId: 'parent', sourceSurface: 'main', anchorKey: 'a', text: '完整引用\n第二行', anchorText: '完整引用第二行', occurrence: 0, note: '注解' })
   const wire = buildProtocolBlock([quote])
-  const node = { kind: 'user', seq: 1, content: [{ type: 'text', text: wire }] }
+  const node: { kind: string; seq: number; messageId?: string; content: { type: string; text: string }[] } = { kind: 'user', seq: 1, content: [{ type: 'text', text: wire }] }
   const session = observable({ sessionId: 'child', running: false, nodes: [node], queue: modern ? undefined : [] as unknown[], promptError: null as unknown, pendingSubmissions: [] as unknown[] })
   const inbox = observable({ 'next-turn': [] as unknown[], 'next-step': [] as unknown[] })
   const inputState = observable({ draft: '正文', phase: 'plain' as const })
@@ -113,6 +113,63 @@ describe('controlled quote admission', () => {
     else h.session.set({ ...h.session.getSnapshot(), queue: [row] })
     expect(await result).toBe(true)
     expect(h.store.get(h.quote.id)?.state).toBe('sent')
+  })
+
+  it.each([false, true])('does not acknowledge an older queued copy becoming durable (modern=%s)', async modern => {
+    const h = harness(modern)
+    const old = { id: 'old-message', messageId: 'old-message', content: [{ type: 'text', text: h.wire + '\n\n上一条问题' }] }
+    if (modern) h.inbox.set({ 'next-turn': [old], 'next-step': [] })
+    else h.session.set({ ...h.session.getSnapshot(), queue: [old] })
+    const result = h.send()
+    await vi.waitFor(() => expect(h.submitted).toHaveBeenCalledOnce())
+    if (modern) h.inbox.set({ 'next-turn': [], 'next-step': [] })
+    h.session.set({ ...h.session.getSnapshot(), queue: modern ? undefined : [], nodes: [...h.session.getSnapshot().nodes, { kind: 'user', messageId: old.messageId, seq: 2, content: old.content }] })
+    h.session.set({ ...h.session.getSnapshot(), promptError: { op: 'send', error: { message: '本次提交被拒绝' } } })
+    expect(await result).toBe(false)
+    expect(h.store.get(h.quote.id)?.state).toBe('active')
+    expect(h.input.state.getSnapshot().draft).toBe('正文')
+  })
+
+  it.each(['user', 'steering'])('accepts a fresh identical %s message after an older queue copy drains', async kind => {
+    const h = harness(true)
+    const old = { messageId: 'old-message', content: [{ type: 'text', text: h.wire + '\n\n正文' }] }
+    h.inbox.set({ 'next-turn': [old], 'next-step': [] })
+    const result = h.send()
+    await vi.waitFor(() => expect(h.submitted).toHaveBeenCalledOnce())
+    const node = { kind, messageId: old.messageId, seq: 2, content: old.content }
+    h.session.set({ ...h.session.getSnapshot(), nodes: [...h.session.getSnapshot().nodes, node] })
+    await Promise.resolve()
+    expect(h.store.get(h.quote.id)?.state).toBe('active')
+    h.session.set({ ...h.session.getSnapshot(), nodes: [...h.session.getSnapshot().nodes, { ...node, messageId: 'current-message', seq: 3 }] })
+    expect(await result).toBe(true)
+    expect(h.store.get(h.quote.id)?.state).toBe('sent')
+  })
+
+  it('keeps an identity-less ambiguous history update pending until native rejection', async () => {
+    const h = harness()
+    h.session.set({ ...h.session.getSnapshot(), queue: [{ id: 'old-message', content: [{ type: 'text', text: h.wire }] }] })
+    const result = h.send()
+    await vi.waitFor(() => expect(h.submitted).toHaveBeenCalledOnce())
+    h.session.set({ ...h.session.getSnapshot(), queue: [], nodes: [...h.session.getSnapshot().nodes, { kind: 'user', seq: 2, content: [{ type: 'text', text: h.sentText() }] }] })
+    h.session.set({ ...h.session.getSnapshot(), promptError: { op: 'send', error: { message: '拒绝提交' } } })
+    expect(await result).toBe(false)
+    expect(h.store.get(h.quote.id)?.state).toBe('active')
+  })
+
+  it('freezes the submitted number when a delete re-ranks the batch during admission', async () => {
+    const h = harness()
+    const extra = h.store.add({ sessionId: 'child', anchorKey: 'b', text: '第二条引用', anchorText: '第二条引用', occurrence: 0, note: '第二条注解' })
+    const result = h.send()
+    // 发送窗口内删除第一条：store 里第二条编号变成 1，但消息里仍是 id=2。
+    h.store.remove(h.quote.id)
+    expect(h.store.get(extra.id)).toMatchObject({ number: 1 })
+    await vi.waitFor(() => expect(h.submitted).toHaveBeenCalledOnce())
+    h.session.set({ ...h.session.getSnapshot(), nodes: [...h.session.getSnapshot().nodes, { kind: 'user', seq: 2, content: [{ type: 'text', text: h.sentText() }] }] })
+    expect(await result).toBe(true)
+    expect(h.sentText()).toContain('<annotation id="1">')
+    expect(h.sentText()).toContain('<annotation id="2">')
+    // 冻结编号取消息里的 2，与气泡 chip 的反解析一致。
+    expect(h.store.get(extra.id)).toMatchObject({ state: 'sent', number: 2 })
   })
 
   it('new or edited quotes and the next body remain active after the old batch is accepted', async () => {
