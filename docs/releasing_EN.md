@@ -18,7 +18,7 @@ Prefer patch releases, for example `0.8.1` → `0.8.2`. Before increasing the mi
 ## Release steps
 
 1. Create a release branch from `main`, update the version in `package.json`, prepare release notes, and open a `release:` PR. Do not push version changes directly to `main`.
-2. Wait for the release PR's `ci` and all `plugin-mount` host matrix checks to pass, then merge into `main`. Confirm CI also passes for that merged commit.
+2. Wait for the release PR's `ci`, fixed `host-compatibility` gate, and all `plugin-mount` host matrix checks to pass, then merge into `main`. Confirm CI also passes for that merged commit. Version-only changes on a recently validated base may use core smoke coverage across the host matrix. Identical validated content after merging may also use smoke; insufficient evidence falls back to full coverage. Check the CI summary's mode, reason, and source link; see the [maintenance guide](maintaining_EN.md).
 3. Create the matching `vX.Y.Z` tag at that version commit on `main` and push it:
 
    ```bash

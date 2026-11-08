@@ -1,5 +1,10 @@
 name: CI
 
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
 on:
   push:
     branches: [main]
@@ -24,6 +29,9 @@ jobs:
     timeout-minutes: 20
     outputs:
       host-matrix: ${{ steps.hosts.outputs.matrix }}
+      host-mode: ${{ steps.plan.outputs.host-mode }}
+      tree: ${{ steps.plan.outputs.tree }}
+      environment: ${{ steps.plan.outputs.environment }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -35,6 +43,11 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Select full journeys or verified release smoke
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/ci-host-plan.mjs
       - name: Validate series ranges and resolve the boundary host matrix
         id: hosts
         run: |
@@ -84,17 +97,25 @@ jobs:
       - name: Install dsh CLI (pinned)
         run: npm install -g @deepseek-ai/dsh@${{ matrix.dsh-version }}
 
-      - name: Build and pack the npm tarball
-        run: pnpm build && pnpm pack
-
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Mount and run host journeys
-        run: pnpm test:mount
+        env:
+          HOST_MODE: ${{ needs.ci.outputs.host-mode }}
+        run: |
+          if [ "$HOST_MODE" = smoke ]; then
+            pnpm test:mount --smoke
+          else
+            pnpm test:mount
+          fi
 
       - name: Reject incompatible updates and retain the current compatible build
         run: pnpm test:compat
+
+      - name: Summarize host journey timings
+        if: always()
+        run: node scripts/e2e-summary.mjs
 
       - name: Upload host inventory and journey evidence
         if: always()
@@ -117,6 +138,12 @@ jobs:
           CI_RESULT: ${{ needs.ci.result }}
           HOST_RESULT: ${{ needs.plugin-mount.result }}
         run: test "$CI_RESULT" = success && test "$HOST_RESULT" = success
+      # A later run can only reuse this proof after the complete workflow passed.
+      # Record the actual checkout tree, including GitHub's PR merge result.
+      - name: Validated ${{ needs.ci.outputs.host-mode }} tree ${{ needs.ci.outputs.tree }} environment ${{ needs.ci.outputs.environment }}
+        env:
+          HOST_MODE: ${{ needs.ci.outputs.host-mode }}
+        run: test "$HOST_MODE" = full || test "$HOST_MODE" = smoke
 
   host-discovery:
     if: github.event_name == 'schedule' || inputs.host-canary == true
@@ -194,6 +221,9 @@ jobs:
         run: pnpm test:mount
       - name: Installer compatibility and rollback
         run: pnpm test:compat
+      - name: Summarize host journey timings
+        if: always()
+        run: node scripts/e2e-summary.mjs
       - name: Upload canary evidence
         if: always()
         uses: actions/upload-artifact@v4
