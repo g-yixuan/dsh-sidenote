@@ -91,6 +91,7 @@ test('side local selection saves outside, reanchors after reload, and sends full
 
 test('streaming side replies and cross-message selections stay ineligible; a stopped complete reply can be quoted', async ({ page }) => {
   await prepareSeedPage(page)
+  const parentBefore = userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)
   const child = await openSideChat(page)
   const side = sideChatOf(page)
   await selectModel(page, side, 'Controlled E2E')
@@ -121,7 +122,7 @@ test('streaming side replies and cross-message selections stay ineligible; a sto
   await overlay.locator('textarea').press('Enter')
   await input.press('Enter')
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes('<quote>complete assistant response</quote>'))).toHaveLength(1)
-  expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!).some(text => text.includes('<quote>complete assistant response</quote>'))).toBe(false)
+  expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)).toEqual(parentBefore)
 })
 
 test('whole side assistant selection keeps paragraphs, lists and code, excluding copy controls', async ({ page }) => {
