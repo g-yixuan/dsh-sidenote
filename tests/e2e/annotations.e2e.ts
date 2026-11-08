@@ -370,7 +370,7 @@ for (const surface of ['main', 'side'] as const) {
   })
 }
 
-for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}annotation numbering stays local across batches with stable model references`, async ({ page }) => {
+for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}annotation numbering restarts for each message and retains sent source badges`, async ({ page }) => {
   test.skip(real && !process.env.DSH_E2E_ACCOUNT_MODEL, 'Requires an isolated native DeepSeek account')
   test.setTimeout(180_000)
   await prepareSeedPage(page)
@@ -389,22 +389,39 @@ for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}annotatio
     await editor.press('Enter')
     await expect(editor).toHaveCount(0)
   }
+  const checkSentSources = async (notes: string[]) => {
+    const source = page.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()
+    await source.scrollIntoViewIfNeeded()
+    const badges = page.locator(OVERLAY).getByTitle(/^(Sent annotation \d+ \(view only\)|已发送的注释 \d+（只读回看）)$/)
+    await expect(badges).toHaveText(notes.length === 2 ? ['1', '2'] : ['1', '2', '1'])
+    for (const [index, note] of notes.entries()) {
+      // 已发送角标沿用灰色描边样式，并保留每一条原文定位及只读回看。
+      await expect(badges.nth(index)).toHaveCSS('border-style', 'solid')
+      await badges.nth(index).click()
+      const viewer = page.locator(OVERLAY)
+      await expect(viewer).toContainText('full history snapshot')
+      await expect(viewer).toContainText(note)
+      await expect(viewer.locator('textarea')).toHaveCount(0)
+      await page.keyboard.press('Escape')
+      await expect(badges).toHaveCount(notes.length)
+    }
+  }
   await addNote('准备撤回的批注')
   await addNote('解释快照边界')
   await side.getByRole('button', { name: /^(2 annotations|2 条注释)$/ }).click()
   await page.getByRole('button', { name: /^(Remove annotation 1|移除注释 1)$/ }).click()
   await input.click()
-  await expect.poll(childItems).toMatchObject([{ number: 2, localNumber: 1, state: 'active' }])
+  await expect.poll(childItems).toMatchObject([{ number: 1, state: 'active' }])
   await addNote('解释刷新恢复\n请简短回答')
-  await expect.poll(childItems).toMatchObject([{ number: 2, localNumber: 1 }, { number: 3, localNumber: 2 }])
+  await expect.poll(childItems).toMatchObject([{ number: 1 }, { number: 2 }])
   const prompt = '请用简短中文逐条回应本条消息的批注，不调用工具。'
   await input.fill(prompt)
   await side.getByRole('button', { name: /^(Send message|发送消息)$/ }).click()
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes(prompt))).toHaveLength(1)
   const firstWire = userMessagesOf(child).find(text => text.includes(prompt))!
-  expect(firstWire).toContain(`<annotation id="2" local="1" scope="${child}">`)
-  expect(firstWire).toContain(`<annotation id="3" local="2" scope="${child}">`)
-  await expect.poll(childItems).toMatchObject([{ state: 'sent', localNumber: 1 }, { state: 'sent', localNumber: 2 }])
+  expect(firstWire).toContain('<annotation id="1">')
+  expect(firstWire).toContain('<annotation id="2">')
+  await expect.poll(childItems).toMatchObject([{ state: 'sent', number: 1 }, { state: 'sent', number: 2 }])
   await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0, { timeout: 90_000 })
   if (real) {
     const reply = side.locator('[data-chat-flow-kind="assistant-step"]').last()
@@ -420,23 +437,25 @@ for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}annotatio
   await expect(bubble).not.toContainText('Annotation ids')
   await page.screenshot({ path: `test-results/annotation-numbering-${real ? 'flash' : 'controlled'}-first.png` })
   await preview.click()
+  await checkSentSources(['解释快照边界', '解释刷新恢复\n请简短回答'])
   await addNote('解释发送冻结')
-  await expect.poll(childItems).toMatchObject([{ state: 'sent', localNumber: 1 }, { state: 'sent', localNumber: 2 }, { state: 'active', number: 4, localNumber: 1 }])
-  const nextPrompt = '这次批注和上一条消息里提到的快照边界有什么区别？请引用问题短语来说明，不调用工具。'
+  await expect.poll(childItems).toMatchObject([{ state: 'sent', number: 1 }, { state: 'sent', number: 2 }, { state: 'active', number: 1 }])
+  const nextPrompt = '这次批注和上一条消息里提到的快照边界有什么区别？不调用工具。'
   await input.fill(nextPrompt)
   await side.getByRole('button', { name: /^(Send message|发送消息)$/ }).click()
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes(nextPrompt))).toHaveLength(1)
-  expect(userMessagesOf(child).find(text => text.includes(nextPrompt))).toContain(`<annotation id="4" local="1" scope="${child}">`)
-  await expect.poll(childItems).toMatchObject([{ state: 'sent', localNumber: 1 }, { state: 'sent', localNumber: 2 }, { state: 'sent', number: 4, localNumber: 1 }])
+  expect(userMessagesOf(child).find(text => text.includes(nextPrompt))).toContain('<annotation id="1">')
+  await expect.poll(childItems).toMatchObject([{ state: 'sent', number: 1 }, { state: 'sent', number: 2 }, { state: 'sent', number: 1 }])
   await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0, { timeout: 90_000 })
   if (real) {
     const reply = side.locator('[data-chat-flow-kind="assistant-step"]').last()
     await expect(reply).toContainText('发送冻结')
     await expect(reply).toContainText('快照边界')
-    await expect(reply).not.toContainText(/(?:注释?|批注)\s*[234]|id[=：:]|scope[=：:]/i)
   }
+  await checkSentSources(['解释快照边界', '解释刷新恢复\n请简短回答', '解释发送冻结'])
   await page.reload()
   await expect(side).toHaveAttribute('data-sidenote-chat-session', child)
+  await checkSentSources(['解释快照边界', '解释刷新恢复\n请简短回答', '解释发送冻结'])
   const nextBubble = side.locator('[data-chat-flow-kind="user"]').filter({ hasText: nextPrompt }).last()
   await nextBubble.getByRole('button', { name: /^(1 annotated|批注 ×1)$/ }).click()
   await expect(page.locator('[data-sidenote-sent-preview] li > span')).toHaveText(['1.'])

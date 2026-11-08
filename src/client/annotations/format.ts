@@ -30,13 +30,10 @@ import { t } from '../locales.ts'
  */
 
 export interface QuoteItem {
-  readonly sessionId?: string
   readonly text: string
   readonly note: string
-  /** 全局编号，作为 <annotation id> 供模型跨消息稳定引用。 */
+  /** 本条消息中的编号，与原文角标一致。 */
   readonly number?: number
-  /** 用户侧局部编号（每轮从 1 连续），wire 上以 local 属性带给模型。 */
-  readonly localNumber?: number
 }
 
 /** 协议头（双语）：zh「我批注了以下 2 处内容：」/ en 见 locales。 */
@@ -47,22 +44,16 @@ export function protocolHeader(n: number): string {
 /** One annotation's XML block（无注解时省略 <note>）。 */
 export function formatAnnotationXml(index: number, item: QuoteItem): string {
   const id = item.number ?? index
-  // local 属性仅在确有局部编号时输出（旧调用方/测试数据可以不带）。
-  const localAttr = item.localNumber === undefined ? '' : ` local="${item.localNumber}"`
-  const scopeAttr = item.sessionId === undefined ? '' : ` scope="${encodeURIComponent(item.sessionId)}"`
   const note = item.note.trim()
   return note === ''
-    ? `<annotation id="${id}"${localAttr}${scopeAttr}>\n<quote>${item.text}</quote>\n</annotation>`
-    : `<annotation id="${id}"${localAttr}${scopeAttr}>\n<quote>${item.text}</quote>\n<note>${note}</note>\n</annotation>`
+    ? `<annotation id="${id}">\n<quote>${item.text}</quote>\n</annotation>`
+    : `<annotation id="${id}">\n<quote>${item.text}</quote>\n<note>${note}</note>\n</annotation>`
 }
-
-const ANNOTATION_NUMBERING_GUIDANCE = 'Annotation ids stay stable within their session scope. Local numbers apply only to this message. Identify annotations by quoted words or notes in replies. Keep ids and scopes internal.'
 
 /** 注释协议块 = 头部句 + 每个注释一个 XML 块（行间无空行，与正文空一行）。 */
 export function buildProtocolBlock(items: readonly QuoteItem[]): string {
   return [
     protocolHeader(items.length),
-    ...(items.some(item => item.localNumber !== undefined) ? [ANNOTATION_NUMBERING_GUIDANCE] : []),
     ...items.map((item, i) => formatAnnotationXml(i + 1, item)),
   ].join('\n')
 }
@@ -73,7 +64,6 @@ export function buildProtocolBlock(items: readonly QuoteItem[]): string {
 export const PROTOCOL_HEADER_RE = /^(?:我批注了以下 (\d+) 处内容：|I annotated (\d+) passage\(s\) of the conversation above:)$/
 
 export interface ParsedAnnotation {
-  readonly localNumber?: number
   readonly id: number
   readonly quote: string
   /** '' = 无注解。 */
@@ -136,13 +126,15 @@ export function splitProtocolPrefix(text: string): ProtocolPrefix | null {
   const headerMatch = /^([^\n]*)\n/.exec(rest)
   if (headerMatch !== null && PROTOCOL_HEADER_RE.test(headerMatch[1] ?? '')) {
     let cursor = pos + headerMatch[0].length
-    if (text.startsWith(ANNOTATION_NUMBERING_GUIDANCE + '\n', cursor)) cursor += ANNOTATION_NUMBERING_GUIDANCE.length + 1
+    // 只读兼容旧预览消息；新消息沿用原始协议，不附加编号指令。
+    const legacyGuidance = /^Annotation ids stay stable within (?:their session scope|this conversation)\.[^\n]*\n/.exec(text.slice(cursor))
+    if (legacyGuidance) cursor += legacyGuidance[0].length
     for (;;) {
       ANNOTATION_RE.lastIndex = cursor
       const m = ANNOTATION_RE.exec(text)
       if (m === null) break
-      // m[1]=全局 id，m[2]=可选 local 局部号（旧消息无此属性），m[3]=quote，m[4]=note。
-      annotations.push({ id: Number(m[1]), ...(m[2] === undefined ? {} : { localNumber: Number(m[2]) }), quote: m[3] ?? '', note: (m[4] ?? '').trim() })
+      // 旧预览消息有 local 属性时，沿用当时显示的编号。
+      annotations.push({ id: Number(m[2] ?? m[1]), quote: m[3] ?? '', note: (m[4] ?? '').trim() })
       cursor = skipBlank(text, ANNOTATION_RE.lastIndex)
     }
     if (annotations.length > 0) {

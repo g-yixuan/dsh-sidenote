@@ -355,7 +355,7 @@ function SentViewer(props: {
 
   return (
     <div ref={rootRef} className={css.editorEdit} style={{ left, top, width, maxHeight: (props.bounds?.bottom ?? window.innerHeight) - top - 8, overflowY: 'auto' }}>
-      <div className={css.sentCardTitle}>{t('sentCardTitle', { n: props.annotation.localNumber })}</div>
+      <div className={css.sentCardTitle}>{t('sentCardTitle', { n: props.annotation.number })}</div>
       <div className={css.sentCardQuote}>{props.annotation.text}</div>
       {props.annotation.note !== '' && <div className={css.sentCardNote}>{props.annotation.note}</div>}
     </div>
@@ -553,9 +553,9 @@ function BadgeLayer(props: {
         className={annotation.state === 'sent' ? `${css.badge} ${css.badgeSent}` : css.badge}
         style={{ left: point.x - 18, top: point.y }}
         title={annotation.state === 'sent'
-          ? t('sentBadgeTitle', { n: annotation.localNumber })
+          ? t('sentBadgeTitle', { n: annotation.number })
           : annotation.note === '' ? annotation.text : `${annotation.text}\n${t('noteLine', { note: annotation.note })}`}
-        aria-label={source.surface === 'side' ? `${annotation.localNumber} · ${source.view.dataset.sidenoteViewTitle ?? ''}` : undefined}
+        aria-label={source.surface === 'side' ? `${annotation.number} · ${source.view.dataset.sidenoteViewTitle ?? ''}` : undefined}
         onMouseEnter={() => { setHoveredId(annotation.id) }}
         onMouseLeave={() => { setHoveredId(null) }}
         onClick={(event) => {
@@ -564,7 +564,7 @@ function BadgeLayer(props: {
           props.onOpen(annotation, { ...point, bounds: clip, targetTitle: source.view.dataset.sidenoteViewTitle })
         }}
       >
-        {annotation.localNumber}
+        {annotation.number}
       </button>,
     )
   }

@@ -24,7 +24,6 @@ function annotationWith(note: string): Annotation {
   return {
     id: 1,
     number: 1,
-    localNumber: 1,
     sessionId: 's1',
     anchorKey: 'k1',
     text: '被划选的原文',

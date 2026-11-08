@@ -1,5 +1,5 @@
 /**
- * 纯函数单测：注释 store（增删 / 编号不重排 / 计数 / sent 迁移 / 持久化）、
+ * 纯函数单测：注释 store（增删 / 批内编号 / 计数 / sent 迁移 / 持久化）、
  * 协议块 v2 序列化与反解析（发送给模型的数据形态）、截断、选区校验。
  * 全部为 node 环境的纯函数测试（无 jsdom 依赖）。
  */
@@ -8,6 +8,7 @@ import { createAnnotationStore } from '../src/client/annotations/model.ts'
 import type { AnnotationDraft } from '../src/client/annotations/model.ts'
 import {
   PROTOCOL_HEADER_RE,
+  protocolHeader,
   buildProtocolBlock,
   splitProtocolPrefix,
 } from '../src/client/annotations/format.ts'
@@ -90,55 +91,44 @@ describe('annotation store', () => {
     const b1 = store.add(draft('s2', '丙'))
     expect([a1.number, a2.number]).toEqual([1, 2])
     expect(b1.number).toBe(1)
-    // 局部编号同样按创建序从 1 连续
-    expect([a1.localNumber, a2.localNumber]).toEqual([1, 2])
     expect(new Set([a1.id, a2.id, b1.id]).size).toBe(3)
   })
 
-  it('does not renumber after deletion (删除不重排)', () => {
+  it('repacks active numbers after deletion without changing local identities', () => {
     const store = createAnnotationStore()
-    store.add(draft('s1', '一'))
+    const first = store.add(draft('s1', '一'))
     const second = store.add(draft('s1', '二'))
-    store.remove(store.list('s1')[0]!.id)
-    expect(store.list('s1').map(a => a.number)).toEqual([2])
-    // 全局编号继续递增，不复用已删除的编号（历史消息引用稳定）
+    store.remove(first.id)
+    expect(store.get(second.id)?.number).toBe(1)
     const third = store.add(draft('s1', '三'))
-    expect(third.number).toBe(3)
-    expect(second.number).toBe(2)
-    // 局部编号则紧凑重排：剩下的 active 前移，新建接着排
-    expect(store.get(second.id)!.localNumber).toBe(1)
-    expect(store.get(third.id)!.localNumber).toBe(2)
+    expect(store.listActive('s1').map(a => a.number)).toEqual([1, 2])
+    expect(third.id).toBeGreaterThan(second.id)
   })
 
-  it('局部编号每轮从 1 连续，发送时冻结（用户视角不漏号）', () => {
+  it('starts each batch at 1 and leaves sent numbers frozen', () => {
     const store = createAnnotationStore()
     const first = store.add(draft('s1', '甲'))
     const second = store.add(draft('s1', '乙'))
     store.markSent([first.id, second.id])
-    // 发送后局部号冻结在 1/2，全局号也不动
-    expect([first.localNumber, second.localNumber]).toEqual([1, 2])
-    expect([first.number, second.number]).toEqual([1, 2])
-    // 新一轮：局部从 1 重新开始，全局续接不复用（历史引用稳定）
     const third = store.add(draft('s1', '丙'))
-    expect(third.localNumber).toBe(1)
-    expect(third.number).toBe(3)
-    // 删除后剩余 active 紧凑重排
+    const fourth = store.add(draft('s1', '丁'))
+    expect([third.number, fourth.number]).toEqual([1, 2])
     store.remove(third.id)
-    store.add(draft('s1', '丁'))
-    expect(store.listActive('s1').map(a => a.localNumber)).toEqual([1])
+    expect(store.list('s1').map(a => [a.number, a.state])).toEqual([
+      [1, 'sent'], [2, 'sent'], [1, 'active'],
+    ])
   })
 
-
-  it('freezes the submitted local numbers and restarts quotes added during admission', () => {
+  it('freezes submitted numbers and restarts quotes added during admission', () => {
     const store = createAnnotationStore(() => 1, null)
     const first = store.add(draft('s1', '一'))
     const second = store.add(draft('s1', '二'))
     const late = store.add(draft('s1', '新增'))
     store.remove(first.id)
-    expect(store.get(second.id)).toMatchObject({ number: 2, localNumber: 1 })
+    expect(store.get(second.id)?.number).toBe(1)
     store.markSent([second.id], new Map([[second.id, 2]]))
-    expect(store.get(second.id)).toMatchObject({ state: 'sent', number: 2, localNumber: 2 })
-    expect(store.get(late.id)).toMatchObject({ state: 'active', number: 3, localNumber: 1 })
+    expect(store.get(second.id)).toMatchObject({ state: 'sent', number: 2 })
+    expect(store.get(late.id)).toMatchObject({ state: 'active', number: 1 })
   })
 
   it('counts only active annotations per session (chip count)', () => {
@@ -236,32 +226,22 @@ describe('protocol block v3（XML 形态）', () => {
   })
 
 
-  it('round-trips the local number and numbering guidance without consuming the body', () => {
-    const wire = buildProtocolBlock([{ text: '第二批原文', note: '说明', number: 8, localNumber: 1 }])
-    expect(wire).toContain('Local numbers apply only to this message.')
-    expect(wire).toContain('<annotation id="8" local="1">')
-    const text = wire + '\n\n当前问题'
-    const parsed = splitProtocolPrefix(text)!
-    expect(parsed.annotations).toEqual([{ id: 8, localNumber: 1, quote: '第二批原文', note: '说明' }])
-    expect(text.slice(parsed.length)).toBe('当前问题')
-    const older = wire.split('\n').filter(line => !line.startsWith('Annotation ids stay')).join('\n')
-    expect(splitProtocolPrefix(older)?.annotations).toEqual(parsed.annotations)
+  it('uses the original protocol with the same numbers as the source badges', () => {
+    const store = createAnnotationStore(() => 1, null)
+    const old = store.add(draft('s1', '上一批'))
+    store.markSent([old.id])
+    const current = store.add(draft('s1', '本批原文', '说明'))
+    const wire = buildProtocolBlock([current])
+    expect(wire).toBe(protocolHeader(1) + '\n<annotation id="1">\n<quote>本批原文</quote>\n<note>说明</note>\n</annotation>')
+    expect(splitProtocolPrefix(wire)?.annotations).toEqual([{ id: 1, quote: '本批原文', note: '说明' }])
   })
 
-
-  it('scopes stable ids to their owning session when a side chat inherits main history', () => {
-    const store = createAnnotationStore(() => 1, null)
-    const main = store.add(draft('parent', '主线引用'))
-    const child = store.add(draft('child', '侧聊引用'))
-    expect(main.number).toBe(child.number)
-    const parentWire = buildProtocolBlock([main])
-    const childWire = buildProtocolBlock([child])
-    expect(parentWire).toContain('id="1" local="1" scope="parent"')
-    expect(childWire).toContain('id="1" local="1" scope="child"')
-    expect(splitProtocolPrefix(childWire)?.annotations).toMatchObject([{ id: 1, localNumber: 1, quote: '侧聊引用' }])
-    const escaped = buildProtocolBlock([{ text: '原文', note: '', number: 2, localNumber: 1, sessionId: 'a"<b' }])
-    expect(escaped).toContain('scope="a%22%3Cb"')
-    expect(splitProtocolPrefix(escaped)?.annotations[0]?.quote).toBe('原文')
+  it.each(['', 'Annotation ids stay stable within their session scope. Local numbers apply only to this message. Identify annotations by quoted words or notes in replies. Keep ids and scopes internal.\n', 'Annotation ids stay stable within this conversation. Local numbers apply only to this message.\n'])('reads preview messages with their original display numbers', guidance => {
+    const text = '我批注了以下 1 处内容：\n' + guidance
+      + '<annotation id="8" local="1" scope="s1">\n<quote>第二批原文</quote>\n<note>说明</note>\n</annotation>\n\n当前问题'
+    const parsed = splitProtocolPrefix(text)!
+    expect(parsed.annotations).toEqual([{ id: 1, quote: '第二批原文', note: '说明' }])
+    expect(text.slice(parsed.length)).toBe('当前问题')
   })
 
   it('protocol header regex matches both locales, rejects lookalikes', () => {
@@ -302,7 +282,7 @@ describe('store 持久化（localStorage 注入替身）', () => {
     expect(storage.map.size).toBe(0)
   })
 
-  it('刷新后水合恢复：编号续接、状态保留', () => {
+  it('刷新后水合恢复：新批从 1 开始、已发送编号保留', () => {
     const storage = fakeStorage()
     const first = createAnnotationStore(() => 1, storage)
     first.add(draft('s1', '甲'))
@@ -311,14 +291,14 @@ describe('store 持久化（localStorage 注入替身）', () => {
     const second = createAnnotationStore(() => 2, storage)
     expect(second.list('s1')).toHaveLength(2)
     expect(second.list('s1').every(a => a.state === 'sent')).toBe(true)
-    // 编号续接（不复用 1/2）
+    // 新一批从 1 开始
     const c = second.add(draft('s1', '丙'))
-    expect(c.number).toBe(3)
+    expect(c.number).toBe(1)
     // id 也不与水合的撞车
     expect(c.id).toBeGreaterThan(b.id)
   })
 
-  it('migrates legacy monotonic numbers: stable ids kept, active display re-packed', () => {
+  it('migrates legacy numbers: sent numbers kept, active batch re-packed', () => {
     const storage = fakeStorage()
     storage.setItem('dsh-sidenote:annotations:v1:s1', JSON.stringify([
       { id: 1, number: 2, sessionId: 's1', anchorKey: 'k', text: '旧一', anchorText: '旧一', occurrence: 0, note: '', state: 'sent', createdAt: 1 },
@@ -327,13 +307,25 @@ describe('store 持久化（localStorage 注入替身）', () => {
       { id: 4, number: 8, sessionId: 's1', anchorKey: 'k', text: '待二', anchorText: '待二', occurrence: 0, note: '', state: 'active', createdAt: 4 },
     ]))
     const store = createAnnotationStore(() => 1, storage)
-    expect(store.list('s1').map(item => [item.text, item.number, item.localNumber, item.state])).toEqual([
-      ['旧一', 2, 2, 'sent'],
-      ['旧二', 5, 5, 'sent'],
-      ['待一', 7, 1, 'active'],
-      ['待二', 8, 2, 'active'],
+    expect(store.list('s1').map(item => [item.text, item.number, item.state])).toEqual([
+      ['旧一', 2, 'sent'],
+      ['旧二', 5, 'sent'],
+      ['待一', 1, 'active'],
+      ['待二', 2, 'active'],
     ])
-    expect(store.add(draft('s1', '下一条'))).toMatchObject({ number: 9, localNumber: 3 })
+    expect(store.add(draft('s1', '下一条'))).toMatchObject({ number: 3 })
+  })
+
+  it('keeps preview sent display numbers when removing the second numbering layer', () => {
+    const storage = fakeStorage()
+    const old = createAnnotationStore(() => 1, storage)
+    const a = old.add(draft('s1', '已发送'))
+    old.markSent([a.id])
+    const entries = [{ ...old.get(a.id), number: 8, localNumber: 1 }, { ...a, id: 2, number: 9, localNumber: 3 }]
+    storage.setItem('dsh-sidenote:annotations:v1:s1', JSON.stringify(entries))
+    const store = createAnnotationStore(() => 2, storage)
+    expect(store.list('s1').map(item => [item.number, item.state])).toEqual([[1, 'sent'], [1, 'active']])
+    expect(store.add(draft('s1', '新增')).number).toBe(2)
   })
 
   it('畸形持久化数据被容错丢弃', () => {

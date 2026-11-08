@@ -98,8 +98,8 @@ describe.each([true, false])('sent context inside the native user bubble (UserTe
   })
 
 
-  it('uses the message-local number in its preview and hides numbering guidance', () => {
-    const wire = buildProtocolBlock([{ text: '第二批引用', note: '说明', number: 8, localNumber: 1 }]) + '\n\n当前问题'
+  it('reads the original display number and hides guidance in legacy preview messages', () => {
+    const wire = '我批注了以下 1 处内容：\nAnnotation ids stay stable within their session scope. Local numbers apply only to this message. Identify annotations by quoted words or notes in replies. Keep ids and scopes internal.\n<annotation id="8" local="1" scope="s1">\n<quote>第二批引用</quote>\n<note>说明</note>\n</annotation>' + '\n\n当前问题'
     const { host } = mount(wire, modern)
     expect(host.querySelector('[data-native-body]')?.textContent).toBe('当前问题')
     act(() => { host.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click() })
