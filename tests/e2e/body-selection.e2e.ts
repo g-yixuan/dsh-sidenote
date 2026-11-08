@@ -17,7 +17,7 @@ test.afterEach(async ({ page }, info) => {
 
 const toolbarOf = (page: Page) => page.locator('[data-dsh-sidenote] [role="toolbar"]')
 const records = (page: Page, id: string) => page.evaluate(id => JSON.parse(localStorage.getItem('dsh-sidenote:annotations:v1:' + id) ?? '[]') as Annotation[], id)
-const replyOf = (view: Locator, text: string) => view.locator('[data-chat-flow-kind="assistant-step"]:not([data-chat-group-part="reasoning"])').filter({ hasText: text }).last()
+const replyOf = (view: Locator, text: string) => view.locator('[data-chat-flow-kind="assistant-step"]:not([data-chat-group-part="reasoning"])').filter({ hasText: text }).first()
 const badgeOf = (page: Page, note: string) => page.locator('[data-dsh-sidenote]').getByTitle(new RegExp(note))
 
 async function setReplies(page: Page, choice: 'all' | 'final') {
@@ -122,10 +122,14 @@ for (const real of [false, true]) test(`${real ? 'official Flash main' : 'native
   writeFileSync(join(process.env.DSH_E2E_WORKSPACE!, 'body-selection.txt'), post + '\n')
   await selectModel(page, view, real ? 'DeepSeek Flash (official E2E)' : 'Controlled E2E')
   const events = await send(view, id, real
-    ? `先单独输出 ${pre}，然后调用 read 工具读取 body-selection.txt。最终回答只回复文件中的完整标记，不调用其他工具。`
+    ? `这是两条正文的交互测试，必须按顺序执行：1. 在调用任何工具之前，先发送一条给用户看的进度正文，内容只能是 ${pre}。2. 在同一轮中调用 read 读取 body-selection.txt。3. 最终回答只能是文件中的完整标记，禁止再次输出 PRE 标记。不要省略第一条进度正文，也不要把它留到最终回答，不调用其他工具。`
     : '[e2e:body-selection] Read body-selection.txt and return the final marker.')
   const turn = events.find(event => event.type === 'turn/end')!.data.turn as number
-  expect(events.some(event => event.type === 'tool/result' && JSON.stringify(event.data).includes(post))).toBe(true)
+  const tool = events.find(event => event.type === 'tool/result' && JSON.stringify(event.data).includes(post))
+  const progress = events.find(event => event.type === 'assistant/message' && event.data.message.content.some((block: { type: string; text?: string }) => block.type === 'text' && block.text?.includes(pre)))
+  expect(tool, 'The host must actually read the file').toBeDefined()
+  expect(progress, 'The model must actually emit a progress reply').toBeDefined()
+  expect(progress!.seq, 'The progress reply must precede the tool result').toBeLessThan(tool!.seq)
   const first = replyOf(view, pre), last = replyOf(view, post)
   await processOpen(page, view, turn, false)
   await dragBetween(page, first, pre, last, post)
