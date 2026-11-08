@@ -33,11 +33,11 @@ export async function dismissOnboarding(page: Page): Promise<void> {
   await expect(mask).toHaveCount(0, { timeout: 15_000 })
 }
 
-export async function openSeedSession(page: Page): Promise<void> {
+export async function openSeedSession(page: Page, clickTimeout = 15_000): Promise<void> {
   const seed = process.env.DSH_E2E_SEED_SESSION
   if (!seed) throw new Error('Missing DSH_E2E_SEED_SESSION')
   const open = page.getByRole('button', { name: /^(Open sidebar|打开侧(?:边)?栏)$/ }).first()
-  if (await open.isVisible()) await open.click({ timeout: 2_000 })
+  if (await open.isVisible()) await open.click({ timeout: clickTimeout })
   const byId = page.locator(`[role="treeitem"][data-row-key="session:${seed}"]`)
   // Both maintained hosts expose stable row identities. Native pagination
   // controls can disappear while the list updates; wait for the target or an
@@ -47,11 +47,11 @@ export async function openSeedSession(page: Page): Promise<void> {
     await expect.poll(async () => await byId.count() > 0 || await overflow.count() > 0, { timeout: 30_000 }).toBe(true)
     if (await byId.count() > 0) break
     const label = await overflow.first().textContent()
-    await overflow.first().click({ timeout: 2_000 })
+    await overflow.first().click({ timeout: clickTimeout })
     await expect.poll(async () => await byId.count() > 0 || await overflow.count() > 0 && await overflow.first().textContent() !== label).toBe(true)
   }
   await expect(byId).toHaveCount(1)
-  await byId.getByText('Side chat plugin review', { exact: true }).click({ timeout: 2_000 })
+  await byId.getByText('Side chat plugin review', { exact: true }).click({ timeout: clickTimeout })
   const conversation = page.locator('[data-conversation-session]').first()
   await expect(conversation).toHaveAttribute('data-conversation-session', seed)
   const history = conversation.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()
@@ -66,7 +66,7 @@ export async function prepareSeedPage(page: Page): Promise<void> {
   // onboarding dialog intercepts it, rather than waiting for an absent dialog.
   await expect(async () => {
     await dismissOnboarding(page)
-    await openSeedSession(page)
+    await openSeedSession(page, 2_000)
   }).toPass({ timeout: 90_000, intervals: [250] })
 }
 
