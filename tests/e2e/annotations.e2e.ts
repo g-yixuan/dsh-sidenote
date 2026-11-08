@@ -137,6 +137,17 @@ test.describe('annotation editor lifecycle', () => {
     await expect(bubble.getByText('刚输入的中文注解', { exact: true })).not.toBeVisible()
     await expect.poll(() => items(page)).toMatchObject([{ note: '刚输入的中文注解', state: 'sent' }])
     await expect(chipOf(page)).toHaveCount(0)
+    for (const reload of [false, true]) {
+      if (reload) await page.reload()
+      await page.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first().scrollIntoViewIfNeeded()
+      const badge = page.locator(OVERLAY).getByTitle(/^(Sent annotation 1 \(view only\)|已发送的注释 1（只读回看）)$/)
+      await expect(badge).toBeVisible()
+      await expect(badge).toHaveCSS('border-style', 'solid')
+      await badge.click()
+      await expect(page.locator(OVERLAY)).toContainText('刚输入的中文注解')
+      await expect(page.locator(`${OVERLAY} textarea`)).toHaveCount(0)
+      await page.keyboard.press('Escape')
+    }
     await page.screenshot({ path: 'test-results/annotation-sent.png' })
   })
 
@@ -370,7 +381,7 @@ for (const surface of ['main', 'side'] as const) {
   })
 }
 
-for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}annotation numbering restarts for each message and retains sent source badges`, async ({ page }) => {
+for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}annotation numbering restarts for each message without cross-window source badges`, async ({ page }) => {
   test.skip(real && !process.env.DSH_E2E_ACCOUNT_MODEL, 'Requires an isolated native DeepSeek account')
   test.setTimeout(180_000)
   await prepareSeedPage(page)
@@ -389,22 +400,11 @@ for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}annotatio
     await editor.press('Enter')
     await expect(editor).toHaveCount(0)
   }
-  const checkSentSources = async (notes: string[]) => {
+  const checkCrossSources = async () => {
     const source = page.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'full history snapshot' }).first()
     await source.scrollIntoViewIfNeeded()
-    const badges = page.locator(OVERLAY).getByTitle(/^(Sent annotation \d+ \(view only\)|已发送的注释 \d+（只读回看）)$/)
-    await expect(badges).toHaveText(notes.length === 2 ? ['1', '2'] : ['1', '2', '1'])
-    for (const [index, note] of notes.entries()) {
-      // 已发送角标沿用灰色描边样式，并保留每一条原文定位及只读回看。
-      await expect(badges.nth(index)).toHaveCSS('border-style', 'solid')
-      await badges.nth(index).click()
-      const viewer = page.locator(OVERLAY)
-      await expect(viewer).toContainText('full history snapshot')
-      await expect(viewer).toContainText(note)
-      await expect(viewer.locator('textarea')).toHaveCount(0)
-      await page.keyboard.press('Escape')
-      await expect(badges).toHaveCount(notes.length)
-    }
+    // 主聊原文发往侧聊时，两边均不补造原文角标，回看留在侧聊消息预览。
+    await expect(page.locator(OVERLAY).getByRole('button', { name: /^\d+(?: · .*)?$/ })).toHaveCount(0)
   }
   await addNote('准备撤回的批注')
   await addNote('解释快照边界')
@@ -414,6 +414,7 @@ for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}annotatio
   await expect.poll(childItems).toMatchObject([{ number: 1, state: 'active' }])
   await addNote('解释刷新恢复\n请简短回答')
   await expect.poll(childItems).toMatchObject([{ number: 1 }, { number: 2 }])
+  await checkCrossSources()
   const prompt = '请用简短中文逐条回应本条消息的批注，不调用工具。'
   await input.fill(prompt)
   await side.getByRole('button', { name: /^(Send message|发送消息)$/ }).click()
@@ -437,7 +438,7 @@ for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}annotatio
   await expect(bubble).not.toContainText('Annotation ids')
   await page.screenshot({ path: `test-results/annotation-numbering-${real ? 'flash' : 'controlled'}-first.png` })
   await preview.click()
-  await checkSentSources(['解释快照边界', '解释刷新恢复\n请简短回答'])
+  await checkCrossSources()
   await addNote('解释发送冻结')
   await expect.poll(childItems).toMatchObject([{ state: 'sent', number: 1 }, { state: 'sent', number: 2 }, { state: 'active', number: 1 }])
   const nextPrompt = '这次批注和上一条消息里提到的快照边界有什么区别？不调用工具。'
@@ -452,10 +453,10 @@ for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}annotatio
     await expect(reply).toContainText('发送冻结')
     await expect(reply).toContainText('快照边界')
   }
-  await checkSentSources(['解释快照边界', '解释刷新恢复\n请简短回答', '解释发送冻结'])
+  await checkCrossSources()
   await page.reload()
   await expect(side).toHaveAttribute('data-sidenote-chat-session', child)
-  await checkSentSources(['解释快照边界', '解释刷新恢复\n请简短回答', '解释发送冻结'])
+  await checkCrossSources()
   const nextBubble = side.locator('[data-chat-flow-kind="user"]').filter({ hasText: nextPrompt }).last()
   await nextBubble.getByRole('button', { name: /^(1 annotated|批注 ×1)$/ }).click()
   await expect(page.locator('[data-sidenote-sent-preview] li > span')).toHaveText(['1.'])

@@ -53,7 +53,7 @@ Each message starts annotation numbering at 1, and model context uses the same n
 
 **Selections in a side chat** go only to that side chat, including selections in its inherited history. Partial text, paragraphs, lists, and code are supported. Streaming replies, cross-message selections, reasoning, and interface controls are excluded.
 
-Badges and highlights follow the source message and stay within its visible area. Folding the source keeps the annotation available above the composer.
+Badges and highlights appear only in the conversation receiving the annotation: main-to-main and side-to-the-same-side selections show badges. Selecting main text to ask in a side chat leaves no badge in main and creates no source badge in the side chat. The full quote and note remain in the target side chat’s annotation chip and sent-message preview. Same-conversation badges stay within the visible source area; folded sources remain available through annotation previews.
 
 ### Sending and recovery
 

@@ -522,7 +522,8 @@ function BadgeLayer(props: {
     const range = resolveRange(annotation, props.cache, props.sessionId)
     if (range === null) continue
     const source = quoteSourceOf(range.startContainer, props.sessionId)
-    if (source === null) continue
+    // 跨窗口提问仅保留目标会话的注释预览，不在来源窗口绘制角标和高亮。
+    if (source === null || source.sessionId !== annotation.sessionId) continue
     const clip = sourceClip(source)
     if (annotation.id === highlightId) {
       const rects = highlightRectsOf(range).map(rect => {

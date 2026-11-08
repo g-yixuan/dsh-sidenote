@@ -86,6 +86,21 @@ test('side local selection saves outside, reanchors after reload, and sends full
   await expect.poll(records).toMatchObject([{ state: 'sent' }, { state: 'sent' }])
   await expect(input).toHaveText('')
   await expect(side.getByText(/^(2 annotated|批注 ×2)$/)).toBeVisible()
+  for (const reload of [false, true]) {
+    if (reload) await restoreSameSide(page, child)
+    if (await inherited.getAttribute('aria-expanded') === 'false') await inherited.click()
+    await loadEarlierUntil(side, quoteBody)
+    await revealForReading(page, quoteBody)
+    const sentBadges = overlay.getByTitle(/^(Sent annotation \d+ \(view only\)|已发送的注释 \d+（只读回看）)$/)
+    await expect(sentBadges).toHaveText(['1', '2'])
+    for (let index = 0; index < 2; index++) {
+      await sentBadges.nth(index).click()
+      await expect(overlay).toContainText('full history snapshot')
+      if (index === 0) await expect(overlay).toContainText('侧回复的完整注解')
+      await expect(overlay.locator('textarea')).toHaveCount(0)
+      await page.keyboard.press('Escape')
+    }
+  }
   expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)).toEqual(parentBefore)
 })
 
