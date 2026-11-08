@@ -80,6 +80,8 @@ The saved session keeps the same layout: collapsible inherited context first, fo
 
 ## Sidenote settings
 
+On first use after installation or an upgrade introducing this behavior, Sidenote makes one attempt per host profile to set **Replies After Collapse** in General settings to **Final answer only**, including an existing **All replies** choice. You can change it back afterward; reloads, restarts, and later upgrades do not override it again. Once the attempt has been recorded, a failed preference write is not retried automatically; change the option manually in General settings. The host preference remains after disabling or uninstalling Sidenote. It affects only collapsed work details; cross-message selections remain unsupported when the process is expanded.
+
 Open DSH settings and select **Sidenote** in the left navigation. **Hide native quote** is on by default, hiding the Quote action in main and side-chat selection menus. Annotations and side-chat questions use their own actions. Turn the switch off when you want native quoting. Changes take effect immediately, are saved in the current host configuration, and survive reloads and restarts. An explicit user setting takes precedence over the default.
 
 ## Installation and troubleshooting
