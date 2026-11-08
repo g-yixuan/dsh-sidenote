@@ -131,26 +131,44 @@ export async function dragText(page: Page, body: Locator, text: string): Promise
   await expect(async () => {
     await body.getByText(text, { exact: false }).first().scrollIntoViewIfNeeded()
     await body.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
-    points = await body.evaluate((el, needle) => {
-      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
-      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        const at = (node.textContent ?? '').indexOf(needle)
-        if (at < 0) continue
-        const first = document.createRange(), last = document.createRange()
-        first.setStart(node, at); first.setEnd(node, at + 1)
-        last.setStart(node, at + needle.length - 1); last.setEnd(node, at + needle.length)
-        const a = first.getBoundingClientRect(), b = last.getBoundingClientRect()
-        const points = { x1: a.left + 0.1, y1: a.top + a.height / 2, x2: b.right - 0.1, y2: b.top + b.height / 2 }
-        if (!el.contains(document.elementFromPoint(points.x1, points.y1)) || !el.contains(document.elementFromPoint(points.x2, points.y2))) return null
-        return points
-      }
-      return null
-    }, text)
+    points = await selectionPoints(body, text)
     expect(points).not.toBeNull()
   }).toPass({ timeout: 5_000 })
   await page.mouse.move(points!.x1, points!.y1); await page.mouse.down()
   await page.mouse.move(points!.x2, points!.y2, { steps: 12 }); await page.mouse.up()
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toContain(text)
+}
+
+async function selectionPoints(body: Locator, text: string) {
+  return body.evaluate((el, needle) => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const at = (node.textContent ?? '').indexOf(needle)
+      if (at < 0) continue
+      const first = document.createRange(), last = document.createRange()
+      first.setStart(node, at); first.setEnd(node, at + 1)
+      last.setStart(node, at + needle.length - 1); last.setEnd(node, at + needle.length)
+      const a = first.getBoundingClientRect(), b = last.getBoundingClientRect()
+      const points = { x1: a.left + 0.1, y1: a.top + a.height / 2, x2: b.right - 0.1, y2: b.top + b.height / 2 }
+      if (!el.contains(document.elementFromPoint(points.x1, points.y1)) || !el.contains(document.elementFromPoint(points.x2, points.y2))) return null
+      return points
+    }
+    return null
+  }, text)
+}
+
+/** Cross two on-screen replies with the same real drag path as local selections. */
+export async function dragBetween(page: Page, first: Locator, firstText: string, last: Locator, lastText: string): Promise<void> {
+  await revealForReading(page, first.getByText(firstText, { exact: false }).first())
+  await revealForReading(page, last.getByText(lastText, { exact: false }).first())
+  const start = await selectionPoints(first, firstText), end = await selectionPoints(last, lastText)
+  expect(start).not.toBeNull(); expect(end).not.toBeNull()
+  // Collapse an earlier selection before dragging, rather than dragging its text.
+  await page.mouse.click(end!.x2, end!.y2)
+  await page.mouse.move(start!.x1, start!.y1); await page.mouse.down()
+  await page.mouse.move(end!.x2, end!.y2, { steps: 16 }); await page.mouse.up()
+  await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toContain(firstText)
+  await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toContain(lastText)
 }
 
 export async function selectModel(page: Page, view: Locator, name: string): Promise<void> {

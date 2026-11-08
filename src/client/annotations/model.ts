@@ -31,11 +31,15 @@ export interface Annotation {
   readonly anchorText: string
   /** 0-based ordinal of the quote's occurrence inside the anchor element. */
   readonly occurrence: number
+  /** Cross-reply quotes retain one anchor per body; legacy quotes use the fields above. */
+  readonly anchors?: readonly AnnotationAnchor[]
   /** User-written note; '' means 纯引用. */
   readonly note: string
   readonly state: 'active' | 'sent'
   readonly createdAt: number
 }
+
+export type AnnotationAnchor = Pick<Annotation, 'anchorKey' | 'anchorText' | 'occurrence'>
 
 export interface AnnotationDraft {
   readonly sessionId: string
@@ -45,6 +49,7 @@ export interface AnnotationDraft {
   readonly text: string
   readonly anchorText: string
   readonly occurrence: number
+  readonly anchors?: readonly AnnotationAnchor[]
   readonly note: string
 }
 
@@ -85,6 +90,14 @@ function reviveStored(value: unknown): Annotation | null {
   if (typeof a.text !== 'string' || typeof a.anchorText !== 'string') return null
   if (typeof a.occurrence !== 'number') return null
   if (a.state !== 'active' && a.state !== 'sent') return null
+  if (a.anchors !== undefined) {
+    if (!Array.isArray(a.anchors) || a.anchors.length < 2) return null
+    for (const anchor of a.anchors) {
+      if (!anchor || typeof anchor.anchorKey !== 'string' || !anchor.anchorKey
+        || typeof anchor.anchorText !== 'string' || !anchor.anchorText.trim()
+        || !Number.isSafeInteger(anchor.occurrence) || anchor.occurrence < 0) return null
+    }
+  }
   return {
     id: a.id,
     // 兼容预览版已发送记录的显示编号；待发送记录在水合后重排。
@@ -96,6 +109,7 @@ function reviveStored(value: unknown): Annotation | null {
     text: a.text,
     anchorText: a.anchorText,
     occurrence: a.occurrence,
+    ...(a.anchors ? { anchors: a.anchors as AnnotationAnchor[] } : {}),
     note: typeof a.note === 'string' ? a.note : '',
     state: a.state,
     createdAt: typeof a.createdAt === 'number' ? a.createdAt : 0,
@@ -228,6 +242,7 @@ export function createAnnotationStore(
         text: draft.text,
         anchorText: draft.anchorText,
         occurrence: draft.occurrence,
+        ...(draft.anchors ? { anchors: draft.anchors } : {}),
         note: draft.note,
         state: 'active',
         createdAt: now(),

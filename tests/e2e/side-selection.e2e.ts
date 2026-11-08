@@ -143,7 +143,7 @@ test('side native answer badge reanchors after reload when reasoning shares its 
   }
 })
 
-test('streaming side replies and cross-message selections stay ineligible; a stopped complete reply can be quoted', async ({ page }) => {
+test('streaming side replies and cross-turn selections stay ineligible; a stopped complete reply can be quoted', async ({ page }) => {
   await prepareSeedPage(page)
   const parentBefore = userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)
   const child = await openSideChat(page)
@@ -159,7 +159,7 @@ test('streaming side replies and cross-message selections stay ineligible; a sto
   await side.getByRole('button', { name: /^(Stop generating|停止生成)$/ }).click()
   await expect(reply).toHaveAttribute('data-sidenote-streaming', 'false')
 
-  // Auxiliary Range covers the negative multi-message rule; the positive
+  // Auxiliary Range covers the negative cross-turn rule; the positive
   // before/after-streaming flows above and below use real mouse selection.
   await side.evaluate(root => {
     const bodies = root.querySelectorAll('[data-sidenote-quote-body]')

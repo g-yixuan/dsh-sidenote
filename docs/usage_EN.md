@@ -36,7 +36,7 @@ Hidden side chats remain runnable. Reopen them from the recently closed entries 
 
 On DSH 0.2.2, the Sidenote toolbar offers **Quote**, **Add to conversation**, and **Ask in side chat** in the main conversation. Quote inserts a native quote block into the source conversation's composer, where you can add your question. Add to conversation opens the annotation editor so you can write notes for individual passages and send them together. Main and side chats share the same toolbar, annotation editor, and previews.
 
-1. Select a passage in a completed assistant reply.
+1. Select text in a completed assistant progress reply or final answer, including several reply bodies in the same turn.
 2. Choose to add it to the main conversation or ask in a side chat, then write a note.
 3. Click outside the editor or press `Enter` to save a new note; press `Esc` to cancel.
 4. Annotation and side-chat reflow chips sit side by side above the composer. Hover to read complete quotes, notes, or returned questions and answers; move into the card to keep reading. Click a chip to keep it open, then press Escape or click outside to close. The compact card scrolls internally for long content. Hovering a chip gently reveals an × button that clears that category of annotations or reflows without affecting the other category or the message body. Edit notes in place: leaving the field saves, Escape cancels. Remove individual entries or clear the batch.
@@ -49,11 +49,15 @@ Quotes and notes stay complete without being inserted into the body draft. Send 
 
 Each message starts annotation numbering at 1, and model context uses the same numbers as the badges. Sent badges keep their numbers, turn gray, and remain clickable for review. New notes support multiple lines, with `Shift+Enter` for a line break and `Enter` to save.
 
+The same selection rules apply to **All replies** and **Final answer only**, using only currently visible content. A selection containing reasoning, tool cards, process disclosure controls, or user messages is rejected in full; collapsed, hidden process content does not count as mixed content. Selections across sessions, main/side views, or turns are unsupported. A reply that is still streaming is temporarily ineligible; earlier completed progress replies need not wait for the whole turn to finish. Code, lists, and tables remain quotable, excluding code-copy controls.
+
 **Selections in the main conversation** can go to the main conversation or a side chat. Main-to-side handoff waits for the chosen tab's actual child session. Press `Esc` to cancel the wait; a failed handoff keeps the note open for retry.
 
-**Selections in a side chat** go only to that side chat, including selections in its inherited history. Partial text, paragraphs, lists, and code are supported. Streaming replies, cross-message selections, reasoning, and interface controls are excluded.
+**Selections in a side chat** go only to that side chat, including selections in its inherited history. Partial text, paragraphs, lists, code, and multiple reply bodies in the same turn are supported.
 
 Badges and highlights appear only in the conversation receiving the annotation: main-to-main and side-to-the-same-side selections show badges. Selecting main text to ask in a side chat leaves no badge in main and creates no source badge in the side chat. The full quote and note remain in the target side chat’s annotation chip and sent-message preview. Same-conversation badges stay within the visible source area; folded sources remain available through annotation previews.
+
+After a reload, cross-reply quotes locate each original fragment separately, with badges and highlights clipped to their source view. If a display-setting change or folding hides part of the source, the badge and highlight temporarily disappear while the full quote remains available. They return when the original text is visible again, without attaching to similar text elsewhere.
 
 ### Sending and recovery
 
@@ -82,7 +86,7 @@ The saved session keeps the same layout: collapsible inherited context first, fo
 
 ## Sidenote settings
 
-On first use after installation or an upgrade introducing this behavior, Sidenote makes one attempt per host profile to set **Replies After Collapse** in General settings to **Final answer only**, including an existing **All replies** choice. You can change it back afterward; reloads, restarts, and later upgrades do not override it again. Once the attempt has been recorded, a failed preference write is not retried automatically; change the option manually in General settings. The host preference remains after disabling or uninstalling Sidenote. It affects only collapsed work details; cross-message selections remain unsupported when the process is expanded.
+On first use after installation or an upgrade introducing this behavior, Sidenote makes one attempt per host profile to set **Replies After Collapse** in General settings to **Final answer only**, including an existing **All replies** choice. You can change it back afterward; reloads, restarts, and later upgrades do not override it again. Once the attempt has been recorded, a failed preference write is not retried automatically; change the option manually in General settings. The host preference remains after disabling or uninstalling Sidenote. It affects only collapsed work details; selections follow the visible-reply rules above.
 
 Open DSH settings and select **Sidenote** in the left navigation. **Hide native quote** is on by default, hiding the Quote action in main and side-chat selection menus. Annotations and side-chat questions use their own actions. Turn the switch off when you want native quoting. Changes take effect immediately, are saved in the current host configuration, and survive reloads and restarts. An explicit user setting takes precedence over the default.
 
