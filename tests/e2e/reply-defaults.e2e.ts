@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createHostApi, restartHost } from './host'
 import { dragText, openGeneralSettings, prepareSeedPage, registerSeedWorkspace, selectModel, sessionEventsOf, userMessagesOf } from './journey'
@@ -40,6 +40,9 @@ const closeSettings = (page: Page) => page.getByRole('dialog', { name: /^(Settin
 for (const real of [false, true]) test(`${real ? 'official Flash ' : ''}folded replies initialize once and preserve an opt-out across reload and restart`, async ({ page }) => {
   test.skip(real && !process.env.DSH_E2E_REAL_MODEL, 'Set DSH_E2E_REAL_KEY_FILE for real Flash verification')
   test.setTimeout(240_000)
+  // Earlier cases may intentionally cancel a request; verify only this case's wire records.
+  const wireFile = join(process.env.DSH_E2E_HOME!, '..', 'official-wire.json')
+  const wireStart: number = real && existsSync(wireFile) ? JSON.parse(readFileSync(wireFile, 'utf8')).length : 0
   // Every previous test page is closed. Seed a saved all choice before this
   // client's first load, exercising an upgrade as well as a fresh install.
   await configure('ui-chat', { foldedReplies: 'all', transcriptView: 'detailed', collapseTiming: 'completion' })
@@ -102,8 +105,7 @@ for (const real of [false, true]) test(`${real ? 'official Flash ' : ''}folded r
   await page.screenshot({ path: `test-results/reply-default-${real ? 'flash' : 'controlled'}-restart.png` })
   await closeSettings(page)
   if (real) {
-    const wireFile = join(process.env.DSH_E2E_HOME!, '..', 'official-wire.json')
-    const wire = JSON.parse(readFileSync(wireFile, 'utf8')) as { model: string; status: number; finished?: boolean }[]
+    const wire = (JSON.parse(readFileSync(wireFile, 'utf8')) as { model: string; status: number; finished?: boolean }[]).slice(wireStart)
     expect(wire.length).toBeGreaterThanOrEqual(3)
     expect(wire.every(request => request.model === 'deepseek-flash' && request.status === 200 && request.finished)).toBe(true)
     writeFileSync('test-results/reply-default-flash-wire.json', JSON.stringify(wire, null, 2) + '\n')
