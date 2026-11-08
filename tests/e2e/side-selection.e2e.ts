@@ -106,6 +106,13 @@ test('side local selection saves outside, reanchors after reload, and sends full
 
 test('side native answer badge reanchors after reload when reasoning shares its message key', async ({ page }) => {
   await prepareSeedPage(page)
+  // 全量回归的主线已有同文案回复，预置一条以免误选继承区后单测假通过。
+  const main = page.locator('[data-conversation-session]').first()
+  await selectModel(page, main, 'Controlled E2E')
+  await main.locator('[data-composer-input]').fill('Prepare the same reply in the parent')
+  await main.locator('[data-composer-input]').press('Enter')
+  await expect(main.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: 'Controlled E2E reply.' }).last()).toBeVisible()
+  await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
   const child = await openSideChat(page)
   const side = sideChatOf(page)
   await selectModel(page, side, 'Controlled E2E')
@@ -113,7 +120,8 @@ test('side native answer badge reanchors after reload when reasoning shares its 
   await input.fill('Native reply with reasoning [e2e:signed-thinking]')
   await input.press('Enter')
   await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
-  const answer = side.locator('[data-sidenote-quote-body]').filter({ hasText: 'Controlled E2E reply.' }).first()
+  const answer = side.locator('[data-chat-flow-kind="assistant-step"] [data-sidenote-quote-body]').filter({ hasText: 'Controlled E2E reply.' }).first()
+  await expect(answer).toHaveAttribute('data-sidenote-streaming', 'false')
   await dragText(page, answer, 'complete assistant response')
   const overlay = page.locator('[data-dsh-sidenote]')
   await overlay.getByRole('button', { name: /^(Add to conversation|添加到对话)$/ }).click()
