@@ -51,6 +51,8 @@ The script uses a temporary DSH_HOME. [CI](.github/workflows/ci.yml) derives exa
 
 Keyless E2E verifies interactions and mounting, not model answers. Changes to opening a side chat while the main session is running, cancellation, queues, or progress snapshots also need a real running-session scenario and explicit validation results. State any limits of your validation.
 
+`pnpm test:mount --smoke` checks core forks, message isolation, reflow, and selection recovery; it does not replace full feature-PR regression. CI selects smoke only for version-only changes or identical merged content with valid evidence. See the [maintenance guide](docs/maintaining_EN.md) for the rules and timing reports.
+
 
 `pnpm test:compat` installs the current packed build in an isolated profile, then verifies rejection of an incompatible update and restoration of the original package. Use `DSH_COMPAT_BASELINE` and `DSH_COMPAT_REJECTED` for retirement checks against a historical npm pin and the actual new build; see the [compatibility policy](docs/compatibility_EN.md). Run the real model separately with `DSH_E2E_REAL_KEY_FILE=/path/to/private-key-file pnpm test:mount --grep "official Flash"`, also setting the exact DSH_CMD / DSH_EXPECTED_VERSION above. Only the server reads the key file; it never enters the profile, browser or artifacts. CI does not call external paid models by default. The lane directly uses official api.deepseek.com / deepseek-flash for main/side tools, multiple turns, images and actual reasoning-level requests, saving request metadata without prompts or authentication.
 

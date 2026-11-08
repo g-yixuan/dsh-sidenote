@@ -7,5 +7,5 @@ export default defineConfig({
   retries: 0,
   workers: 1,
   use: { actionTimeout: 15_000 },
-  reporter: [['list']],
+  reporter: [['list'], ['json', { outputFile: 'test-results/playwright-results.json' }]],
 })

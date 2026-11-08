@@ -18,7 +18,7 @@
 ## 发布步骤
 
 1. 从 `main` 创建发布分支，更新 `package.json` 的版本并准备发布说明，提交 `release:` PR。不要直接推送版本变更到 `main`。
-2. 确认发布 PR 的 `ci` 和全部 `plugin-mount` 宿主兼容矩阵通过，再合并到 `main`；确认合并后该提交的 CI 也通过。
+2. 确认发布 PR 的 `ci`、固定 `host-compatibility` 和全部 `plugin-mount` 宿主兼容矩阵通过，再合并到 `main`；确认合并后该提交的 CI 也通过。仅版本字段变化且有近期有效基线证据时，宿主矩阵执行核心 smoke；合入后内容与已验证 PR 一致也可执行 smoke，证据不足则自动全量。核对 CI 摘要中的模式、原因及来源链接，规则见[维护指南](maintaining.md)。
 3. 在 `main` 上的该版本提交创建对应的 `vX.Y.Z` tag，并推送到仓库：
 
    ```bash
