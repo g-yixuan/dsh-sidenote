@@ -22,7 +22,11 @@ function preferenceFixture(initial?: ReturnType<SidenoteConfigForm['getSnapshot'
   const form = {
     getSnapshot: () => state,
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } },
-    set: vi.fn(async (_field: 'hideNativeQuote', hidden: boolean) => { publish(hidden); return true }),
+    set: vi.fn(async (field: 'hideNativeQuote' | 'showSideChatNote', value: boolean) => {
+      state = { ...state, value: { hideNativeQuote: false, ...state.value, [field]: value } }
+      for (const listener of listeners) listener()
+      return true
+    }),
   }
   const preferences = createSidenotePreferences(form)
   cleanup.push(preferences.dispose)
@@ -30,6 +34,22 @@ function preferenceFixture(initial?: ReturnType<SidenoteConfigForm['getSnapshot'
 }
 
 describe('native quotation preferences', () => {
+  it('defaults to showing side-chat notes and saves the opt-out independently', async () => {
+    expect(Config({}).showSideChatNote.get()).toBe(true)
+    expect(Config({ showSideChatNote: false }).showSideChatNote.get()).toBe(false)
+    const { form, preferences } = preferenceFixture()
+    expect(preferences.getSnapshot().showSideChatNote).toBe(true)
+    await preferences.setShowSideChatNote(false)
+    expect(form.set).toHaveBeenCalledWith('showSideChatNote', false)
+    await preferences.setHidden(true)
+    expect(preferences.getSnapshot()).toMatchObject({ hidden: true, showSideChatNote: false, failed: false })
+    form.set.mockResolvedValueOnce(false)
+    await preferences.setShowSideChatNote(true)
+    expect(preferences.getSnapshot()).toMatchObject({ showSideChatNote: false, failed: true })
+    await preferences.setShowSideChatNote(true)
+    expect(preferences.getSnapshot()).toMatchObject({ showSideChatNote: true, failed: false })
+  })
+
   it('hides native quotes by default while honoring an explicit opt-out', () => {
     expect(Config({}).hideNativeQuote.get()).toBe(true)
     expect(Config({ hideNativeQuote: false }).hideNativeQuote.get()).toBe(false)

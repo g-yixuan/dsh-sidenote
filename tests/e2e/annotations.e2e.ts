@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, userMessageContentsOf, openSideChat, selectModel, USER_BUBBLE } from './journey'
+import { prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, userMessageContentsOf, openGeneralSettings, openSideChat, selectModel, USER_BUBBLE } from './journey'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -54,6 +54,75 @@ async function addQuote(page: Page): Promise<void> {
 
 test.describe('annotation editor lifecycle', () => {
   test.beforeEach(async ({ page }) => { await prepareSeedPage(page) })
+
+  test('side-chat note preference skips entry, persists after reload and restores note entry', async ({ page }) => {
+    const overlay = page.locator(OVERLAY)
+    const parentBefore = userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)
+    const noteInput = overlay.getByRole('textbox', { name: /^(Side chat note|侧边聊天注解)$/ })
+    const setting = async (show: boolean, expected: boolean) => {
+      await openGeneralSettings(page)
+      const dialog = page.getByRole('dialog', { name: /^(Settings|设置)$/ })
+      await dialog.getByRole('button', { name: 'Sidenote', exact: true }).click()
+      const toggle = dialog.getByRole('switch', { name: /^(Add a note before asking in side chat|侧边提问前填写注解)$/ })
+      await expect(toggle).toBeEnabled()
+      await expect(toggle).toHaveAttribute('aria-checked', String(expected))
+      if (show !== expected) await toggle.click()
+      await expect(toggle).toHaveAttribute('aria-checked', String(show))
+      await expect(toggle).toBeEnabled()
+      await expect(dialog.getByRole('alert')).toHaveCount(0)
+      await page.screenshot({ path: `test-results/side-note-setting-${show}.png` })
+      await dialog.getByRole('button', { name: /^(Close(?: settings)?|关闭(?:设置)?)$/i }).click()
+    }
+    const ask = async () => {
+      await selectQuote(page)
+      await overlay.getByText(/^(Ask in side chat|在侧边聊天中提问)$/).click()
+    }
+    await ask()
+    await expect(noteInput).toBeVisible()
+    await page.keyboard.press('Escape')
+    await setting(false, true)
+    try {
+      await ask()
+      const side = sideChatOf(page)
+      await expect(side).toHaveCount(1, { timeout: 30_000 })
+      await expect(side.locator('[data-composer-input]')).toBeVisible()
+      const child = await side.getAttribute('data-sidenote-chat-session')
+      expect(child).toBeTruthy()
+      const childItems = () => page.evaluate(id => JSON.parse(localStorage.getItem('dsh-sidenote:annotations:v1:' + id) ?? '[]'), child!)
+      await expect.poll(childItems).toMatchObject([{ text: 'full history snapshot', note: '', state: 'active' }])
+      await expect(noteInput).toHaveCount(0)
+      const input = side.locator('[data-composer-input]')
+      await expect(input).toBeFocused()
+      await input.fill('Explain this selected term')
+      await ask()
+      await expect.poll(childItems).toHaveLength(2)
+      await expect(input).toHaveText('Explain this selected term')
+      await expect(input).toBeFocused()
+      await expect(noteInput).toHaveCount(0)
+      expect(await items(page)).toEqual([])
+      expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)).toEqual(parentBefore)
+
+      await page.reload()
+      await expect(input).toBeVisible()
+      await setting(false, false)
+      await ask()
+      await expect.poll(childItems).toHaveLength(3)
+      await expect(noteInput).toHaveCount(0)
+      await selectControlledModel(page)
+      await input.press('Enter')
+      await expect.poll(() => userMessagesOf(child!).filter(text => text.includes('<quote>full history snapshot</quote>'))).toHaveLength(1)
+      const sent = userMessagesOf(child!).find(text => text.includes('<quote>full history snapshot</quote>'))!
+      expect(sent.match(/<quote>full history snapshot<\/quote>/g)).toHaveLength(3)
+      await expect.poll(childItems).toMatchObject([{ state: 'sent' }, { state: 'sent' }, { state: 'sent' }])
+      expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)).toEqual(parentBefore)
+      await page.screenshot({ path: 'test-results/side-note-skipped.png' })
+    } finally {
+      await setting(true, false)
+    }
+    await ask()
+    await expect(noteInput).toBeVisible()
+    await page.keyboard.press('Escape')
+  })
 
   test('side-chat note survives outside click; empty note saves and Escape discards', async ({ page }) => {
     const overlay = page.locator(OVERLAY)

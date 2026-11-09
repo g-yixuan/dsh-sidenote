@@ -8,14 +8,14 @@ import { SideChatNoteEditor } from '../src/client/annotate/overlay.tsx'
 
 afterEach(() => { document.body.replaceChildren() })
 
-function mount(save: (note: string) => boolean = () => true) {
+function mount(save: (note: string) => boolean | Promise<boolean> = () => true, skipNote = false) {
   const onSave = vi.fn(save)
   const onCancel = vi.fn()
   const host = document.createElement('div')
   document.body.append(host)
   const root = createRoot(host)
   const render = (handler = onSave) => act(() => {
-    root.render(<SideChatNoteEditor x={40} y={40} onSave={handler} onCancel={onCancel} />)
+    root.render(<SideChatNoteEditor x={40} y={40} skipNote={skipNote} onSave={handler} onCancel={onCancel} />)
   })
   render()
   const input = host.querySelector('textarea')!
@@ -31,6 +31,31 @@ function mount(save: (note: string) => boolean = () => true) {
 }
 
 describe('side-chat note editor', () => {
+  it('skips note entry and saves an empty note once while waiting for the target', async () => {
+    let finish!: (ok: boolean) => void
+    const v = mount(() => new Promise(resolve => { finish = resolve }), true)
+    expect(v.host.querySelector('textarea')).toBeNull()
+    expect(v.host.querySelector('[role="status"]')).not.toBeNull()
+    v.outside(); v.render()
+    expect(v.onSave).toHaveBeenCalledExactlyOnceWith('')
+    await act(async () => { finish(true) })
+    expect(v.host.querySelector('textarea')).toBeNull()
+    v.unmount()
+  })
+
+  it('shows the editor after a skipped-note failure and keeps it open while typing a retry', () => {
+    const v = mount(() => false, true)
+    expect(v.input).not.toBeNull()
+    v.outside()
+    expect(v.onSave).toHaveBeenCalledExactlyOnceWith('')
+    v.type('重试时补充的问题')
+    expect(v.host.querySelector('textarea')).toBe(v.input)
+    expect(v.input.value).toBe('重试时补充的问题')
+    v.key('Enter')
+    expect(v.onSave).toHaveBeenLastCalledWith('重试时补充的问题')
+    v.unmount()
+  })
+
   it('outside click preserves the latest note exactly once', () => {
     const v = mount()
     v.type('刚输入的中文注解')
