@@ -56,6 +56,19 @@ describe('side-chat note editor', () => {
     v.unmount()
   })
 
+  it('cancels a skipped-note wait and ignores its late result', async () => {
+    let finish!: (ok: boolean) => void
+    const v = mount(() => new Promise(resolve => { finish = resolve }), true)
+    act(() => { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    expect(v.onCancel).toHaveBeenCalledOnce()
+    await act(async () => { finish(false) })
+    expect(v.host.querySelector('textarea')).toBeNull()
+    expect(v.host.textContent).not.toContain("Couldn't open")
+    v.outside()
+    expect(v.onSave).toHaveBeenCalledExactlyOnceWith('')
+    v.unmount()
+  })
+
   it('outside click preserves the latest note exactly once', () => {
     const v = mount()
     v.type('刚输入的中文注解')

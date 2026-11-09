@@ -73,17 +73,18 @@ describe('native quotation preferences', () => {
     expect(preferences.getSnapshot().hidden).toBe(false)
   })
 
-  it('does not admit a second write while the visible switch is saving', async () => {
+  it('does not admit a write from either switch while a preference is saving', async () => {
     const { form, preferences } = preferenceFixture()
     let finish!: (accepted: boolean) => void
     form.set.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
     const writing = preferences.setHidden(true)
     await preferences.setHidden(false)
+    await preferences.setShowSideChatNote(false)
     expect(form.set).toHaveBeenCalledTimes(1)
     expect(preferences.getSnapshot().saving).toBe(true)
     finish(false)
     await writing
-    expect(preferences.getSnapshot()).toMatchObject({ hidden: false, saving: false, failed: true })
+    expect(preferences.getSnapshot()).toMatchObject({ hidden: false, showSideChatNote: true, saving: false, failed: true })
   })
 
   it('coordinates main and side surfaces, keeps native-only selections and restores the renderer', async () => {
