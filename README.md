@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(max-width: 640px)" srcset="docs/assets/hero-compact.svg">
-    <img src="docs/assets/hero.svg" alt="dsh-sidenote：思路可以分岔，主线始终向前。划选注释、侧边追问，再把结论带回来。" width="100%">
+    <img src="docs/assets/hero.svg" alt="dsh-sidenote：思路可以分岔，主线始终向前。划选批注、侧边聊天与结论回流。" width="100%">
   </picture>
 </p>
 
@@ -44,6 +44,8 @@ dsh plugin --profile web add dsh-sidenote
 ### 有疑问，在旁边聊透
 
 评审方案时想追问一个细节，读代码时想弄清一种实现，都可以从当前对话开一个侧聊。**完整历史随 fork 保留**，不用再交代一遍背景。
+
+**带着背景继续聊，已有缓存接着用。** 侧聊延续主线上下文，支持上下文缓存复用，减少缓存命中部分的重复计算与输入开销。
 
 侧聊有独立的多轮对话、工具卡、模型和权限切换，也支持图片、`@` 引用以及面板内审批。主线和支线各自推进。
 
