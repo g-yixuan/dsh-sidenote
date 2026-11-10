@@ -30,6 +30,8 @@ The right sidebar can keep multiple side-chat tabs, each with independent histor
 
 The note popover has a **Cancel** (×) button, available before confirmation, while waiting, and after failure; `Esc` does the same. Cancelling discards this pending quote and prevents late results from submitting it. Preparing a long-history side chat stays pending until it is ready, fails, or you cancel.
 
+![Side-chat note popover with cancellation and retry controls, shown in Chinese](assets/side-note-cancel.png)
+
 ### Session lists and recovery
 
 Side chats stay out of the sidebar list and search results from creation, without briefly flashing into the list. Closing tabs or reloading does not put registered side chats back in the list. Saving as a regular session creates a visible copy.
