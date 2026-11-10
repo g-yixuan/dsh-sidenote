@@ -6,8 +6,14 @@ interface NativeQuoteProps {
   useSession<T>(select: (state: { sessionId: string }) => T): T
 }
 
+/** The shared preview store owns toolbar visibility without recapturing the native selection. */
+interface QuoteSelection {
+  subscribe(listener: () => void): () => void
+  getSnapshot(): { selection: { sessionId: string } | null }
+}
+
 /** Coordinate the native surface with Sidenote's existing selection toolbar. */
-export function registerNativeQuoteVisibility(ctx: Context, preferences: SidenotePreferences, ownsSelection: (sessionId: string) => boolean): void {
+export function registerNativeQuoteVisibility(ctx: Context, preferences: SidenotePreferences, selection: QuoteSelection): void {
   type Entry = { options: { key?: string }; component: ComponentType<NativeQuoteProps> }
   const slots = ctx.slots as Context['slots'] & {
     entries(name: string): readonly Entry[]
@@ -22,7 +28,8 @@ export function registerNativeQuoteVisibility(ctx: Context, preferences: Sidenot
         const Wrapped = (props: NativeQuoteProps) => {
           const state = useSyncExternalStore(preferences.subscribe, preferences.getSnapshot)
           const sessionId = props.useSession(session => session.sessionId)
-          if (state.hidden || ownsSelection(sessionId)) return null
+          const selectedSession = useSyncExternalStore(selection.subscribe, () => selection.getSnapshot().selection?.sessionId)
+          if (state.hidden || selectedSession === sessionId) return null
           return createElement(Original, props)
         }
         entry.component = Wrapped

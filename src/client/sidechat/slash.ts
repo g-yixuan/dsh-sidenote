@@ -23,6 +23,7 @@ interface SelectOption {
 interface CommandUiService {
   register(contribution: {
     readonly name: string
+    readonly label?: () => string
     // 契约在 0.1.5 从 string 改为 () => string（authority:
     // dsh-client-ui-commands 0.1.5-rc.2 contract.d.ts `readonly description: () => string`；
     // 0.1.1~0.1.3 为 string）。传错形状会在候选合成时炸掉整个斜杠菜单
@@ -43,10 +44,11 @@ function isDsh015Plus(ctx: Context): boolean {
   return legacy === undefined || legacy === null
 }
 
-/** 单个命令名对应的完整贡献（side / 侧边 共用）。 */
-function makeContribution(ctx: Context, name: string) {
+/** One canonical command; localized labels participate in the host's menu search. */
+function makeContribution(ctx: Context) {
   return {
-    name,
+    name: 'side',
+    label: () => t('headerSide'),
     description: isDsh015Plus(ctx) ? () => t('cmdDesc') : t('cmdDesc'),
     available: (session: CommandSession) => canForkFrom(ctx, session.sessionId),
     ui: {
@@ -114,7 +116,7 @@ function makeContribution(ctx: Context, name: string) {
   }
 }
 
-/** 注册 /side 与中文别名「/侧边」；不可行时静默降级（不影响 Tab 入口）。 */
+/** Register /side once, with a localized searchable label rather than a duplicate alias row. */
 export function registerSideCommand(ctx: Context): void {
   let commandUi: CommandUiService | undefined
   try {
@@ -123,11 +125,9 @@ export function registerSideCommand(ctx: Context): void {
     return
   }
   if (commandUi === undefined || typeof commandUi.register !== 'function') return
-  for (const name of ['side', '侧边']) {
-    try {
-      ctx.effect(() => commandUi.register(makeContribution(ctx, name)), `dsh-sidenote: /${name} command`)
-    } catch (error) {
-      console.warn(`[dsh-sidenote] /${name} 命令注册失败（Tab 入口不受影响）:`, error)
-    }
+  try {
+    ctx.effect(() => commandUi.register(makeContribution(ctx)), 'dsh-sidenote: /side command')
+  } catch (error) {
+    console.warn('[dsh-sidenote] /side command registration failed:', error)
   }
 }

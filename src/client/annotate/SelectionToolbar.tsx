@@ -2,12 +2,12 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { useLocaleTick } from '../locale-tick.ts'
 import { t } from '../locales.ts'
 import { sourceClip } from '../annotations/source.ts'
-import type { SelectionSnapshot } from './selection.ts'
+import type { SelectionPreview } from './selection.ts'
 import css from './annotate.module.css'
 
 /** Preserve Sidenote's selection surface while admitting the host quote action. */
 export function SelectionToolbar(props: {
-  snapshot: SelectionSnapshot
+  snapshot: SelectionPreview
   sideChatAvailable: boolean
   addAvailable: boolean
   onAdd(): void

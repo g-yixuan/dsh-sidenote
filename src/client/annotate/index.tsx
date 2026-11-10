@@ -15,7 +15,7 @@
 import { createRoot } from 'react-dom/client'
 import type { Context } from '../host/contracts.ts'
 import type { AnnotationStore } from '../annotations/model.ts'
-import { captureSelection, createSelectionController } from './selection.ts'
+import { createSelectionController } from './selection.ts'
 import { AnnotateOverlay } from './overlay.tsx'
 import { createContextChips } from '../annotations/chip.tsx'
 import { registerNativeComposer } from '../annotations/NativeComposer.tsx'
@@ -41,7 +41,7 @@ export function registerAnnotations(ctx: Context, reflow: ReflowStore, store: An
       document.body.appendChild(host)
       const root = createRoot(host)
       root.render(<AnnotateOverlay ctx={ctx} store={store} controller={controller} preferences={preferences} />)
-      registerNativeQuoteVisibility(ctx, preferences, sessionId => captureSelection(currentSessionIdOf(ctx))?.sessionId === sessionId)
+      registerNativeQuoteVisibility(ctx, preferences, controller)
 
       // 发送携带：原生提交入口在提交瞬间把协议块（注释 + 回流）拼入正文（草稿零污染）。
       registerNativeComposer(ctx, store, reflow)

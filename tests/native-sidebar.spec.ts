@@ -334,14 +334,17 @@ describe('native 数据源切换（P2）', () => {
     }
     // registerSideCommand 经 ctx.effect 注册——fake 直接立即执行。
     ;(ctx as { effect: unknown }).effect = (fn: () => void) => fn()
-    let contribution: { ui: { options: (s: { sessionId: string }) => Promise<readonly { id: string; label: string }[]>; onSelect: (o: { id: string }, s: { sessionId: string }) => void } } | undefined
+    let contribution: { name: string; label(): string; ui: { options: (s: { sessionId: string }) => Promise<readonly { id: string; label: string }[]>; onSelect: (o: { id: string }, s: { sessionId: string }) => void } } | undefined
+    const registeredNames: string[] = []
     ;(ctx as { get: unknown }).get = (name: string) => {
-      if (name === 'commandUi') return { register: (c: typeof contribution) => { contribution = c } }
+      if (name === 'commandUi') return { register: (c: typeof contribution) => { registeredNames.push(c!.name); contribution = c } }
       if (name === 'sidebarRight') return { openTab() {}, focus: focusFn, tabsIn: () => liveSideChatsOf('s-slash').map(panel => ({ id: panel.tabId, kind: SIDE_TAB_TYPE, title: panel.readTitle() })) }
       return undefined
     }
     const dispose = registerLiveSideChat('s-slash', 'tab-slash', () => {}, () => ({}), () => '侧边 2')
     registerSideCommand(ctx)
+    expect(registeredNames).toEqual(['side'])
+    expect(contribution!.label()).toBe('Side')
     const options = await contribution!.ui.options({ sessionId: 's-slash' })
     expect(options.map(o => o.id)).toContain('focus:tab-slash')
     expect(options.find(o => o.id === 'focus:tab-slash')?.label).toContain('侧边 2')

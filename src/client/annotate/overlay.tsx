@@ -17,7 +17,7 @@ import type { ReactNode } from 'react'
 import { IconCheckOutline16, IconTrashOutline16 } from '../host/icons.ts'
 import type { Context } from '../host/contracts.ts'
 import { currentSessionIdOf } from '../host/currentSession.ts'
-import { focusSideComposer } from '../host/dom.ts'
+import { focusSideComposer, mountedConversationIds } from '../host/dom.ts'
 import { hostDiagnostics } from '../host/probes.ts'
 import { insertNativeQuote, probeInput, resolveInput } from '../host/input.ts'
 import { sideChatBridge, type SideChatBridge } from '../bridge.ts'
@@ -27,7 +27,7 @@ import { badgeAnchorOf, gutterAnchorOf, highlightRectsOf, resolveRanges, spreadB
 import { quoteSourceOf, sourceClip, focusSourceComposer } from '../annotations/source.ts'
 import { FirstUseHint } from './hint.tsx'
 import type { Annotation, AnnotationStore } from '../annotations/model.ts'
-import type { SelectionController, SelectionSnapshot } from './selection.ts'
+import { resolveSelection, type SelectionController, type SelectionSnapshot } from './selection.ts'
 import { AnnotationBoundary } from '../annotations/boundary.tsx'
 import type { SidenotePreferences } from '../preferences.ts'
 import { SelectionToolbar } from './SelectionToolbar.tsx'
@@ -119,11 +119,19 @@ function AnnotateOverlayInner({ ctx, store, controller, preferences }: OverlayPr
   const currentSessionId = currentSessionIdOf(ctx)
   const [editor, setEditor] = useState<EditorState | null>(null)
   const [sideDraft, setSideDraft] = useState<SideDraftState | null>(null)
+  const [viewer, setViewer] = useState<{ annotationId: number; x: number; y: number; bounds?: Bounds } | null>(null)
   // Bumped by scroll/resize/DOM mutation so badge/highlight geometry follows.
   const [, setGeometryTick] = useState(0)
   const rangeCache = useRef(new Map<number, CachedRange>())
+  const selection = selectionState.selection
+  const mountedSessions = mountedConversationIds()
+  const hasStoredAnnotations = store.sessions().some(id => store.list(id).length > 0)
+  const geometryActive = selection !== null || editor !== null || sideDraft !== null || viewer !== null
+    || store.sessions().some(id => mountedSessions.has(id) && store.list(id).some(annotation => (annotation.sourceSessionId ?? id) === id))
 
   useEffect(() => {
+    if (!geometryActive && !hasStoredAnnotations) return
+    let mountedKey = [...mountedConversationIds()].sort().join('\n')
     let raf = 0
     let debounce = 0
     const bumpNow = (): void => {
@@ -144,30 +152,46 @@ function AnnotateOverlayInner({ ctx, store, controller, preferences }: OverlayPr
       }, 100)
     }
     const observer = new MutationObserver(records => {
+      if (!geometryActive) {
+        const next = [...mountedConversationIds()].sort().join('\n')
+        if (next !== mountedKey) { mountedKey = next; bumpNow() }
+        return
+      }
       // Ignore this overlay's own positioning styles; host pane resizing and
       // visibility still invalidate geometry without a feedback loop.
       if (records.every(record => (record.target instanceof Element ? record.target : record.target.parentElement)?.closest('[data-dsh-sidenote]'))) return
       bumpDebounced()
     })
     try {
-      observer.observe(document.body, { childList: true, subtree: true, characterData: true,
-        attributes: true, attributeFilter: ['hidden', 'aria-expanded', 'data-sidenote-streaming', 'style', 'class'] })
+      observer.observe(document.body, { childList: true, subtree: true,
+        ...(geometryActive ? { characterData: true, attributes: true,
+          attributeFilter: ['hidden', 'aria-expanded', 'data-sidenote-streaming', 'style', 'class'] } : {}) })
     } catch {
       // document.body missing (pre-mount teardown) — badges just stay put.
     }
-    window.addEventListener('resize', bumpNow)
-    document.addEventListener('scroll', bumpNow, true)
+    if (geometryActive) {
+      window.addEventListener('resize', bumpNow)
+      document.addEventListener('scroll', bumpNow, true)
+    }
     return () => {
       observer.disconnect()
-      window.removeEventListener('resize', bumpNow)
-      document.removeEventListener('scroll', bumpNow, true)
+      if (geometryActive) {
+        window.removeEventListener('resize', bumpNow)
+        document.removeEventListener('scroll', bumpNow, true)
+      }
       if (raf !== 0) window.cancelAnimationFrame(raf)
       if (debounce !== 0) window.clearTimeout(debounce)
     }
-  }, [])
+  }, [geometryActive, hasStoredAnnotations])
 
-  const selection = selectionState.selection
   const nativeQuoteAvailable = selection !== null && !preference.hidden && typeof resolveInput(ctx, selection.sessionId)?.insertQuote === 'function'
+
+  const commitSelection = (action: (snapshot: SelectionSnapshot) => void): void => {
+    if (!selection) return
+    const snapshot = resolveSelection(selection)
+    if (snapshot) action(snapshot)
+    else controller.clear()
+  }
 
   const addToConversation = (snapshot: SelectionSnapshot): void => {
     const anchor = selectionBadgePoint(snapshot)
@@ -224,7 +248,6 @@ function AnnotateOverlayInner({ ctx, store, controller, preferences }: OverlayPr
   }
 
   // sent 态注释的只读回看卡片（角标灰态点开的落点）。
-  const [viewer, setViewer] = useState<{ annotationId: number; x: number; y: number; bounds?: Bounds } | null>(null)
 
   const reopenAnnotation = (annotation: Annotation, point: { x: number; y: number; bounds?: Bounds; targetTitle?: string }): void => {
     if (store.getSubmission(annotation.sessionId).pending) return
@@ -245,7 +268,7 @@ function AnnotateOverlayInner({ ctx, store, controller, preferences }: OverlayPr
       <FirstUseHint />
       {selection !== null && editor === null && sideDraft === null && viewer === null && (
         <SelectionToolbar
-          key={`${selection.sessionId}:${selection.anchorKey}:${selection.anchorText}:${selection.occurrence}`}
+          key={`${selection.sessionId}:${selection.anchorKey}:${selection.anchorText}:${selection.rect.top}:${selection.rect.left}`}
           snapshot={selection}
           onQuote={nativeQuoteAvailable ? () => {
             if (!insertNativeQuote(ctx, selection.sessionId, selection.text)) return false
@@ -255,8 +278,8 @@ function AnnotateOverlayInner({ ctx, store, controller, preferences }: OverlayPr
           } : undefined}
           addAvailable={selection.source.surface === 'side' || (probeInput(ctx, selection.sessionId).state === 'available' && hostDiagnostics(ctx).getSnapshot().capabilities.some(capability => capability.id === 'dock' && capability.state === 'available'))}
           sideChatAvailable={selection.source.surface === 'main' && sideChatBridge.current !== null}
-          onAdd={() => { addToConversation(selection) }}
-          onAsk={() => { askInSideChat(selection) }}
+          onAdd={() => { commitSelection(addToConversation) }}
+          onAsk={() => { commitSelection(askInSideChat) }}
         />
       )}
       <BadgeLayer
@@ -525,7 +548,9 @@ function BadgeLayer(props: {
   editingId: number | null
   onOpen: (annotation: Annotation, point: { x: number; y: number; bounds?: Bounds; targetTitle?: string }) => void
 }): ReactNode {
-  const annotations = props.store.sessions().flatMap(id => props.store.list(id))
+  const mountedSessions = mountedConversationIds()
+  const annotations = props.store.sessions().filter(id => mountedSessions.has(id)).flatMap(id => props.store.list(id))
+    .filter(annotation => (annotation.sourceSessionId ?? annotation.sessionId) === annotation.sessionId)
   const badges: ReactNode[] = []
   const placed: { x: number; y: number }[] = []
   let highlight: ReactNode = null

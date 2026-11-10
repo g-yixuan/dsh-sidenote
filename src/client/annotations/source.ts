@@ -29,7 +29,7 @@ export function quoteSourceOf(node: Node, currentSessionId: string): QuoteSource
   const side = element?.closest<HTMLElement>('[data-sidenote-chat-session]')
   if (native && side && native.sessionId === side.dataset.sidenoteChatSession) return { ...native, view: side, surface: 'side' }
   if (element?.closest('[data-dsh-better-sidebar], [data-dsh-sidenote], [data-sidenote-chat-session]') !== null) return null
-  return mainMessageOf(node, currentSessionId)
+  return native
 }
 
 export function sourceKey(source: QuoteSource): string | undefined {
@@ -45,14 +45,26 @@ export function sourceBodies(sessionId: string, surface: 'main' | 'side', anchor
   })
 }
 
+/** Visit selected text without descending into unselected sibling subtrees. */
+function* rangeTextNodes(range: Range): Generator<Text> {
+  const root = range.commonAncestorContainer
+  if (root.nodeType === Node.TEXT_NODE) { yield root as Text; return }
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!range.intersectsNode(node)) return NodeFilter.FILTER_REJECT
+      return node.nodeType === Node.TEXT_NODE ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
+    },
+  })
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) yield node as Text
+}
+
 /** Admit the complete visible selection, never silently drop process content. */
 export function quoteSourcesOfRange(range: Range, currentSessionId: string): QuoteSource[] | null {
-  const root = range.commonAncestorContainer
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
   const sources: QuoteSource[] = []
   const seen = new Set<HTMLElement>()
-  for (let node = root.nodeType === Node.TEXT_NODE ? root : walker.nextNode(); node; node = walker.nextNode()) {
-    if (!range.intersectsNode(node) || !quoteNodeVisible(node)) continue
+  const styles = new Map<Element, CSSStyleDeclaration>()
+  for (const node of rangeTextNodes(range)) {
+    if (!quoteNodeVisible(node, styles)) continue
     const start = node === range.startContainer ? range.startOffset : 0
     const end = node === range.endContainer ? range.endOffset : node.textContent!.length
     if (node.textContent!.slice(start, end).trim() === '') continue
@@ -78,7 +90,7 @@ export function quoteSourcesOfRange(range: Range, currentSessionId: string): Quo
 
 /** Trim each stored fragment to the actual selected text, excluding surrounding UI. */
 export function quoteRangeOf(body: HTMLElement, selection: Range): Range | null {
-  const nodes = quoteTextNodes(body).filter(node => selection.intersectsNode(node)
+  const nodes = quoteTextNodes(body, selection).filter(node => selection.intersectsNode(node)
     && (node !== selection.startContainer || selection.startOffset < node.length)
     && (node !== selection.endContainer || selection.endOffset > 0))
   const first = nodes[0], last = nodes.at(-1)
@@ -91,19 +103,23 @@ export function quoteRangeOf(body: HTMLElement, selection: Range): Range | null 
 
 /** The same text-node projection is used at capture and when rebuilding anchors.
  * Browser selections contain block newlines; anchor offsets deliberately do not. */
-export function quoteTextNodes(body: HTMLElement): Text[] {
-  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT)
+export function quoteTextNodes(body: HTMLElement, range?: Range): Text[] {
+  function* allNodes(): Generator<Text> {
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) yield node as Text
+  }
   const nodes: Text[] = []
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    if (node.parentElement?.closest(`${NON_QUOTE}, ${PROCESS_UI}`) !== null || !quoteNodeVisible(node)) continue
-    if (node.parentElement !== null && getComputedStyle(node.parentElement).userSelect === 'none') continue
-    nodes.push(node as Text)
+  const styles = new Map<Element, CSSStyleDeclaration>()
+  for (const node of range ? rangeTextNodes(range) : allNodes()) {
+    if (!body.contains(node) || node.parentElement?.closest(`${NON_QUOTE}, ${PROCESS_UI}`) !== null || !quoteNodeVisible(node, styles)) continue
+    if (node.parentElement !== null && styles.get(node.parentElement)?.userSelect === 'none') continue
+    nodes.push(node)
   }
   return nodes
 }
 
 export function projectedRangeText(body: HTMLElement, range: Range): string {
-  return quoteTextNodes(body).map(node => {
+  return quoteTextNodes(body, range).map(node => {
     if (!range.intersectsNode(node)) return ''
     const start = node === range.startContainer ? range.startOffset : 0
     const end = node === range.endContainer ? range.endOffset : node.length

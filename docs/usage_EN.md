@@ -34,6 +34,10 @@ Hidden side chats remain runnable. Reopen them from the recently closed entries 
 
 ## Select and annotate
 
+Mouse dragging uses the browser's native selection; releasing the pointer shows the toolbar immediately. Keyboard and touch selection changes update once per animation frame. The toolbar checks only selected content. Original-text positions for restoring annotations are calculated when an annotation action is clicked. If the source was replaced or hidden before the click, the action is cancelled to avoid quoting a different passage.
+
+The slash menu has one `/side` command with a searchable, localized Side label. The annotation overlay listens for scrolling only while a selection or annotations in mounted conversations need positioning.
+
 On DSH 0.2.2, the Sidenote toolbar offers **Quote**, **Add to conversation**, and **Ask in side chat** in the main conversation. Quote inserts a native quote block into the source conversation's composer, where you can add your question. Add to conversation opens the annotation editor so you can write notes for individual passages and send them together. Main and side chats share the same toolbar, annotation editor, and previews.
 
 1. Select text in a completed assistant progress reply or final answer, including several reply bodies in the same turn.
@@ -101,6 +105,8 @@ See the [overview](../README_EN.md#install) and [compatibility policy](compatibi
 [Report a problem](https://github.com/g-yixuan/dsh-sidenote/issues/new/choose) with your DSH and plugin versions, reproduction steps, or a screenshot. Normal use requires no diagnostic configuration; developer troubleshooting is documented in the [contributing guide](../CONTRIBUTING_EN.md#developer-diagnostics).
 
 ## Local development
+
+After building, testing and committing a local maintenance branch, run `node scripts/deploy-local.mjs --profile <profile-directory> --host-source <DSH-checkout>` to install it into a new immutable directory. The script preserves the original plugin configuration and unrelated profile content, disables the original declaration and inserts a local one. Use `--dry-run` to inspect or `--restore` to roll back. Restoration refuses to overwrite later profile edits; merge the saved plugin rows in that case. Native hot reload adopts the new declaration; reload the independent verification page if its client does not refresh automatically.
 
 ```bash
 dsh plugin --profile web add link:<repo path>

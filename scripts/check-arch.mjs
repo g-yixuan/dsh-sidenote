@@ -11,9 +11,10 @@
  * 用法：node scripts/check-arch.mjs（CI 与本地同门）。exit 1 = 规则 1/2 违规。
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join, relative, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const ROOT = new URL('..', import.meta.url).pathname
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const SRC = join(ROOT, 'src/client')
 
 /** L0/L1 判型：纯逻辑与 store 文件（react-free 承诺）。 */
@@ -56,11 +57,12 @@ const warnings = []
 
 for (const dir of [SRC, join(ROOT, 'tests')]) {
   for (const file of walk(dir)) {
-    const rel = relative(ROOT, file)
+    const rel = relative(ROOT, file).split(sep).join('/')
+    const normalized = file.split(sep).join('/')
     const src = readFileSync(file, 'utf8')
 
     // 规则 1：L0/L1 react-free（值导入才拦；import type / import{ type X } 放行）。
-    if (/\.ts$/.test(file) && L01_PATTERNS.some(p => p.test(file))) {
+    if (/\.ts$/.test(file) && L01_PATTERNS.some(p => p.test(normalized))) {
       for (const m of src.matchAll(/^import\s+(?!type\b)([^'"]*?)\s+from\s+['"]react['"]/gm)) {
         const clause = m[1]
         // 子句去掉所有 type 修饰成员后为空 = 全类型导入，放行。
@@ -73,7 +75,7 @@ for (const dir of [SRC, join(ROOT, 'tests')]) {
     }
 
     // 规则 2：feature 互引（例外白名单豁免）。
-    if (/(sidechat|annotate)\/[^/]+\.(ts|tsx)$/.test(file)) {
+    if (/(sidechat|annotate)\/[^/]+\.(ts|tsx)$/.test(normalized)) {
       for (const m of src.matchAll(/from\s+'(\.\.\/(?:sidechat|annotate)\/[^']+)'/g)) {
         const spec = m[1]
         const selfFeature = rel.includes('/sidechat/') ? 'sidechat' : 'annotate'

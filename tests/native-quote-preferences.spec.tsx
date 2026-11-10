@@ -97,8 +97,12 @@ describe('native quotation preferences', () => {
       entries: () => [entry],
       subscribe: () => () => {},
     } } as unknown as Context
-    const owned = new Set(['main', 'side-a', 'side-b'])
-    registerNativeQuoteVisibility(ctx, preferences, sessionId => owned.has(sessionId))
+    let selectedSession: string | undefined
+    const selectionListeners = new Set<() => void>()
+    registerNativeQuoteVisibility(ctx, preferences, {
+      getSnapshot: () => ({ selection: selectedSession ? { sessionId: selectedSession } : null }),
+      subscribe: listener => { selectionListeners.add(listener); return () => { selectionListeners.delete(listener) } },
+    })
     const wrapped = entry.component
     const host = document.createElement('div')
     document.body.append(host)
@@ -109,9 +113,12 @@ describe('native quotation preferences', () => {
       const props: Props = { useSession: select => select({ sessionId }) }
       act(() => { root.render(createElement(entry.component as React.ComponentType<Props>, props)) })
     }
-    for (const sessionId of owned) { render(sessionId); expect(host.querySelector('button')).toBeNull() }
-    owned.clear()
-    render('main')
+    for (const sessionId of ['main', 'side-a', 'side-b']) {
+      selectedSession = sessionId
+      render(sessionId)
+      expect(host.querySelector('button')).toBeNull()
+    }
+    act(() => { selectedSession = undefined; for (const listener of selectionListeners) listener() })
     expect(host.textContent).toBe('Native quote')
     await act(async () => { await preferences.setHidden(true) })
     expect(host.querySelector('button')).toBeNull()

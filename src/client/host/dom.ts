@@ -5,11 +5,12 @@ export const NON_QUOTE = 'button, [role="button"], input, textarea, select, [con
 export const PROCESS_UI = '[data-variant="think"], [data-chat-group-part="reasoning"], [data-chat-flow-kind="tool-call"], [data-chat-flow-kind="tool-result"], [data-chat-flow-kind="turn-process"], [data-context-kind="thinking"], [data-context-kind="tool"]'
 
 /** Collapsed process rows can remain mounted, including during their animation. */
-export function quoteNodeVisible(node: Node): boolean {
+export function quoteNodeVisible(node: Node, styles = new Map<Element, CSSStyleDeclaration>()): boolean {
   for (let element = elementOf(node); element !== null; element = element.parentElement) {
     if (element.matches('[hidden], [data-turn-process-hidden], [data-turn-process-inline]')) return false
     if (element instanceof HTMLDetailsElement && !element.open && !element.querySelector(':scope > summary')?.contains(node)) return false
-    const style = getComputedStyle(element)
+    let style = styles.get(element)
+    if (!style) { style = getComputedStyle(element); styles.set(element, style) }
     if (style.display === 'none' || style.visibility === 'hidden') return false
   }
   return true
@@ -17,6 +18,12 @@ export function quoteNodeVisible(node: Node): boolean {
 
 export function nativeAssistantBodies(root: ParentNode = document): HTMLElement[] {
   return [...root.querySelectorAll<HTMLElement>(MAIN_ASSISTANT)]
+}
+
+/** Only mounted conversation panes can own visible annotation badges. */
+export function mountedConversationIds(): ReadonlySet<string> {
+  return new Set([...document.querySelectorAll<HTMLElement>('[data-conversation-session], [data-sidenote-chat-session]')]
+    .map(view => view.dataset.sidenoteChatSession ?? view.dataset.conversationSession ?? '').filter(Boolean))
 }
 
 export function elementOf(node: Node): Element | null {
