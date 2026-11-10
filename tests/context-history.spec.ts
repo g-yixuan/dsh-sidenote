@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { loadForkBoundary, loadInheritedContext, type ContextEventWindow } from '../src/client/host/chat.ts'
+import { loadEarlierContext, loadForkBoundary, loadInheritedContext, type ContextEventWindow } from '../src/client/host/chat.ts'
 import type { SessionFace } from '../src/client/host/contracts.ts'
 
 function history() {
@@ -7,13 +7,14 @@ function history() {
   let loadingOlder = false
   const listeners = new Set<() => void>()
   const loadThrough = vi.fn(async (_seq: number) => {})
+  const loadOlder = vi.fn(async () => {})
   const session = {
-    open: async () => {}, loadThrough,
+    open: async () => {}, loadThrough, loadOlder,
     getSnapshot: () => ({ loadingOlder }),
     subscribe: (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn) } },
     eventSource: { getSnapshot: () => window },
   } as unknown as SessionFace
-  return { session, loadThrough,
+  return { session, loadThrough, loadOlder,
     page: (seq: number, seed = false) => { window = { entries: [{ event: { type: seed ? 'session/end-seed' : 'user/message', seq, data: seed ? { inherited: true } : {} } }, ...window.entries], hasMore: seq > 0 } },
     busy: (value: boolean) => { loadingOlder = value; for (const fn of [...listeners]) fn() },
     listeners,
@@ -43,4 +44,21 @@ it('locates the child seed independently of saved metadata without loading ances
   h.loadThrough.mockImplementationOnce(async () => { h.page(80) }).mockImplementationOnce(async () => { h.page(50, true) })
   await expect(loadForkBoundary(h.session)).resolves.toBe(49)
   expect(h.loadThrough.mock.calls).toEqual([[99], [79]])
+})
+
+it('loads exactly one earlier native page without jumping to the start of history', async () => {
+  const h = history()
+  h.loadOlder.mockImplementation(async () => { h.page(60) })
+  await loadEarlierContext(h.session)
+  expect(h.loadOlder).toHaveBeenCalledOnce()
+  expect(h.loadThrough).not.toHaveBeenCalled()
+  h.page(0)
+  await loadEarlierContext(h.session)
+  expect(h.loadOlder).toHaveBeenCalledOnce()
+})
+
+it('reports a swallowed native page failure without treating it as complete history', async () => {
+  const h = history()
+  await expect(loadEarlierContext(h.session)).rejects.toThrow('上下文加载未完成')
+  expect(h.loadOlder).toHaveBeenCalledOnce()
 })

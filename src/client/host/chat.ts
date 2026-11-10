@@ -72,6 +72,22 @@ export async function loadInheritedContext(session: SessionFace | undefined, bou
   }
 }
 
+/** The reader pulls one native page at a time; model snapshots still use the
+ * complete loadInheritedContext path when the first side prompt is admitted. */
+export async function loadEarlierContext(session: SessionFace | undefined): Promise<void> {
+  const source = contextEventSource(session)
+  if (!session || !source) throw new Error('上下文尚未就绪，请稍后重试')
+  await waitForHistoryPage(session)
+  const before = source.getSnapshot()
+  if (!before.hasMore) return
+  await session.loadOlder()
+  await waitForHistoryPage(session)
+  const after = source.getSnapshot()
+  if (after.hasMore && (after.entries[0]?.event.seq ?? Infinity) >= (before.entries[0]?.event.seq ?? Infinity)) {
+    throw new Error('上下文加载未完成，内容已保留，请重新尝试')
+  }
+}
+
 /** A legacy saved boundary can point into the child's own messages. Locate
  * the last durable seed marker independently of that unverified number. */
 export async function loadForkBoundary(session: SessionFace | undefined): Promise<number> {

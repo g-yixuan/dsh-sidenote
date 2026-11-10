@@ -24,13 +24,11 @@ export function ensureSideChatTarget(ctx: Context, parentId: string, signal: Abo
     const bs = betterSidebarOf(ctx)
     let tabId = choice === undefined ? targetTabId(ctx, parentId) : choice.tabId
     let settled = false
-    let timer: ReturnType<typeof setTimeout> | undefined
     let unsubscribe = (): void => {}
     const exists = (): boolean => (native ? sideChatTabsOf(ctx, parentId) : collectSideTabs(bs?.getSnapshot().state)).some(tab => tab.id === tabId)
     const cleanup = (): void => {
       unsubscribe()
       signal.removeEventListener('abort', cancel)
-      if (timer !== undefined) clearTimeout(timer)
     }
     const fail = (text: string): void => {
       if (settled) return
@@ -53,7 +51,8 @@ export function ensureSideChatTarget(ctx: Context, parentId: string, signal: Abo
     }
     unsubscribe = subscribeLiveSideChats(check)
     signal.addEventListener('abort', cancel, { once: true })
-    timer = setTimeout(() => fail('目标侧边聊天尚未就绪；请保留注解并重试'), 15_000)
+    // Native forks of long histories can legitimately take more than 15 seconds.
+    // Completion, target closure and the caller's AbortSignal own this lifetime.
     try {
       if (tabId !== undefined) {
         if (!exists()) { fail('目标侧边聊天已关闭；注解仍在编辑器中'); return }

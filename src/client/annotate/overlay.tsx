@@ -14,7 +14,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
-import { IconCheckOutline16, IconTrashOutline16 } from '../host/icons.ts'
+import { IconCheckOutline16, IconCloseOutline16, IconTrashOutline16 } from '../host/icons.ts'
 import type { Context } from '../host/contracts.ts'
 import { currentSessionIdOf } from '../host/currentSession.ts'
 import { focusSideComposer, mountedConversationIds } from '../host/dom.ts'
@@ -119,6 +119,7 @@ function AnnotateOverlayInner({ ctx, store, controller, preferences }: OverlayPr
   const currentSessionId = currentSessionIdOf(ctx)
   const [editor, setEditor] = useState<EditorState | null>(null)
   const [sideDraft, setSideDraft] = useState<SideDraftState | null>(null)
+  useEffect(() => () => { sideDraft?.abort.abort() }, [sideDraft])
   const [viewer, setViewer] = useState<{ annotationId: number; x: number; y: number; bounds?: Bounds } | null>(null)
   // Bumped by scroll/resize/DOM mutation so badge/highlight geometry follows.
   const [, setGeometryTick] = useState(0)
@@ -441,6 +442,11 @@ export function SideChatNoteEditor(props: {
   const failedRef = useRef(false)
   const cancelled = useRef(false)
   useEffect(() => { cancelled.current = false; return () => { cancelled.current = true } }, [])
+  const cancel = (): void => {
+    if (cancelled.current) return
+    cancelled.current = true
+    latest.current.onCancel()
+  }
   const save = (outside = false): void => {
     if (saved.current || cancelled.current || (outside && failedRef.current)) return
     // Lock before the bridge runs: focusing its composer must not submit twice.
@@ -468,9 +474,9 @@ export function SideChatNoteEditor(props: {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        event.preventDefault()
         event.stopPropagation()
-        cancelled.current = true
-        latest.current.onCancel()
+        cancel()
       }
     }
     const onMouseDown = (event: MouseEvent): void => {
@@ -495,9 +501,12 @@ export function SideChatNoteEditor(props: {
 
   return (
     <div ref={rootRef} className={css.editorAsk} style={{ left, top, width, maxHeight: (props.bounds?.bottom ?? window.innerHeight) - top - 8, overflowY: 'auto' }}>
-      {props.targetTitle !== undefined && props.targetTitle !== '' && (
-        <div className={css.editorTarget}>{t('sendToTarget', { title: props.targetTitle })}</div>
-      )}
+      <div className={css.editorAskHeader}>
+        <div className={css.editorTarget}>{props.targetTitle ? t('sendToTarget', { title: props.targetTitle }) : ''}</div>
+        <button type="button" className={css.dismissButton} aria-label={t('cancel')} title={t('cancel')} onClick={cancel}>
+          <IconCloseOutline16 size={14} />
+        </button>
+      </div>
       {showNote && (
         <div className={css.editorAskRow}>
           <textarea

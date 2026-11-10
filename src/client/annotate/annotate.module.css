@@ -167,6 +167,32 @@
   gap: 8px;
 }
 
+.editorAskHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dismissButton {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  color: var(--dsw-alias-label-caption, #8f959e);
+  background: transparent;
+  cursor: pointer;
+}
+
+.dismissButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+  color: var(--dsw-alias-label-primary, #1f2329);
+}
+
 /* 注解编辑器里的投递目标提示行（「发送至：侧边 2」）。 */
 .editorTarget {
   padding: 2px 2px 0;

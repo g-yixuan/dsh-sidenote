@@ -1,10 +1,10 @@
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { SIDE_TAB_TYPE } from '../src/client/sidechat/model.ts'
 import type { Context } from '../src/client/host/contracts.ts'
 import { captureSideChatTarget, ensureSideChatTarget } from '../src/client/sidechat/target.ts'
 import { clearNativeRuntime, liveSideChat, liveSideChatsOf, notifyLiveSideChats, registerLiveSideChat } from '../src/client/sidechat/native.ts'
 
-afterEach(clearNativeRuntime)
+afterEach(() => { clearNativeRuntime(); vi.useRealTimers() })
 const ctx = {
   sessions: { list: { getSnapshot: () => ({ current: 'parent' }) } },
   get: (name: string) => name === 'sidebarRight' ? { openTab() {}, focus() {}, isExpanded: () => true, tabsIn: (id: string) => liveSideChatsOf(id).map(panel => ({ id: panel.tabId, kind: SIDE_TAB_TYPE, title: panel.readTitle() })), active: () => undefined } : undefined,
@@ -33,6 +33,19 @@ it('Escape cancellation terminates the wait before a later fork completes', asyn
   const target = ensureSideChatTarget(ctx, 'parent', abort.signal)
   const rejection = expect(target).rejects.toThrow('取消')
   abort.abort(); await rejection
+})
+
+it('keeps waiting for a slow native fork until it is ready or explicitly cancelled', async () => {
+  vi.useFakeTimers()
+  let status: { phase: string; childId?: string } = { phase: 'forking' }
+  registerLiveSideChat('parent', 'slow', () => {}, () => ({}), () => 'Slow', () => status)
+  let settled = false
+  const target = ensureSideChatTarget(ctx, 'parent', new AbortController().signal)
+  void target.then(() => { settled = true }, () => { settled = true })
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(settled).toBe(false)
+  status = { phase: 'chat', childId: 'slow-child' }; notifyLiveSideChats()
+  expect(await target).toMatchObject({ childId: 'slow-child' })
 })
 
 it('identical native tab ids remain isolated by parent session', async () => {

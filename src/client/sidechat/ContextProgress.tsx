@@ -9,6 +9,9 @@ import type { SnapshotEntry } from './snapshot.ts'
 import type { ContextEntry } from './context.ts'
 import css from './sidechat.module.css'
 
+// Bound Markdown/image mounts independently of the host's retained event window.
+const CONTEXT_PAGE_ROWS = 80
+
 function ContextImage({ attachment, load }: { attachment: unknown; load?: (attachment: unknown) => Promise<string> }) {
   const [url, setUrl] = useState<string>()
   const [failed, setFailed] = useState(false)
@@ -52,13 +55,39 @@ const ProgressEntry = memo(function ProgressEntry({ entry, live, loadImage }: { 
 
 /** This region alone owns context scrolling. It never moves the native side
  * conversation, and it mounts even before that conversation has any messages. */
-export function ContextProgress({ id, history, entries, live, loading, error, onRetry, loadImage, loadProgressImage }: {
+export function ContextProgress({ id, history, entries, live, loading, error, onRetry, loadImage, loadProgressImage, hasMore, onLoadEarlier }: {
   id: string; history: readonly ContextEntry[]; entries: readonly SnapshotEntry[]; live: boolean
   loading: boolean; error?: string; onRetry: () => void; loadImage?: (attachment: unknown) => Promise<string>; loadProgressImage?: (attachment: unknown) => Promise<string>
+  hasMore?: boolean; onLoadEarlier?: () => Promise<void>
 }) {
   const root = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
   const follow = useRef(true)
+  const [visibleRows, setVisibleRows] = useState(CONTEXT_PAGE_ROWS)
+  const [loadingEarlier, setLoadingEarlier] = useState(false)
+  const [earlierError, setEarlierError] = useState<string>()
+  const earlierPending = useRef(false)
+  const mounted = useRef(true)
+  const prepend = useRef<{ top: number; height: number }>()
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  const start = Math.max(0, history.length + entries.length - visibleRows)
+  const progressStart = Math.max(0, start - history.length)
+  const loadEarlier = async (): Promise<void> => {
+    if (earlierPending.current) return
+    earlierPending.current = true
+    follow.current = false
+    setLoadingEarlier(true); setEarlierError(undefined)
+    if (root.current) prepend.current = { top: root.current.scrollTop, height: root.current.scrollHeight }
+    try {
+      if (start === 0) await onLoadEarlier?.()
+      if (mounted.current) setVisibleRows(value => value + CONTEXT_PAGE_ROWS)
+    } catch (reason) {
+      if (mounted.current) { prepend.current = undefined; setEarlierError(reason instanceof Error ? reason.message : String(reason)) }
+    } finally {
+      earlierPending.current = false
+      if (mounted.current) setLoadingEarlier(false)
+    }
+  }
   const [following, setFollowing] = useState(true)
   const updateAffordance = () => {
     const element = root.current
@@ -66,13 +95,16 @@ export function ContextProgress({ id, history, entries, live, loading, error, on
   }
   const pause = () => { follow.current = false; updateAffordance() }
   const toLatest = () => {
-    follow.current = true; setFollowing(true)
+    follow.current = true; setFollowing(true); setVisibleRows(CONTEXT_PAGE_ROWS)
     if (root.current) { root.current.scrollTop = root.current.scrollHeight; root.current.focus({ preventScroll: true }) }
   }
   useLayoutEffect(() => {
-    if (follow.current && root.current) root.current.scrollTop = root.current.scrollHeight
+    if (prepend.current && root.current && !loadingEarlier) {
+      root.current.scrollTop = prepend.current.top + root.current.scrollHeight - prepend.current.height
+      prepend.current = undefined
+    } else if (follow.current && root.current) root.current.scrollTop = root.current.scrollHeight
     updateAffordance()
-  }, [history, entries, loading])
+  }, [history, entries, loading, visibleRows, loadingEarlier])
   useEffect(() => {
     const view = root.current ? conversationViewOf(root.current) : undefined
     const newerIntent = (event: Event) => { if (!root.current?.contains(event.target as Node)) pause() }
@@ -98,9 +130,11 @@ export function ContextProgress({ id, history, entries, live, loading, error, on
         setFollowing(follow.current)
       }}>
       <div ref={content} className={css.progressContent}>
-        <div data-sidenote-context-history>{history.map(entry => <ProgressEntry key={entry.key} entry={entry} live={false} loadImage={loadImage} />)}</div>
+        {(start > 0 || hasMore && onLoadEarlier) && <button type="button" className={css.nativeAction} disabled={loadingEarlier} onClick={() => { void loadEarlier() }}>{t(loadingEarlier ? 'contextLoading' : 'contextEarlier')}</button>}
+        {earlierError && <div className={css.stateDetail} role="alert">{earlierError}</div>}
+        <div data-sidenote-context-history>{history.slice(start).map(entry => <ProgressEntry key={entry.key} entry={entry} live={false} loadImage={loadImage} />)}</div>
         {entries.length > 0 && <div data-sidenote-context-increment>
-          {entries.map((entry, index) => <ProgressEntry key={`progress:${index}:${entry.kind}`} entry={entry} live={live} loadImage={loadProgressImage ?? loadImage} />)}
+          {entries.slice(progressStart).map((entry, index) => <ProgressEntry key={`progress:${progressStart + index}:${entry.kind}`} entry={entry} live={live} loadImage={loadProgressImage ?? loadImage} />)}
         </div>}
         {loading && <div className={css.contextHint} role="status">{t('contextLoading')}</div>}
         {error && <div className={css.stateDetail} role="alert">{error} <button type="button" className={css.nativeAction} onClick={onRetry}>{t('contextRetry')}</button></div>}

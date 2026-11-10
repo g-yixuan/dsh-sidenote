@@ -57,7 +57,7 @@ export function SideChatPanel(props: TabComponentProps & { closeSource: () => vo
   const phase = phaseOf({ childId, forkError, bound: session !== undefined, listPhase: list.phase, listed: childId !== undefined && list.byId?.[childId] !== undefined })
   useEffect(() => { openSessionWindow(session) }, [session])
   const context = useMainContext(ctx, meta.parentSessionId ?? scope.sessionId, childId, session, meta.snapshotOnly === true, meta.forkedMidTurn === true)
-  const { boundarySeq, messages, history, progress, loadContext, loadImage, childChat: chat } = context
+  const { boundarySeq, messages, readContext, takenAt, loadContext, loadEarlier, hasMoreContext, loadImage, childChat: chat } = context
   const [boundaryError, setBoundaryError] = useState<string>()
   useEffect(() => {
     if (!session || meta.snapshotOnly || boundarySeq !== undefined) { setBoundaryError(undefined); return }
@@ -153,7 +153,7 @@ export function SideChatPanel(props: TabComponentProps & { closeSource: () => vo
   if (phase === 'fork-error') return <StateScreen title={t('forkErrorTitle')} detail={forkError ?? undefined} hint={t('forkErrorHint')} />
   if (phase === 'missing') return <StateScreen title={t('missingTitle')} detail={t('missingDetail')} hint={t('missingHint')} />
   if (phase !== 'chat' || !reference || !childId) return <StateScreen title={t('preparing')} />
-  const side: SideConversation = { sessionId: childId, parentSessionId: meta.parentSessionId ?? scope.sessionId, title: tab.title, boundarySeq, reflow: props.reflow, history, loadImage, progress, loadContext, loadError: boundaryError, loadProgressImage: context.loadProgressImage, contextPending: context.contextPending }
+  const side: SideConversation = { sessionId: childId, parentSessionId: meta.parentSessionId ?? scope.sessionId, title: tab.title, boundarySeq, reflow: props.reflow, readContext, takenAt, loadImage, loadContext, loadEarlier, hasMoreContext, loadError: boundaryError, loadProgressImage: context.loadProgressImage, contextPending: context.contextPending }
   const replies = finalReplies(messages, boundarySeq, new Set(chat?.getCompletedReplySeqs?.() ?? []))
   const questions = pairQuestions(messages)
   const allAdded = replies.length > 0 && replies.every(reply => isReplyAdded(side, reply, questions.get(reply.key)))

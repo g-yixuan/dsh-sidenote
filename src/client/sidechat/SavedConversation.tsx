@@ -1,6 +1,6 @@
 import { createElement, useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ComponentType } from 'react'
 import type { Context } from '../host/contracts.ts'
-import { chatSourceOf, contextEventSource, loadInheritedContext } from '../host/chat.ts'
+import { chatSourceOf, contextEventSource, loadEarlierContext, loadInheritedContext } from '../host/chat.ts'
 import { contextImageLoader } from '../host/attachments.ts'
 import { contextEntriesOf, contextHistory, savedContextOf } from './context.ts'
 import { effectiveContextNodes, snapshotEntriesFromText, splitSnapshotPrefix } from './snapshot.ts'
@@ -71,7 +71,8 @@ export function SavedConversation({ ctx, Original, props }: { ctx: Context; Orig
   const saved = useMemo(() => savedContextOf(legacy?.nodes ?? [], window?.entries ?? [], window?.hasMore), [legacy, window])
   const markerSeq = props.useProjection?.('sidenoteContext')
   const [error, setError] = useState<string>()
-  const loadContext = useCallback(() => loadInheritedContext(session, 0), [session])
+  const loadContext = useCallback(() => loadInheritedContext(session, Infinity), [session])
+  const loadEarlier = useCallback(() => loadEarlierContext(session), [session])
   // Only an indexed plugin marker justifies paging; ordinary native forks
   // retain the host's lazy history window. The marker survives promotion.
   useEffect(() => {
@@ -88,11 +89,14 @@ export function SavedConversation({ ctx, Original, props }: { ctx: Context; Orig
     }).catch(reason => { if (active) setError(String(reason instanceof Error ? reason.message : reason)) })
     return () => { active = false }
   }, [markerSeq, !!saved, session, source, chat])
-  const progress = useMemo(() => saved ? { entries: snapshotEntriesFromText(saved.snapshot, saved.content), takenAt: saved.takenAt } : undefined, [saved])
-  const history = useMemo(() => contextHistory(contextEntriesOf(effectiveContextNodes(legacy?.nodes ?? [], window, saved?.boundarySeq ?? -1).nodes), progress?.entries ?? []), [legacy, window, saved, progress])
+  const readContext = useCallback(() => {
+    const progress = saved ? { entries: snapshotEntriesFromText(saved.snapshot, saved.content), takenAt: saved.takenAt } : undefined
+    const history = contextHistory(contextEntriesOf(effectiveContextNodes(legacy?.nodes ?? [], window, saved?.boundarySeq ?? -1).nodes), progress?.entries ?? [])
+    return { history, progress }
+  }, [legacy, window, saved])
   const loadImage = useMemo(() => contextImageLoader(ctx, props.sessionId), [ctx, props.sessionId])
   if (!saved) return <>{error && <div role="alert" className={css.errorRow}>{error}<button type="button" className={css.nativeAction} onClick={() => { void loadContext().then(() => setError(undefined), reason => setError(String(reason))) }}>{t('contextRetry')}</button></div>}{createElement(Original, props)}</>
-  const context = { sessionId: props.sessionId, boundarySeq: saved.boundarySeq, history, progress, loadContext, loadImage }
+  const context = { sessionId: props.sessionId, boundarySeq: saved.boundarySeq, readContext, takenAt: saved.takenAt, loadContext, loadEarlier, hasMoreContext: window?.hasMore === true, loadImage }
   return <div className={css.chatView} data-sidenote-saved-context>
     <InheritedContext context={context} />
     <HistoryView Original={Original} props={props} side={context} />

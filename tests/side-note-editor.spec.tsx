@@ -138,8 +138,38 @@ describe('side-chat note editor', () => {
     act(() => v.input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
     v.key('Enter', { isComposing: true }); v.key('Enter', { keyCode: 229 })
     expect(v.onSave).not.toHaveBeenCalled()
-    act(() => v.host.querySelector('button')!.click())
+    act(() => v.host.querySelector<HTMLButtonElement>('button[aria-label="Confirm and ask"]')!.click())
     expect(v.onSave).toHaveBeenCalledExactlyOnceWith('输入法注解')
+    v.unmount()
+  })
+
+  it('provides a visible cancel action before confirmation and after failure', () => {
+    for (const failed of [false, true]) {
+      const v = mount(() => false)
+      v.type('这次不打开侧聊')
+      if (failed) v.key('Enter')
+      const cancel = v.host.querySelector<HTMLButtonElement>('button[aria-label="Cancel"]')!
+      expect(cancel.disabled).toBe(false)
+      act(() => cancel.click())
+      v.outside(); v.key('Enter')
+      expect(v.onCancel).toHaveBeenCalledOnce()
+      expect(v.onSave).toHaveBeenCalledTimes(failed ? 1 : 0)
+      v.unmount()
+    }
+  })
+
+  it.each([false, true])('allows clicking cancel during an async wait (skip note=%s)', async skipNote => {
+    let finish!: (ok: boolean) => void
+    const v = mount(() => new Promise(resolve => { finish = resolve }), skipNote)
+    if (!skipNote) v.key('Enter')
+    const cancel = v.host.querySelector<HTMLButtonElement>('button[aria-label="Cancel"]')!
+    expect(cancel.disabled).toBe(false)
+    act(() => cancel.click())
+    expect(v.onCancel).toHaveBeenCalledOnce()
+    await act(async () => { finish(false) })
+    expect(v.host.textContent).not.toContain("Couldn't open")
+    v.outside()
+    expect(v.onSave).toHaveBeenCalledOnce()
     v.unmount()
   })
 })

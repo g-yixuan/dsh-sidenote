@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { Context, SessionFace } from '../host/contracts.ts'
-import { chatSourceOf, contextEventSource, inheritedBoundarySource, loadForkBoundary, loadInheritedContext } from '../host/chat.ts'
+import { chatSourceOf, contextEventSource, inheritedBoundarySource, loadEarlierContext, loadForkBoundary, loadInheritedContext } from '../host/chat.ts'
 import { contextImageLoader } from '../host/attachments.ts'
 import { transcriptOf } from '../chat/transcript.ts'
 import { contextEntriesOf, contextHistory, savedContextOf } from './context.ts'
@@ -41,15 +41,20 @@ export function useMainContext(ctx: Context, parentSessionId: string, childId: s
   const parentLegacy = useSyncExternalStore(useCallback(notify => parentChat?.subscribe(notify) ?? noop(), [parentChat]), () => parentChat?.getLegacy() ?? null)
   const parentEvents = useMemo(() => contextEventSource(parent), [parent])
   const parentWindow = useSyncExternalStore(useCallback(notify => parentEvents?.subscribe(notify) ?? noop(), [parentEvents]), () => parentEvents?.getSnapshot())
-  const progress = useMemo(() => saved ? { entries: snapshotEntriesFromText(saved.snapshot, saved.content), takenAt: saved.takenAt }
-    : forkedMidTurn && boundarySeq !== undefined ? { entries: snapshotEntriesOf(effectiveContextNodes(parentLegacy?.nodes ?? [], parentWindow).nodes, parentLegacy?.partial, boundarySeq, parentLegacy?.runningCalls) } : undefined, [saved, forkedMidTurn, parentLegacy, parentWindow, boundarySeq])
-  const history = useMemo(() => contextHistory(contextEntriesOf(effectiveContextNodes(legacy?.nodes ?? [], childWindow, boundarySeq ?? -1).nodes), progress?.entries ?? []), [legacy, childWindow, boundarySeq, progress])
+  // Do not parse inherited text, tool results or image inventories while folded.
+  const readContext = useCallback(() => {
+    const progress = saved ? { entries: snapshotEntriesFromText(saved.snapshot, saved.content), takenAt: saved.takenAt }
+      : forkedMidTurn && boundarySeq !== undefined ? { entries: snapshotEntriesOf(effectiveContextNodes(parentLegacy?.nodes ?? [], parentWindow).nodes, parentLegacy?.partial, boundarySeq, parentLegacy?.runningCalls) } : undefined
+    const history = contextHistory(contextEntriesOf(effectiveContextNodes(legacy?.nodes ?? [], childWindow, boundarySeq ?? -1).nodes), progress?.entries ?? [])
+    return { history, progress }
+  }, [saved, forkedMidTurn, parentLegacy, parentWindow, boundarySeq, legacy, childWindow])
   const loadContext = useCallback(async () => {
     if (!snapshotOnly) await loadForkBoundary(session)
     // One native event cache serves the context reader and the first-send path.
-    await loadInheritedContext(session, 0)
+    await loadInheritedContext(session, Infinity)
   }, [session, snapshotOnly])
+  const loadEarlier = useCallback(() => loadEarlierContext(session), [session])
   const loadImage = useMemo(() => childId ? contextImageLoader(ctx, childId) : undefined, [ctx, childId])
   const loadProgressImage = useMemo(() => preview ? contextImageLoader(ctx, parentSessionId) : loadImage, [ctx, parentSessionId, preview, loadImage])
-  return { boundarySeq, childChat, messages, history, progress, loadContext, loadImage, loadProgressImage, firstSendPrefix, accept, contextPending: forkedMidTurn && !saved }
+  return { boundarySeq, childChat, messages, readContext, takenAt: saved?.takenAt, loadContext, loadEarlier, hasMoreContext: childWindow?.hasMore === true, loadImage, loadProgressImage, firstSendPrefix, accept, contextPending: forkedMidTurn && !saved }
 }
