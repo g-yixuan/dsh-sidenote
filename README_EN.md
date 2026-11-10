@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(max-width: 640px)" srcset="docs/assets/hero-en-compact.svg">
-    <img src="docs/assets/hero-en.svg" alt="dsh-sidenote: Follow the tangent. Keep the thread. Annotate, explore on the side, and bring answers back." width="100%">
+    <img src="docs/assets/hero-en.svg" alt="dsh-sidenote: Follow the tangent. Keep the thread. Annotations, side chats, and answers to bring back." width="100%">
   </picture>
 </p>
 
@@ -44,6 +44,8 @@ The main branch maintains **DSH 0.2.2 (from rc.1)** using the native conversatio
 ### Follow a question on the side
 
 Clarify a detail during a design review or explore an implementation while reading code. Open a side chat from the current conversation. **The fork preserves the full history**, so you can pick up without explaining the context again.
+
+**Keep the context. Make use of the cache.** Side chats carry the main conversation's context forward and support context-cache reuse, reducing repeated computation and input costs for the portions that hit the cache.
 
 Side chats support multiple turns, tool cards, model and permission switching, images, `@` references, and approvals inside the panel. Main and side conversations can move forward independently.
 

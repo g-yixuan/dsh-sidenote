@@ -10,12 +10,14 @@ from pathlib import Path
 ASSETS = Path(__file__).resolve().parent.parent / 'docs' / 'assets'
 
 
-def cover(lang, heading, subtitle, labels):
+def cover(lang, heading, features, labels):
     title = escape(' '.join(heading))
+    annotation, chat, handback = map(escape, features)
+    chat_x, handback_x = (286, 506) if lang == 'en' else (256, 446)
     main, side, back = map(escape, labels)
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="560" viewBox="0 0 1440 560" role="img" aria-labelledby="title desc" xml:lang="{lang}">
   <title id="title">dsh-sidenote — {title}</title>
-  <desc id="desc">{escape(subtitle)}. {main} → {side} → {back}.</desc>
+  <desc id="desc">{annotation} · {chat} · {handback}. {main} → {side} → {back}.</desc>
   <rect width="1440" height="560" rx="24" fill="#F8FAFF"/>
   <path d="M840 0h576a24 24 0 0 1 24 24v512a24 24 0 0 1-24 24H840Z" fill="#EAF0FF"/>
   <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', sans-serif">
@@ -28,7 +30,23 @@ def cover(lang, heading, subtitle, labels):
     </g>
     <text x="64" y="221" fill="#152441" font-size="64" font-weight="700" letter-spacing="-2">{escape(heading[0])}</text>
     <text x="64" y="304" fill="#152441" font-size="64" font-weight="700" letter-spacing="-2">{escape(heading[1])}</text>
-    <text x="66" y="368" fill="#60708E" font-size="24">{escape(subtitle)}</text>
+    <!-- Parallel capabilities use the same line weight as the route illustration. -->
+    <g transform="translate(66 350)">
+      <g fill="none" stroke="#3B5BFD" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 5h18M2 12h13M2 19h8"/>
+        <path d="m17 25 7-7 4 4-7 7-6 1Z"/>
+      </g>
+      <text x="43" y="25" fill="#42536F" font-size="24" font-weight="550">{annotation}</text>
+    </g>
+    <g transform="translate({chat_x} 350)">
+      <path d="M5 3h20a4 4 0 0 1 4 4v13a4 4 0 0 1-4 4H14l-7 6v-6H5a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4Z" fill="none" stroke="#3B5BFD" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M8 10h14M8 16h9" fill="none" stroke="#3B5BFD" stroke-width="2.4" stroke-linecap="round"/>
+      <text x="43" y="25" fill="#42536F" font-size="24" font-weight="550">{chat}</text>
+    </g>
+    <g transform="translate({handback_x} 350)">
+      <path d="M3 2v28m27-14H12m8-8-8 8 8 8" fill="none" stroke="#3B5BFD" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="43" y="25" fill="#42536F" font-size="24" font-weight="550">{handback}</text>
+    </g>
     <text x="66" y="490" fill="#60708E" font-size="20">A companion for DeepSeek Harness</text>
     <!-- A continuous main line with a side route that rejoins it. -->
     <path d="M908 185H1366" fill="none" stroke="#152441" stroke-width="6" stroke-linecap="round"/>
@@ -48,11 +66,11 @@ def cover(lang, heading, subtitle, labels):
 '''
 
 
-for filename, lang, heading, subtitle, labels in [
-    ('hero.svg', 'zh-CN', ('思路可以分岔。', '主线始终向前。'), '划选注释、侧边追问，再把结论带回来。', ('主对话', '侧边追问', '结论回流')),
-    ('hero-en.svg', 'en', ('Follow the tangent.', 'Keep the thread.'), 'Annotate. Explore on the side. Bring answers back.', ('Main thread', 'Side chat', 'Bring it back')),
+for filename, lang, heading, features, labels in [
+    ('hero.svg', 'zh-CN', ('思路可以分岔。', '主线始终向前。'), ('划选批注', '侧边聊天', '结论回流'), ('主对话', '侧边追问', '结论回流')),
+    ('hero-en.svg', 'en', ('Follow the tangent.', 'Keep the thread.'), ('Annotations', 'Side chats', 'Bring answers back'), ('Main thread', 'Side chat', 'Bring it back')),
 ]:
-    svg = cover(lang, heading, subtitle, labels)
+    svg = cover(lang, heading, features, labels)
     (ASSETS / filename).write_text(svg, encoding='utf-8')
     # A text-first crop keeps the headline readable in narrow README layouts.
     compact = svg.replace('width="1440" height="560"', 'width="840" height="560"', 1)
