@@ -33,9 +33,9 @@
 
 ### Side chats for a thought worth exploring
 
-Check an implementation, clarify a detail, or follow a tangent. Click **Side** in the session header or enter **`/side`** and write your question. The side chat inherits the main conversation's effective context and supports multi-turn discussion and tools. Main and side conversations can move forward independently.
+Check an implementation, clarify a detail, or follow a tangent. Click **Side** in the session header or choose **New side chat** from the **`/side`** menu and write your question. The side chat inherits the main conversation's effective context and supports multi-turn discussion and tools. Main and side conversations can move forward independently.
 
-Keep several independent side-chat tabs open, reopen a closed chat through `/side`, or save a discussion as a regular session to continue later.
+Keep several independent side-chat tabs open, reopen a recently closed chat through `/side`, or save a discussion as a regular session to continue later.
 
 ### Annotations for feedback on a passage
 
@@ -45,7 +45,7 @@ Annotate in the main conversation or a side chat. To explore a passage from the 
 
 ### Bring useful answers back to the main task
 
-When a side chat produces an answer you want to use, click **Bring back to main conversation** beside the reply. The question and answer appear together above the main composer. Preview and choose what to send with your next message so the main conversation can build on the finding.
+When a side chat produces an answer you want to use, click the **Bring back to main conversation** icon on the right of the reply's action row. The question and answer appear together above the main composer. Preview and choose what to send with your next message so the main conversation can build on the finding.
 
 Pick one answer or use **Reflow all** for the side chat's new, completed question–answer pairs. Your draft text and pending handbacks stay separate.
 
@@ -57,7 +57,7 @@ With DSH already installed, run the following command.
 dsh plugin --profile web add dsh-sidenote
 ```
 
-Open DSH Web and click **Side** or enter **`/side`** to start a side chat. To annotate, select text in a reply and choose **Add to conversation**.
+Open DSH Web and click **Side** or choose **New side chat** from the **`/side`** menu. To annotate, select text in a reply and choose **Add to conversation**.
 
 The main branch maintains **DSH 0.2.2 (from rc.1)** using the native conversation interface. Version 0.2.2-rc.1 is verified, and later RCs and the unsuffixed release in that series may be installed, with verification recorded against exact versions. DSH 0.2.2 requires Node.js 24.9 or newer. This range applies from plugin 0.8.3. Version 0.8.2 supports the 0.2.1 series. DSH 0.2.1 users pin `dsh-sidenote@0.8.2`, 0.2.0-rc.2 pins `dsh-sidenote@0.7.6`, and earlier hosts retain their last compatible package. See the [compatibility policy](docs/compatibility_EN.md).
 
@@ -73,7 +73,7 @@ Sidenote adds collapsible inherited context, annotation previews, and question�
 | Check a passage and your feedback | Hover to preview, click to keep the preview open, edit notes in place, and remove items individually. |
 | Review context you already sent | Open the annotation and handback chips in the corresponding message. |
 | Retry a failed send | Draft text, annotations, and pending handbacks stay available. |
-| Continue after a reload or restart | Side-chat history and saved annotations persist. Reopen through `/side` if the sidebar is not restored. |
+| Continue after a reload or restart | Side-chat history and saved annotations persist. Reopen recently closed side chats through `/side`. |
 | Keep the session list focused | Side chats stay hidden until saved as regular sessions, when they appear in the list and search. |
 
 See the [user guide](docs/usage_EN.md) for controls, recovery behavior, and selection boundaries.
@@ -82,7 +82,7 @@ See the [user guide](docs/usage_EN.md) for controls, recovery behavior, and sele
 
 A side chat uses the main conversation's effective context, fixes the included progress when you send its first message, and continues independently from there. Existing compaction summaries and the retained tail remain in effect. **Opening a side chat does not make a model request**. Inference starts when you send a question.
 
-**Matching request prefixes may reuse the model provider's context cache and reduce input costs.** DeepSeek, for example, caches request prefixes automatically and bills cache-hit input at its cached rate. Actual hits depend on the model and provider, matching request prefixes, and whether the cache has been created and remains available. Further model calls follow your provider's billing rules. [DeepSeek caching guide](https://api-docs.deepseek.com/guides/kv_cache/) · [Input pricing](https://api-docs.deepseek.com/quick_start/pricing/)
+**Matching request prefixes may reuse the model provider's context cache and reduce input costs.** The DeepSeek API, for example, enables context caching by default and bills cache-hit input at its cached rate. Actual hits depend on the model and provider, matching request prefixes, and whether the cache has been created and remains available. Further model calls follow your provider's billing rules. [DeepSeek caching guide](https://api-docs.deepseek.com/guides/kv_cache/) · [Input pricing](https://api-docs.deepseek.com/quick_start/pricing/)
 
 ## See it in action
 
