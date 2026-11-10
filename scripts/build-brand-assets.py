@@ -12,51 +12,51 @@ ASSETS = Path(__file__).resolve().parent.parent / 'docs' / 'assets'
 
 def cover(lang, heading, subtitle, labels):
     title = escape(' '.join(heading))
-    chat, note, handback = map(escape, labels)
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="440" viewBox="0 0 1440 440" role="img" aria-labelledby="title desc" xml:lang="{lang}">
+    main, side, back = map(escape, labels)
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="560" viewBox="0 0 1440 560" role="img" aria-labelledby="title desc" xml:lang="{lang}">
   <title id="title">dsh-sidenote — {title}</title>
-  <desc id="desc">{escape(subtitle)}</desc>
-  <rect width="1440" height="440" rx="24" fill="#F8FAFF"/>
-  <path d="M840 0h576a24 24 0 0 1 24 24v392a24 24 0 0 1-24 24H840Z" fill="#EAF0FF"/>
+  <desc id="desc">{escape(subtitle)}. {main} → {side} → {back}.</desc>
+  <rect width="1440" height="560" rx="24" fill="#F8FAFF"/>
+  <path d="M840 0h576a24 24 0 0 1 24 24v512a24 24 0 0 1-24 24H840Z" fill="#EAF0FF"/>
   <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', sans-serif">
-    <g transform="translate(64 40)">
+    <g transform="translate(64 52)">
       <rect width="44" height="44" rx="12" fill="#3B5BFD"/>
       <path d="M11 16h12m-12 7h8" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
       <path d="M29 12v21" stroke="white" stroke-opacity=".35" stroke-width="1.5"/>
       <path d="M33 16h5v7h-3l-2 3Z" fill="white"/>
       <text x="60" y="31" font-size="32" font-weight="650" letter-spacing="-1" fill="#152441">dsh-sidenote</text>
     </g>
-    <text x="64" y="188" fill="#152441" font-size="64" font-weight="700" letter-spacing="-2">{escape(heading[0])}</text>
-    <text x="64" y="269" fill="#152441" font-size="64" font-weight="700" letter-spacing="-2">{escape(heading[1])}</text>
-    <text x="66" y="331" fill="#60708E" font-size="24">{escape(subtitle)}</text>
-    <text x="66" y="397" fill="#60708E" font-size="20">A companion for DeepSeek Harness</text>
-    <!-- Equal-weight feature entries, each with its own action. -->
-    <g fill="none" stroke="#3B5BFD" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M918 88h42a8 8 0 0 1 8 8v28a8 8 0 0 1-8 8h-20l-16 13v-13h-6a8 8 0 0 1-8-8V96a8 8 0 0 1 8-8Z"/>
-      <path d="M923 103h31m-31 12h21"/>
-      <path d="M915 198h45m-45 16h29m-29 16h18"/>
-      <path d="m948 238 16-16 8 8-16 16-12 4Z"/>
-      <path d="M918 306v50m45-25h-34m12-12-12 12 12 12"/>
-    </g>
-    <g fill="#152441" font-size="30" font-weight="600">
-      <text x="1006" y="126">{chat}</text>
-      <text x="1006" y="234">{note}</text>
-      <text x="1006" y="342">{handback}</text>
-    </g>
+    <text x="64" y="221" fill="#152441" font-size="64" font-weight="700" letter-spacing="-2">{escape(heading[0])}</text>
+    <text x="64" y="304" fill="#152441" font-size="64" font-weight="700" letter-spacing="-2">{escape(heading[1])}</text>
+    <text x="66" y="368" fill="#60708E" font-size="24">{escape(subtitle)}</text>
+    <text x="66" y="490" fill="#60708E" font-size="20">A companion for DeepSeek Harness</text>
+    <!-- A continuous main line with a side route that rejoins it. -->
+    <path d="M908 185H1366" fill="none" stroke="#152441" stroke-width="6" stroke-linecap="round"/>
+    <path d="M960 185C1012 185 988 366 1060 366H1160C1236 366 1228 185 1304 185" fill="none" stroke="#3B5BFD" stroke-width="6" stroke-linecap="round"/>
+    <path d="m1354 175 12 10-12 10" fill="none" stroke="#152441" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="960" cy="185" r="11" fill="#F8FAFF" stroke="#152441" stroke-width="5"/>
+    <circle cx="1304" cy="185" r="11" fill="#F8FAFF" stroke="#152441" stroke-width="5"/>
+    <rect x="924" y="111" width="134" height="42" rx="21" fill="#152441"/>
+    <text x="991" y="139" fill="white" font-size="18" font-weight="600" text-anchor="middle">{main}</text>
+    <rect x="1019" y="308" width="184" height="112" rx="18" fill="white" stroke="#C9D5FA" stroke-width="1.5"/>
+    <path d="M1043 335h24m-24 9h15" stroke="#3B5BFD" stroke-width="3" stroke-linecap="round"/>
+    <text x="1042" y="388" fill="#152441" font-size="23" font-weight="600">{side}</text>
+    <rect x="1211" y="227" width="172" height="43" rx="21.5" fill="#DDE6FF"/>
+    <text x="1297" y="255" fill="#304DCE" font-size="18" font-weight="600" text-anchor="middle">{back}</text>
   </g>
 </svg>
 '''
 
 
 for filename, lang, heading, subtitle, labels in [
-    ('hero.svg', 'zh-CN', ('思路可以分岔。', '主线始终向前。'), '侧边聊天、划选批注与结论回流。', ('侧边聊天', '划选批注', '结论回流')),
-    ('hero-en.svg', 'en', ('Follow the tangent.', 'Keep the thread.'), 'Side chats, annotations, and answers to bring back.', ('Side chats', 'Annotations', 'Bring answers back')),
+    ('hero.svg', 'zh-CN', ('思路可以分岔。', '主线始终向前。'), '划选注释、侧边追问，再把结论带回来。', ('主对话', '侧边追问', '结论回流')),
+    ('hero-en.svg', 'en', ('Follow the tangent.', 'Keep the thread.'), 'Annotate. Explore on the side. Bring answers back.', ('Main thread', 'Side chat', 'Bring it back')),
 ]:
     svg = cover(lang, heading, subtitle, labels)
     (ASSETS / filename).write_text(svg, encoding='utf-8')
     # A text-first crop keeps the headline readable in narrow README layouts.
-    compact = svg.replace('width="1440" height="440"', 'width="840" height="440"', 1)
-    compact = compact.replace('viewBox="0 0 1440 440"', 'viewBox="0 0 840 440"', 1)
-    compact = compact.replace('<rect width="1440" height="440"', '<rect width="840" height="440"', 1)
+    compact = svg.replace('width="1440" height="560"', 'width="840" height="560"', 1)
+    compact = compact.replace('viewBox="0 0 1440 560"', 'viewBox="0 0 840 560"', 1)
+    compact = compact.replace('<rect width="1440" height="560"', '<rect width="840" height="560"', 1)
     (ASSETS / filename.replace('.svg', '-compact.svg')).write_text(compact, encoding='utf-8')
     print(filename)
