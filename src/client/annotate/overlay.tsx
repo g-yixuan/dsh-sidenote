@@ -17,6 +17,7 @@ import type { ReactNode } from 'react'
 import { IconCheckOutline16, IconTrashOutline16 } from '../host/icons.ts'
 import type { Context } from '../host/contracts.ts'
 import { currentSessionIdOf } from '../host/currentSession.ts'
+import { focusSideComposer } from '../host/dom.ts'
 import { hostDiagnostics } from '../host/probes.ts'
 import { insertNativeQuote, probeInput, resolveInput } from '../host/input.ts'
 import { sideChatBridge, type SideChatBridge } from '../bridge.ts'
@@ -56,8 +57,8 @@ function useAutoGrowingNote(note: string) {
   return input
 }
 
-/** 「Ask in side chat」的注解收集态：先弹编辑器（与「Add to conversation」一致，
- *  允许空注解），保存后经 bridge 等待真实子会话，创建共享注释对象；正文保持干净。 */
+/** 「Ask in side chat」的投递草稿：按偏好填写或跳过注解，
+ *  经 bridge 等待真实子会话后创建共享注释对象；正文保持干净。 */
 interface SideDraftState {
   readonly snapshot: SelectionSnapshot
   readonly x: number
@@ -66,6 +67,7 @@ interface SideDraftState {
   readonly targetTitle?: string
   readonly abort: AbortController
   readonly target: ReturnType<SideChatBridge['captureTarget']> | undefined
+  readonly skipNote: boolean
 }
 
 interface OverlayProps {
@@ -188,11 +190,12 @@ function AnnotateOverlayInner({ ctx, store, controller, preferences }: OverlayPr
   }
 
   const askInSideChat = (snapshot: SelectionSnapshot): void => {
-    // 收集注解（可空），等选定的实际目标就绪后递交共享对象。
+    // 按偏好收集注解，等选定的实际目标就绪后递交共享对象。
     const anchor = selectionBadgePoint(snapshot)
     const target = sideChatBridge.current?.captureTarget(snapshot.sessionId)
     const targetTitle = target?.title
-    setSideDraft({ snapshot, x: anchor.x, y: anchor.y, abort: new AbortController(), target, ...(targetTitle !== undefined ? { targetTitle } : {}) })
+    setSideDraft({ snapshot, x: anchor.x, y: anchor.y, abort: new AbortController(), target, skipNote: !preference.showSideChatNote,
+      ...(targetTitle !== undefined ? { targetTitle } : {}) })
     controller.clear()
     window.getSelection()?.removeAllRanges()
   }
@@ -211,6 +214,11 @@ function AnnotateOverlayInner({ ctx, store, controller, preferences }: OverlayPr
       })
       rangeCache.current.set(annotation.id, { ranges: snapshot.ranges.map(range => range.cloneRange()), view: snapshot.source.view })
       setSideDraft(current => current === sideDraft ? null : current)
+      if (sideDraft.skipNote) {
+        const view = [...document.querySelectorAll<HTMLElement>('[data-sidenote-chat-session]')]
+          .find(element => element.dataset.sidenoteChatSession === target.childId)
+        if (view) focusSideComposer(view)
+      }
       return true
     } catch { return false }
   }
@@ -298,6 +306,7 @@ function AnnotateOverlayInner({ ctx, store, controller, preferences }: OverlayPr
           x={sideDraft.x}
           y={sideDraft.y}
           targetTitle={sideDraft.targetTitle}
+          skipNote={sideDraft.skipNote}
           bounds={sourceClip(sideDraft.snapshot.source)}
           onSave={commitSideDraft}
           onCancel={() => { sideDraft.abort.abort(); setSideDraft(null) }}
@@ -392,11 +401,13 @@ export function SideChatNoteEditor(props: {
   y: number
   targetTitle?: string
   bounds?: Bounds
+  skipNote?: boolean
   onSave: (note: string) => boolean | Promise<boolean>
   onCancel: () => void
 }): ReactNode {
   useLocaleTick()
   const [note, setNote] = useState('')
+  const [showNote, setShowNote] = useState(!props.skipNote)
   const noteInputRef = useAutoGrowingNote(note)
   const [failed, setFailed] = useState(false)
   const [pending, setPending] = useState(false)
@@ -415,6 +426,7 @@ export function SideChatNoteEditor(props: {
       if (cancelled.current) return
       saved.current = ok
       failedRef.current = !ok
+      if (!ok) setShowNote(true)
       setFailed(!ok)
       setPending(false)
     }
@@ -426,6 +438,9 @@ export function SideChatNoteEditor(props: {
   }
   const saveRef = useRef(save)
   saveRef.current = save
+  useEffect(() => {
+    if (props.skipNote) saveRef.current()
+  }, [props.skipNote])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -460,40 +475,42 @@ export function SideChatNoteEditor(props: {
       {props.targetTitle !== undefined && props.targetTitle !== '' && (
         <div className={css.editorTarget}>{t('sendToTarget', { title: props.targetTitle })}</div>
       )}
-      <div className={css.editorAskRow}>
-        <textarea
-          ref={noteInputRef}
-          rows={1}
-          className={css.editorInput}
-          value={note}
-          placeholder={t('sideNotePlaceholder')}
-          aria-label={t('sideNoteAria')}
-          autoFocus
-          disabled={pending}
-          onChange={(event) => {
-            setNote(event.target.value)
-            failedRef.current = false
-            setFailed(false)
-          }}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter' || event.shiftKey) return
-            // IME 保护：组合中（候选窗未提交）的 Enter 属于输入法，不能算确认。
-            if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
-            event.preventDefault()
-            save()
-          }}
-        />
-        <button
-          type="button"
-          className={css.confirmButton}
-          title={t('confirmTitle')}
-          aria-label={t('confirmAskAria')}
-          onClick={() => { save() }}
-          disabled={pending}
-        >
-          <IconCheckOutline16 size={14} />
-        </button>
-      </div>
+      {showNote && (
+        <div className={css.editorAskRow}>
+          <textarea
+            ref={noteInputRef}
+            rows={1}
+            className={css.editorInput}
+            value={note}
+            placeholder={t('sideNotePlaceholder')}
+            aria-label={t('sideNoteAria')}
+            autoFocus
+            disabled={pending}
+            onChange={(event) => {
+              setNote(event.target.value)
+              failedRef.current = false
+              setFailed(false)
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' || event.shiftKey) return
+              // IME 保护：组合中（候选窗未提交）的 Enter 属于输入法，不能算确认。
+              if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
+              event.preventDefault()
+              save()
+            }}
+          />
+          <button
+            type="button"
+            className={css.confirmButton}
+            title={t('confirmTitle')}
+            aria-label={t('confirmAskAria')}
+            onClick={() => { save() }}
+            disabled={pending}
+          >
+            <IconCheckOutline16 size={14} />
+          </button>
+        </div>
+      )}
       {failed && <div className={css.editorError}>{t('openSideFailed')}</div>}
       {pending && <div className={css.editorTarget} role="status">{t('sideTargetWaiting')}</div>}
     </div>

@@ -24,7 +24,7 @@ After main-session compaction, **Main conversation context** starts with the lat
 
 The right sidebar can keep multiple side-chat tabs, each with independent history, drafts, and running state. Click a tab to switch. Create another through `/side` → **New side chat** or the sidebar **+** menu; the header **Side** button focuses the selected side chat. Reopen a closed original conversation through `/side` without first closing other side chats. Only admitted native hosts are maintained; outside-window hosts pin plugin 0.6.5; see the [compatibility policy](compatibility_EN.md).
 
-**Ask in side chat** targets the selected side-chat tab. When another sidebar page such as a file is selected, it uses the last opened side chat. The target is frozen when note editing begins: switching tabs afterward never redirects the quote. If the original target closes, the note remains available with a retry message.
+**Ask in side chat** targets the selected side-chat tab. When another sidebar page such as a file is selected, it uses the last opened side chat. The target is frozen when you click the action. Switching tabs afterward never redirects the quote. If the original target closes, the note remains available with a retry message.
 
 ### Session lists and recovery
 
@@ -40,6 +40,8 @@ On DSH 0.2.2, the Sidenote toolbar offers **Quote**, **Add to conversation**, an
 2. Choose to add it to the main conversation or ask in a side chat, then write a note.
 3. Click outside the editor or press `Enter` to save a new note; press `Esc` to cancel.
 4. Annotation and side-chat reflow chips sit side by side above the composer. Hover to read complete quotes, notes, or returned questions and answers; move into the card to keep reading. Click a chip to keep it open, then press Escape or click outside to close. The compact card scrolls internally for long content. Hovering a chip gently reveals an × button that clears that category of annotations or reflows without affecting the other category or the message body. Edit notes in place: leaving the field saves, Escape cancels. Remove individual entries or clear the batch.
+
+To write your question directly in the side chat, turn off **Add a note before asking in side chat** under **Settings → Sidenote**. **Ask in side chat** then skips the note editor and adds the passage as a pending annotation in the target side chat, ready to preview and send with your next message. A waiting status appears while the side chat becomes ready, and `Esc` cancels the handoff. A failed handoff opens the editor for retry.
 
 ![Select a passage, then add it to the conversation or ask in a side chat](assets/selection-en.jpg)
 
@@ -89,6 +91,8 @@ The saved session keeps the same layout: collapsible inherited context first, fo
 On first use after installation or an upgrade introducing this behavior, Sidenote makes one attempt per host profile to set **Replies After Collapse** in General settings to **Final answer only**, including an existing **All replies** choice. You can change it back afterward; reloads, restarts, and later upgrades do not override it again. Once the attempt has been recorded, a failed preference write is not retried automatically; change the option manually in General settings. The host preference remains after disabling or uninstalling Sidenote. It affects only collapsed work details; selections follow the visible-reply rules above.
 
 Open DSH settings and select **Sidenote** in the left navigation. **Hide native quote** is on by default, hiding the Quote action in main and side-chat selection menus. Annotations and side-chat questions use their own actions. Turn the switch off when you want native quoting. Changes take effect immediately, are saved in the current host configuration, and survive reloads and restarts. An explicit user setting takes precedence over the default.
+
+**Add a note before asking in side chat** is enabled by default. Turn it off to skip note entry for side-chat questions. This preference is also saved to the current host configuration and survives reloads and restarts. You can turn it back on at any time.
 
 ## Installation and troubleshooting
 

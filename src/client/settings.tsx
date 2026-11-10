@@ -24,6 +24,15 @@ function SidenoteSettings({ preferences }: { preferences: SidenotePreferences })
           disabled={state.status !== 'ready' || !state.writable || state.saving}
           onChange={hidden => { void preferences.setHidden(hidden) }} />
       </div>
+      <div className={css.row} role="group" aria-labelledby={`${id}-side-note-label`} aria-describedby={`${id}-side-note-description`}>
+        <div className={css.copy}>
+          <span id={`${id}-side-note-label`} className={css.label}>{t('showSideChatNote')}</span>
+          <p id={`${id}-side-note-description`} className={css.hint}>{t('showSideChatNoteHint')}</p>
+        </div>
+        <Switch checked={state.showSideChatNote} label={t('showSideChatNote')} title={t('showSideChatNoteHint')}
+          disabled={state.status !== 'ready' || !state.writable || state.saving}
+          onChange={show => { void preferences.setShowSideChatNote(show) }} />
+      </div>
       {state.saving && <p className={css.status} role="status">{t('settingsSaving')}</p>}
       {state.status === 'loading' && <p className={css.status} role="status">{t('settingsLoading')}</p>}
       {state.status === 'unavailable' && <p className={css.error} role="alert">{t('settingsUnavailable')}</p>}
