@@ -58,7 +58,7 @@ function DocumentSelectionToolbar({ ctx, store }: { ctx: Context; store: Annotat
     window.getSelection()?.removeAllRanges()
     setSelection(null); setNotice(t('documentAdded'))
   }
-  return <>{selection && <SelectionToolbarFrame range={selection.range} clip={() => quoteClipOf(selection.body, selection.view)}>
+  return <>{selection && <SelectionToolbarFrame range={selection.range} view={selection.view} clip={() => quoteClipOf(selection.body, selection.view)}>
     <button type="button" className={css.toolbarButton} disabled={!available} title={!available ? t('documentWaiting') : undefined}
       onMouseDown={event => event.preventDefault()} onClick={add}>{t('documentAdd')}</button>
     {!available && <span className={css.toolbarStatus} role="status">{t('documentWaiting')}</span>}

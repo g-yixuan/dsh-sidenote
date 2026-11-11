@@ -19,7 +19,7 @@ export function SelectionToolbar(props: {
   const [failed, setFailed] = useState(false)
   if (!props.snapshot.source.body.isConnected || props.snapshot.range.getClientRects().length === 0) return null
   return (
-    <SelectionToolbarFrame range={props.snapshot.range} clip={() => sourceClip(props.snapshot.source)}>
+    <SelectionToolbarFrame range={props.snapshot.range} view={props.snapshot.source.view} clip={() => sourceClip(props.snapshot.source)}>
       {props.onQuote && <button type="button" className={css.toolbarButton} title={t('nativeQuoteHint')}
         onMouseDown={event => { event.preventDefault() }}
         onClick={event => { event.preventDefault(); event.stopPropagation(); setFailed(!props.onQuote!()) }}>

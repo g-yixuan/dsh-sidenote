@@ -3,8 +3,9 @@ import { t } from '../locales.ts'
 import css from './selection.module.css'
 
 /** Chat and document selections share geometry and appearance, not their actions. */
-export function SelectionToolbarFrame({ range, clip, children }: {
+export function SelectionToolbarFrame({ range, view, clip, children }: {
   range: Range
+  view: HTMLElement
   clip(): { left: number; top: number; right: number; bottom: number }
   children: ReactNode
 }) {
@@ -26,6 +27,10 @@ export function SelectionToolbarFrame({ range, clip, children }: {
     place()
     const observer = new ResizeObserver(place)
     observer.observe(toolbar)
+    observer.observe(view)
+    const anchor = range.commonAncestorContainer
+    const element = anchor instanceof Element ? anchor : anchor.parentElement
+    if (element) observer.observe(element)
     window.addEventListener('resize', place)
     window.addEventListener('scroll', place, true)
     return () => { observer.disconnect(); window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true) }
