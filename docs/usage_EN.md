@@ -34,8 +34,6 @@ Side chats stay out of the sidebar list and search results from creation, withou
 
 Hidden side chats remain runnable. Reopen them from the recently closed entries in `/side`; use **Save as session** to keep a visible copy in the list. This does not recover deleted sessions or undo existing legacy archives. Historical 0.6.5 Releases retain their archive-based behavior; see the [compatibility policy](compatibility_EN.md).
 
-After a reload or DSH restart, the side chat’s own exchanges stay in its conversation area and inherited mainline context keeps its collapsible section. Messages remain readable while their origin is being confirmed, and handback becomes available once it is confirmed.
-
 ## Select and annotate
 
 On DSH 0.2.2, the Sidenote toolbar offers **Quote**, **Add to conversation**, and **Ask in side chat** in the main conversation. Quote inserts a native quote block into the source conversation's composer, where you can add your question. Add to conversation opens the annotation editor so you can write notes for individual passages and send them together. Main and side chats share the same toolbar, annotation editor, and previews.
