@@ -13,7 +13,7 @@ test.beforeAll(async () => {
   await registerSeedWorkspace()
 })
 test.afterEach(async ({ page }, info) => {
-  if (info.status !== info.expectedStatus) await page.screenshot({ path: info.outputPath('document-quotes-failure.png') })
+  if (info.status !== info.expectedStatus) await page.screenshot({ animations: 'disabled', path: info.outputPath('document-quotes-failure.png') })
 })
 
 const toolbar = (page: Page) => page.locator('[data-sidenote-document-ui] [role="toolbar"]')
@@ -28,18 +28,31 @@ async function start(page: Page) {
   const main = page.locator('[data-conversation-session]').first()
   await expect(main).not.toHaveAttribute('data-conversation-session', seedId!)
   await selectModel(page, main, 'Controlled E2E')
-  await page.keyboard.press('ControlOrMeta+Alt+p')
-  await expect(page.locator('[data-files-page]')).toBeVisible()
   return { main, id: (await main.getAttribute('data-conversation-session'))! }
 }
 
+async function showFiles(page: Page) {
+  const expand = page.getByRole('button', { name: /^(Open right sidebar|打开右侧边栏)$/ })
+  if (await expand.isVisible()) await expand.click()
+  const files = page.getByRole('tab', { name: /^(Files|文件)/ }).first()
+  if (await files.isVisible()) await files.click()
+  else {
+    const entry = page.locator('[data-sidebar-right-guide-entry="files"]')
+    if (!await entry.isVisible()) await page.getByRole('button', { name: /^(New tab|新标签页)$/ }).first().click()
+    await entry.click()
+  }
+  await expect(page.locator('[data-files-page]')).toBeVisible()
+}
+
 async function openFile(page: Page, name: string) {
+  await showFiles(page)
   const row = page.getByRole('button', { name, exact: true }).first()
-  if (!await row.isVisible()) await page.keyboard.press('ControlOrMeta+Alt+p')
   await expect(row).toBeVisible()
   await row.click()
   const preview = page.locator('[data-document-preview]:visible').filter({ has: page.locator('[data-textpreview-path]').filter({ hasText: name }) }).last()
   await expect(preview).toBeVisible()
+  const hideTree = page.getByRole('button', { name: /^(Hide file tree|隐藏文件树)$/ }).first()
+  if (await hideTree.isVisible()) await hideTree.click()
   return preview
 }
 
@@ -109,7 +122,7 @@ test('document quotes: Markdown, code and plain text accumulate, survive reload 
   await expect(panel).toContainText('document-notes.md')
   await expect(panel).toContainText('Plain text excerpt marker')
   await expect(panel.locator('textarea')).toHaveCount(0)
-  await page.screenshot({ path: 'test-results/document-quotes-draft.png' })
+  await page.screenshot({ animations: 'disabled', path: 'test-results/document-quotes-draft.png' })
   await page.keyboard.press('Escape')
   const marker = 'Explain the collected document excerpts. [e2e:document-quotes]'
   const before = sessionEventsOf(id).filter(event => event.type === 'turn/end').length
@@ -126,7 +139,7 @@ test('document quotes: Markdown, code and plain text accumulate, survive reload 
   await bubble.getByRole('button', { name: /Document quotes|文档引用/ }).click()
   await expect(page.locator('[data-sidenote-sent-preview]')).toContainText('Markdown excerpt marker.')
   await expect(page.locator('[data-sidenote-sent-preview]')).toContainText('code marker')
-  await page.screenshot({ path: 'test-results/document-quotes-sent.png' })
+  await page.screenshot({ animations: 'disabled', path: 'test-results/document-quotes-sent.png' })
   await page.keyboard.press('Escape')
   await page.reload()
   await bubble.getByRole('button', { name: /Document quotes|文档引用/ }).click()
@@ -149,7 +162,7 @@ for (const [file, text] of [['paper.pdf', 'PDF first page'], ['notes.docx', 'Off
     await expect(panel).toContainText(file!)
     await expect(panel).toContainText(/Page 1|第 1 页/)
     await expect(panel).toContainText(text!)
-    await page.screenshot({ path: `test-results/document-quotes-${file}.png` })
+    await page.screenshot({ animations: 'disabled', path: `test-results/document-quotes-${file}.png` })
     const stored = await page.evaluate(id => JSON.parse(localStorage.getItem('dsh-sidenote:annotations:v1:' + id) ?? '[]'), id)
     expect(stored).toMatchObject([{ text: selected, document: { path: file, pageStart: 1, pageEnd: 1 } }])
     await page.keyboard.press('Escape')
@@ -169,7 +182,7 @@ for (const [file, text] of [['paper.pdf', 'PDF first page'], ['notes.docx', 'Off
       await expect(page.locator('[data-sidenote-context-preview]')).toContainText(/Pages 1–2|第 1–2 页/)
       const records = await page.evaluate(id => JSON.parse(localStorage.getItem('dsh-sidenote:annotations:v1:' + id) ?? '[]'), id)
       expect(records[1]).toMatchObject({ text: across, document: { path: file, pageStart: 1, pageEnd: 2 } })
-      await page.screenshot({ path: 'test-results/document-quotes-pdf-cross-page.png' })
+      await page.screenshot({ animations: 'disabled', path: 'test-results/document-quotes-pdf-cross-page.png' })
       await page.keyboard.press('Escape')
     }
     await page.reload()
