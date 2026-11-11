@@ -45,12 +45,6 @@ The main branch maintains **DSH 0.2.2 (from rc.1)** using the native conversatio
 
 Clarify a detail during a design review or explore an implementation while reading code. Open a side chat from the current conversation. **The fork preserves the full history**, so you can pick up without explaining the context again.
 
-**Keep the context. Make use of the cache.** Side chats carry the main conversation's context forward and support context-cache reuse, reducing repeated computation and input costs for the portions that hit the cache.
-
-Side chats support multiple turns, tool cards, model and permission switching, images, `@` references, and approvals inside the panel. Main and side conversations can move forward independently.
-
-After a reload or DSH restart, the side chatâ€™s own exchanges stay in its conversation area and inherited mainline context keeps its collapsible section. Saving as a regular session preserves that separation; opening another side chat from the saved session establishes a new inherited range. Messages remain readable while their origin is being confirmed, and handback becomes available once it is confirmed.
-
 ### Put your feedback on the passage
 
 Select part of a reply in the main conversation or a side chat, then add a question or comment. **The original passage and your note stay together.** Collect several notes, preview or remove them before sending, and keep writing in the composer.
@@ -77,9 +71,11 @@ Click the **Bring back to main conversation** icon on the right of a side replyâ
 |---|---|
 | Explore several questions | Keep independent side-chat tabs in the right sidebar, switch freely, and reopen closed conversations. |
 | Earlier context | Side chats inherit the full history, collapsed until you need it. |
+| Side-chat input costs | Context-cache reuse reduces input costs for the portions that hit the cache. |
+| A familiar chat experience | The composer and messages match the native experience, with images, tool cards, and in-panel approvals. |
 | Several pieces of feedback | Send annotations together, or preview and remove them individually. |
 | A failed send | Annotations and draft text stay available for retry. |
-| Picking up after a reload | Saved annotations persist. If the sidebar is not restored, reopen the original side chat through `/side`. |
+| Picking up after a reload | Side-chat messages and the inherited-context section persist. If the sidebar is not restored, reopen through `/side`. |
 | Keeping the session list focused | Side chats stay out of the list and search until saved as regular sessions. |
 | A conversation worth keeping | Save it as a regular session and continue later. |
 

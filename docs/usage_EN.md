@@ -6,6 +6,8 @@ English · [中文](usage.md) · [Back to the overview](../README_EN.md)
 
 A side chat forks the current main session with a full history snapshot, without compressing it into a summary. It is a real, independent DSH session that supports further conversation.
 
+Side chats carry the main conversation's context forward and support context-cache reuse, reducing repeated computation and input costs for the portions that hit the cache.
+
 Use the session header's **Side** button, the right-sidebar entry, or `/side` in the main composer. Side chats reuse the main conversation’s native composer, message flow, tools, model and reasoning controls, permissions, commands, file references and attachments. Answer approvals and questions in the panel. Completion notifications require a successful turn; stopping or failing is not completion.
 
 With an image-capable model, focus the side composer and press `⌘V` / `Ctrl+V` to paste clipboard images, or use the attachment button to select them. Images appear above the input and can be removed before sending. Send images on their own or together with text.
@@ -31,6 +33,8 @@ The right sidebar can keep multiple side-chat tabs, each with independent histor
 Side chats stay out of the sidebar list and search results from creation, without briefly flashing into the list. Closing tabs or reloading does not put registered side chats back in the list. Saving as a regular session creates a visible copy.
 
 Hidden side chats remain runnable. Reopen them from the recently closed entries in `/side`; use **Save as session** to keep a visible copy in the list. This does not recover deleted sessions or undo existing legacy archives. Historical 0.6.5 Releases retain their archive-based behavior; see the [compatibility policy](compatibility_EN.md).
+
+After a reload or DSH restart, the side chat’s own exchanges stay in its conversation area and inherited mainline context keeps its collapsible section. Messages remain readable while their origin is being confirmed, and handback becomes available once it is confirmed.
 
 ## Select and annotate
 
@@ -82,7 +86,7 @@ Reflows, quotes, annotations, body text, and attachments are submitted as one na
 
 When saving completes, the source side-chat tab closes and the saved copy opens. If you switched to another main conversation while saving, only the source tab closes; the current conversation stays open, and the saved copy is available in the session list.
 
-The saved session keeps the same layout: collapsible inherited context first, followed by its own side-chat messages. Reloads retain the original first-send cut instead of exposing raw protocol text or folding the side conversation into its inherited history. If the saved session is compacted again before another side chat is opened, the latest committed summary takes precedence over snapshots embedded in older messages. Recovery uses the marker position indexed by the host and does not automatically load all history for ordinary native forks.
+The saved session keeps the same layout: collapsible inherited context first, followed by its own side-chat messages. Reloads retain the original first-send cut instead of exposing raw protocol text or folding the side conversation into its inherited history. Opening another side chat from the saved session establishes a new inherited range. If the saved session is compacted again before another side chat is opened, the latest committed summary takes precedence over snapshots embedded in older messages. Recovery uses the marker position indexed by the host and does not automatically load all history for ordinary native forks.
 
 ![A side-chat finding ready to accompany the main-thread draft](assets/workflow-en.jpg)
 
