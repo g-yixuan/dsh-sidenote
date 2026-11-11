@@ -72,6 +72,9 @@ export function apply(ctx) {
       let reply = 'Controlled E2E reply. This complete assistant response supports quote selection.\n\nSecond paragraph preserves the full selected text.'
       if (text.includes('[e2e:body-selection]')) {
         reply = 'POST-CONTROLLED'
+      } else if (text.endsWith('[e2e:document-quotes]')) {
+        const received = ['document-notes.md', 'document-code.ts', 'document-plain.txt', 'Markdown excerpt marker.', 'code marker', 'Plain text excerpt marker'].every(value => text.includes(value))
+        reply = received ? 'Document sources and complete excerpts reached the model adapter.' : 'Document context is missing.'
       } else if (text === '[e2e:reflow] Remember the conclusion code SIDENOTE_SIDE_BLUE.') {
         reply = 'Remembered SIDENOTE_SIDE_BLUE in this side conversation.'
       } else if (text === '[e2e:reflow] Return the remembered code as the final conclusion.') {

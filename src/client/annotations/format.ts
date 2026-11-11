@@ -1,4 +1,5 @@
 import { t } from '../locales.ts'
+import { formatDocumentQuote, parseDocumentQuote, type DocumentSource, type DocumentQuote } from './document.ts'
 
 /**
  * Wire format v3（2026-09-06 用户裁定）——发送给模型的数据形态与气泡
@@ -34,6 +35,7 @@ export interface QuoteItem {
   readonly note: string
   /** 本条消息中的编号，与原文角标一致。 */
   readonly number?: number
+  readonly document?: DocumentSource
 }
 
 /** 协议头（双语）：zh「我批注了以下 2 处内容：」/ en 见 locales。 */
@@ -52,9 +54,10 @@ export function formatAnnotationXml(index: number, item: QuoteItem): string {
 
 /** 注释协议块 = 头部句 + 每个注释一个 XML 块（行间无空行，与正文空一行）。 */
 export function buildProtocolBlock(items: readonly QuoteItem[]): string {
+  const annotations = items.filter(item => !item.document)
   return [
-    protocolHeader(items.length),
-    ...items.map((item, i) => formatAnnotationXml(i + 1, item)),
+    ...items.filter(item => item.document).map((item, i) => formatDocumentQuote(item.number ?? i + 1, item.text, item.document!)),
+    ...(annotations.length ? [protocolHeader(annotations.length), ...annotations.map((item, i) => formatAnnotationXml(i + 1, item))] : []),
   ].join('\n')
 }
 
@@ -80,6 +83,7 @@ export interface ProtocolPrefix {
   readonly length: number
   readonly annotations: readonly ParsedAnnotation[]
   readonly reflows: readonly ParsedRefFlow[]
+  readonly documents?: readonly DocumentQuote[]
 }
 
 const ANNOTATION_RE = /<annotation id="(\d+)"(?: local="(\d+)")?(?: scope="[^"]*")?>\s*<quote>([\s\S]*?)<\/quote>\s*(?:<note>([\s\S]*?)<\/note>\s*)?<\/annotation>/y
@@ -111,6 +115,7 @@ export function splitProtocolPrefix(text: string): ProtocolPrefix | null {
   let pos = 0
   const reflows: ParsedRefFlow[] = []
   const annotations: ParsedAnnotation[] = []
+  const documents: DocumentQuote[] = []
 
   // 1) 连续的回流块（send.ts 组装序：回流在前）。
   for (;;) {
@@ -121,7 +126,14 @@ export function splitProtocolPrefix(text: string): ProtocolPrefix | null {
     pos = skipBlank(text, REFLOW_RE.lastIndex)
   }
 
-  // 2) 注释块：头部行 + 连续 <annotation> 块。
+  for (;;) {
+    const parsed = parseDocumentQuote(text, pos)
+    if (!parsed) break
+    documents.push(parsed.quote)
+    pos = skipBlank(text, parsed.end)
+  }
+
+  // 注释块：头部行 + 连续 <annotation> 块。
   const rest = text.slice(pos)
   const headerMatch = /^([^\n]*)\n/.exec(rest)
   if (headerMatch !== null && PROTOCOL_HEADER_RE.test(headerMatch[1] ?? '')) {
@@ -139,18 +151,18 @@ export function splitProtocolPrefix(text: string): ProtocolPrefix | null {
     }
     if (annotations.length > 0) {
       pos = cursor
-    } else if (reflows.length === 0) {
+    } else if (reflows.length === 0 && documents.length === 0) {
       return null
     }
     // 有回流但头部行后无注释块：头部行属用户巧合文本，不消费（留给正文）。
-  } else if (reflows.length === 0) {
+  } else if (reflows.length === 0 && documents.length === 0) {
     return null
   }
 
-  if (reflows.length === 0 && annotations.length === 0) return null
+  if (reflows.length === 0 && annotations.length === 0 && documents.length === 0) return null
   // 协议区与正文之间的一个空行分隔也一并消费。
   const end = skipBlank(text, pos)
-  return { length: end, annotations, reflows }
+  return { length: end, annotations, reflows, ...(documents.length ? { documents } : {}) }
 }
 
 export { splitSnapshotPrefix } from '../../snapshotProtocol.ts'

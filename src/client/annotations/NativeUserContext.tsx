@@ -8,6 +8,7 @@ import { flattenReflowContent, splitProtocolPrefix, splitSnapshotPrefix, type Pr
 import { t } from '../locales.ts'
 import { withoutSnapshotImages } from '../../snapshotProtocol.ts'
 import { useLocaleTick } from '../locale-tick.ts'
+import { DocumentQuoteContent } from './DocumentQuoteContent.tsx'
 import css from './annotations.module.css'
 
 interface HistoryNode { kind: string; seq: number; source?: { kind?: string }; content?: readonly { type: string; text?: string }[] }
@@ -106,7 +107,7 @@ function ContextChip({ label, icon, children, interactive }: { label: string; ic
 
 export function SentContext({ protocol, interactive = true }: { protocol: ProtocolPrefix; interactive?: boolean }) {
   useLocaleTick()
-  if (protocol.annotations.length === 0 && protocol.reflows.length === 0) return null
+  if (protocol.annotations.length === 0 && protocol.reflows.length === 0 && !protocol.documents?.length) return null
   return <span className={css.sentChips} data-dsh-sidenote-bubble data-sidenote-no-quote>
     {protocol.annotations.length > 0 && <ContextChip label={t('sentChipLabel', { n: protocol.annotations.length })} icon={<IconListPenOutline16 size={12} />} interactive={interactive}>
       <ul className={css.contextList}>{protocol.annotations.map(annotation => <li className={css.contextItem} key={annotation.id}>
@@ -114,6 +115,11 @@ export function SentContext({ protocol, interactive = true }: { protocol: Protoc
           <div className={css.contextLabel}>{t('selectedText')}</div><div className={css.contextText}>{annotation.quote}</div>
           {annotation.note && <><div className={css.contextLabel}>{t('userComment')}</div><div className={css.contextText}>{annotation.note}</div></>}
         </div>
+      </li>)}</ul>
+    </ContextChip>}
+    {!!protocol.documents?.length && <ContextChip label={t('documentChip', { n: protocol.documents.length })} icon={<IconListPenOutline16 size={12} />} interactive={interactive}>
+      <ul className={css.contextList}>{protocol.documents.map(item => <li className={css.contextItem} key={item.id}>
+        <span className={css.contextNumber}>{item.id}.</span><DocumentQuoteContent source={item.document} text={item.quote} />
       </li>)}</ul>
     </ContextChip>}
     {protocol.reflows.length > 0 && <ContextChip label={t('reflowBubbleLabel')} icon={<IconShareOutline16 size={12} />} interactive={interactive}>

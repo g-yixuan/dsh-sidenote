@@ -40,6 +40,25 @@ function harness(modern = false) {
     send: () => submitAnnotations({ ctx, store, sessionId: 'child', input, annotations: store.listActive('child') }) }
 }
 
+it('keeps rejected document snapshots for retry and marks only the admitted batch sent', async () => {
+  const h = harness()
+  const source = { sessionId: 'source', path: 'notes.md' }
+  const saved = h.store.add({ sessionId: 'child', text: '原文快照', document: source })
+  const rejected = h.send()
+  await vi.waitFor(() => expect(h.submitted).toHaveBeenCalledOnce())
+  h.session.set({ ...h.session.getSnapshot(), promptError: { op: 'send', error: { message: 'native rejection' } } })
+  expect(await rejected).toBe(false)
+  expect(h.store.get(saved.id)?.state).toBe('active')
+  h.session.set({ ...h.session.getSnapshot(), promptError: null })
+  const accepted = h.send()
+  await vi.waitFor(() => expect(h.submitted).toHaveBeenCalledTimes(2))
+  const addedLater = h.store.add({ sessionId: 'child', text: '留给下一条', document: source })
+  h.session.set({ ...h.session.getSnapshot(), nodes: [...h.session.getSnapshot().nodes, { kind: 'user', seq: 2, content: [{ type: 'text', text: h.sentText() }] }] })
+  expect(await accepted).toBe(true)
+  expect(h.store.get(saved.id)).toBeUndefined()
+  expect(h.store.get(addedLater.id)?.state).toBe('active')
+})
+
 describe('controlled quote admission', () => {
   it('waiting for the target cannot silently submit newly typed body text', async () => {
     const h = harness()

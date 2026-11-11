@@ -65,7 +65,7 @@ test('body-only selection survives display changes and rejects visible process c
   const note = 'BODY-' + randomUUID()
   await addQuote(page, note)
   const saved = (await records(page, id)).find(annotation => annotation.note === note)!
-  expect(saved.anchors).toHaveLength(2)
+  expect(!saved.document && saved.anchors).toHaveLength(2)
   expect(saved.text).toContain(beforeText); expect(saved.text).toContain(afterText)
 
   await setReplies(page, 'final')
@@ -138,7 +138,7 @@ for (const real of [false, true]) test(`${real ? 'official Flash main' : 'native
   const note = 'GENERATED-' + randomUUID()
   await addQuote(page, note)
   const annotation = (await records(page, id)).find(item => item.note === note)!
-  expect(annotation.anchors).toHaveLength(2)
+  expect(!annotation.document && annotation.anchors).toHaveLength(2)
   expect(annotation.text).toContain(pre); expect(annotation.text).toContain(post)
   await restartHost(page); await prepareSeedPage(page)
   await revealForReading(page, first)

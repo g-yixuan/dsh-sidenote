@@ -5,17 +5,18 @@ import { IconCheckOutline16, IconCloseOutline16, IconEditOutline16, IconListPenO
 import type { Context, InputZone } from '../host/contracts.ts'
 import { resolveInput } from '../host/input.ts'
 import { hostDiagnostics } from '../host/probes.ts'
-import type { Annotation, AnnotationStore } from './model.ts'
+import type { ChatAnnotation, DocumentAnnotation, AnnotationStore } from './model.ts'
+import { DocumentQuoteContent } from './DocumentQuoteContent.tsx'
 import type { ReflowStore } from '../reflow.ts'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
 import { AnnotationBoundary } from './boundary.tsx'
 import css from './annotations.module.css'
 
-type Kind = 'annotations' | 'reflows'
+type Kind = 'annotations' | 'documents' | 'reflows'
 interface ChipProps { readonly session: InputZone['session']; readonly input: InputZone['input'] }
 
-function AnnotationDetail({ item, store, pending, onEdit }: { item: Annotation; store: AnnotationStore; pending: boolean; onEdit(): void }) {
+function AnnotationDetail({ item, store, pending, onEdit }: { item: ChatAnnotation; store: AnnotationStore; pending: boolean; onEdit(): void }) {
   const [editing, setEditing] = useState(false)
   const [note, setNote] = useState(item.note)
   const cancelled = useRef(false)
@@ -54,12 +55,14 @@ function ContextChips({ ctx, store, reflow, sessionId }: { ctx: Context; store: 
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const id = useId()
   const clearTimer = () => { clearTimeout(timer.current); timer.current = undefined }
-  const active = store.listActive(sessionId)
+  const allActive = store.listActive(sessionId)
+  const active = allActive.filter((item): item is ChatAnnotation => !item.document)
+  const documents = allActive.filter((item): item is DocumentAnnotation => !!item.document)
   const reflows = reflow.list(sessionId)
   const submission = store.getSubmission(sessionId)
-  const hasItems = open?.kind === 'annotations' ? active.length > 0 : reflows.length > 0
+  const hasItems = open?.kind === 'annotations' ? active.length > 0 : open?.kind === 'documents' ? documents.length > 0 : reflows.length > 0
   const shown = open !== null && hasItems
-  const label = (kind: Kind) => kind === 'annotations' ? t(active.length === 1 ? 'chipOne' : 'chipMany', { n: active.length }) : t(reflows.length === 1 ? 'reflowChipOne' : 'reflowChipMany', { n: reflows.length })
+  const label = (kind: Kind) => kind === 'documents' ? t('documentChip', { n: documents.length }) : kind === 'annotations' ? t(active.length === 1 ? 'chipOne' : 'chipMany', { n: active.length }) : t(reflows.length === 1 ? 'reflowChipOne' : 'reflowChipMany', { n: reflows.length })
 
   useEffect(() => { setOpen(null); return clearTimer }, [sessionId])
   useEffect(() => {
@@ -100,6 +103,7 @@ function ContextChips({ ctx, store, reflow, sessionId }: { ctx: Context; store: 
   const clear = (kind: Kind) => {
     clearTimer()
     if (kind === 'annotations') for (const item of active) store.remove(item.id)
+    else if (kind === 'documents') for (const item of documents) store.remove(item.id)
     else reflow.clearSession(sessionId)
     if (open?.kind === kind) setOpen(null)
   }
@@ -110,17 +114,21 @@ function ContextChips({ ctx, store, reflow, sessionId }: { ctx: Context; store: 
   }} onPointerLeave={leave}>
     <button type="button" className={css.chipMain} data-context-kind={kind} aria-haspopup="dialog" aria-expanded={shown && open.kind === kind} aria-controls={id} onClick={() => {
       clearTimer(); setOpen(open?.kind === kind && open.pinned ? null : { kind, pinned: true })
-    }}>{kind === 'annotations' ? <IconListPenOutline16 size={14} /> : <IconShareOutline16 size={14} />}<span>{label(kind)}</span></button>
-    <span className={css.chipDismissShade}><button type="button" className={css.chipDismiss} disabled={submission.pending} aria-label={t(kind === 'annotations' ? 'clearAnnotations' : 'clearReflows')} title={t(kind === 'annotations' ? 'clearAnnotations' : 'clearReflows')} onClick={() => { clear(kind) }}><IconCloseOutline16 size={14} /></button></span>
+    }}>{kind !== 'reflows' ? <IconListPenOutline16 size={14} /> : <IconShareOutline16 size={14} />}<span>{label(kind)}</span></button>
+    <span className={css.chipDismissShade}><button type="button" className={css.chipDismiss} disabled={submission.pending} aria-label={t(kind === 'annotations' ? 'clearAnnotations' : kind === 'documents' ? 'clearDocuments' : 'clearReflows')} title={t(kind === 'annotations' ? 'clearAnnotations' : kind === 'documents' ? 'clearDocuments' : 'clearReflows')} onClick={() => { clear(kind) }}><IconCloseOutline16 size={14} /></button></span>
   </span>
-  if (!active.length && !reflows.length && !submission.error) return null
+  if (!allActive.length && !reflows.length && !submission.error) return null
   return <div ref={root} className={css.chipWrap} data-sidenote-context-dock data-sidenote-annotation-ui>
-    {active.length > 0 && chip('annotations')}{reflows.length > 0 && chip('reflows')}
+    {active.length > 0 && chip('annotations')}{documents.length > 0 && chip('documents')}{reflows.length > 0 && chip('reflows')}
     {store.getStorageStatus(sessionId) === 'memory' && <span className={css.storageNotice} role="status">{t('annotationStorageMemory')}</span>}
     {submission.error && <span className={css.storageNotice} role="alert">{submission.error}</span>}
     {shown && createPortal(<div ref={panel} id={id} role="dialog" tabIndex={-1} aria-label={label(open.kind)} className={css.contextPanel} style={position} data-sidenote-context-preview data-sidenote-no-quote onPointerEnter={clearTimer} onPointerLeave={leave}>
       <ul className={css.contextList}>
-        {open.kind === 'annotations' ? active.map(item => <AnnotationDetail key={item.id} item={item} store={store} pending={submission.pending} onEdit={() => { setOpen({ kind: 'annotations', pinned: true }) }} />) : reflows.map((item, index) => <li key={item.id} className={css.contextItem}>
+        {open.kind === 'annotations' ? active.map(item => <AnnotationDetail key={item.id} item={item} store={store} pending={submission.pending} onEdit={() => { setOpen({ kind: 'annotations', pinned: true }) }} />) : open.kind === 'documents' ? documents.map(item => <li key={item.id} className={css.contextItem}>
+          <span className={css.contextNumber}>{item.number}.</span>
+          <DocumentQuoteContent source={item.document} text={item.text} />
+          <div className={css.contextActions}><button type="button" className={css.contextAction} disabled={submission.pending} aria-label={t('removeDocument', { n: item.number })} title={t('removeTitle')} onClick={() => store.remove(item.id)}><IconTrashOutline16 size={16} /></button></div>
+        </li>) : reflows.map((item, index) => <li key={item.id} className={css.contextItem}>
           <span className={css.contextNumber}>{index + 1}.</span>
           <div className={css.contextContent}>
             <div className={css.contextSource}>{item.sideTitle}</div>

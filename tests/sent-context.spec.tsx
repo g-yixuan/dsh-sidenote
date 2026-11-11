@@ -56,6 +56,23 @@ function mount(text: string, modern: boolean, key = 'user', injected = '', image
 }
 
 describe.each([true, false])('sent context inside the native user bubble (UserText=%s)', modern => {
+  it('keeps document source and full excerpt in the same native bubble without comment controls', () => {
+    const text = '引用全文 </quote> & 第二行\n结尾'
+    const source = { sessionId: 'main', path: 'docs/paper.pdf', pageStart: 5, pageEnd: 6 }
+    const wire = buildProtocolBlock([{ text, note: '', document: source }])
+    const { host, content, rerender } = mount(wire + '\n\n解释这段', modern)
+    expect(host.querySelector('[data-native-body]')?.textContent).toBe('解释这段')
+    expect(host.querySelector('[data-native-bubble]')?.textContent).toContain('Document quotes ×1')
+    act(() => { host.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click() })
+    const panel = document.querySelector('[data-sidenote-sent-preview]')!
+    expect(panel.textContent).toContain(text)
+    expect(panel.textContent).toContain('Pages 5–6')
+    expect(panel.textContent).toContain('docs/paper.pdf')
+    expect(panel.querySelector('textarea')).toBeNull()
+    expect(panel.textContent).not.toContain('用户评论')
+    rerender()
+    expect(content[1]!.text).toBe(wire + '\n\n解释这段')
+  })
   it('keeps injected context visible beside an image-only input without changing its attachments', () => {
     const { host, content } = mount('', modern, 'user', reflow, true)
     expect(host.querySelector('[data-native-bubble] [data-dsh-sidenote-bubble]')).not.toBeNull()

@@ -26,7 +26,7 @@ const TOPIC_MAX = 20
 export function topicOf(text: string): string | undefined {
   text = splitSnapshotPrefix(text)?.rest ?? text
   const protocol = splitProtocolPrefix(text)
-  if (protocol) text = text.slice(protocol.length).trim() || protocol.annotations.map(item => item.note || item.quote).join(' ') || protocol.reflows.map(item => item.source).join(' ')
+  if (protocol) text = text.slice(protocol.length).trim() || protocol.annotations.map(item => item.note || item.quote).join(' ') || protocol.documents?.map(item => item.quote).join(' ') || protocol.reflows.map(item => item.source).join(' ')
   const lines = text.split('\n')
   const own = lines
     .filter(l => !l.startsWith('>'))

@@ -1,0 +1,69 @@
+.toolbar {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  z-index: 50;
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  width: max-content;
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  user-select: none;
+}
+
+/* 选区贴视口顶部时的翻转修饰类（与 .toolbar 叠加使用）：渲染在选区下方。 */
+.toolbarBelow {
+  transform: translate(-50%, 0);
+}
+
+.toolbarButton {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font-size: 13px;
+  line-height: 20px;
+  padding: 7px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.toolbarButton + .toolbarButton {
+  border-left: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.08));
+}
+
+.toolbarButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+}
+
+.toolbarButton:focus-visible {
+  outline: 2px solid #2f88ff;
+  outline-offset: -3px;
+}
+
+.toolbarStatus {
+  flex-basis: 100%;
+  padding: 6px 12px;
+  color: var(--dsw-alias-label-secondary, #646a73);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.selectionNotice {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  padding: 8px 12px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  pointer-events: none;
+}
+

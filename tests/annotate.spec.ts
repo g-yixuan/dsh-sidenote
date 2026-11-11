@@ -5,7 +5,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createAnnotationStore } from '../src/client/annotations/model.ts'
-import type { AnnotationDraft } from '../src/client/annotations/model.ts'
+import type { ChatAnnotationDraft } from '../src/client/annotations/model.ts'
 import {
   PROTOCOL_HEADER_RE,
   protocolHeader,
@@ -16,7 +16,7 @@ import { BADGE_SPREAD_STEP, spreadBadgePoint } from '../src/client/annotate/anch
 import { currentSessionIdOf } from '../src/client/annotate/index.tsx'
 import type { Context } from '../src/client/host/contracts.ts'
 
-function draft(sessionId: string, text: string, note = ''): AnnotationDraft {
+function draft(sessionId: string, text: string, note = ''): ChatAnnotationDraft {
   return { sessionId, anchorKey: 'k1', text, anchorText: text, occurrence: 0, note }
 }
 
@@ -347,7 +347,7 @@ describe('store 持久化（localStorage 注入替身）', () => {
     const restored = createAnnotationStore(() => 2, storage).list('s1')
     expect(restored).toHaveLength(1)
     expect(restored[0]?.text).toBe('legacy quote')
-    expect(restored[0]?.anchors).toBeUndefined()
+    expect(restored[0]).not.toHaveProperty('anchors')
   })
 })
 

@@ -6,10 +6,14 @@
  * 否则引号撑破属性、尖括号污染块结构。内容位（<问>/<答> 之间）保持原文，
  * 不转义——模型读取友好且不改写用户数据。
  */
-export function xmlAttr(value: string): string {
+/** Document excerpts escape body delimiters; existing chat/reflow formats remain verbatim. */
+export function xmlText(value: string): string {
   return value
     .replaceAll('&', '&amp;')
-    .replaceAll('"', '&quot;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
+}
+
+export function xmlAttr(value: string): string {
+  return xmlText(value).replaceAll('"', '&quot;')
 }
