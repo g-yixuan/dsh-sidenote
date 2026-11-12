@@ -53,6 +53,7 @@ BS_VERSION=none DSH_EXPECTED_VERSION=0.2.2-rc.1 DSH_CMD="npx -y --package @deeps
 
 `pnpm test:mount --smoke` 只验证核心 fork、消息隔离、回流和划选恢复，不替代功能 PR 的全量回归。CI 仅在有有效验证证据的版本变更或相同内容合入后选择 smoke；规则与耗时报告见[维护指南](docs/maintaining.md)。
 
+CI 将完整宿主回归分为 4 片，在独立宿主中并行执行；所有片通过才算完成。手工定位单片问题时，可在上述宿主命令中增加 `DSH_E2E_SHARD=1/4`，切换编号以运行其他片；不设置时仍执行全部用例。每片须使用不同的临时 DSH_HOME，单片结果不能代替全量验收。
 
 `pnpm test:compat` 使用隔离 profile 安装当前打包构建，再验证不兼容更新被拒绝和原包恢复。退役系列通过 `DSH_COMPAT_BASELINE` 与 `DSH_COMPAT_REJECTED` 检查旧包钉版和真实新构建拒装，命令见[兼容政策](docs/compatibility.md)。真实模型单独运行：`DSH_E2E_REAL_KEY_FILE=/path/to/private-key-file pnpm test:mount --grep "official Flash"`（同时设置上例的精确 DSH_CMD / DSH_EXPECTED_VERSION）。Key 文件只由服务进程读取，不进入 profile、浏览器或产物；CI 默认不调用外部付费模型。此 lane 直连官方 api.deepseek.com / deepseek-flash，验证主侧工具、多轮、图片及实际推理等级请求，保存不含正文或鉴权信息的请求元数据。
 

@@ -68,6 +68,36 @@ describe('current and alpha native host windows', () => {
     expect(hosts(resolve(value))).toEqual(['0.2.1-rc.2', '0.2.1-rc.5', '0.2.2-alpha.3', '0.2.2-alpha.4'])
   })
 
+  it('assigns every boundary host all four isolated shards and keeps smoke unsharded', () => {
+    for (const count of [1, 4]) {
+      const result = resolve(manifest(), ['--shards', String(count)])
+      expect(result.status, result.stderr).toBe(0)
+      const rows = JSON.parse(result.stdout).include
+      expect(rows).toHaveLength(3 * count)
+      for (const version of ['0.2.1-rc.2', '0.2.1-rc.5', '0.2.2-alpha.3']) {
+        expect(rows.filter((row: { 'dsh-version': string }) => row['dsh-version'] === version)).toEqual(
+          Array.from({ length: count }, (_, index) => ({
+            'dsh-version': version, 'bs-version': 'none', 'shard-index': index + 1, 'shard-total': count,
+          })),
+        )
+      }
+    }
+  })
+
+  it('shards every discovered host after deduplicating channels', () => {
+    const registry = { versions: ['0.2.2-rc.1', '0.2.2-rc.2'], 'dist-tags': { latest: '0.2.2-rc.2', next: '0.2.2-rc.2' } }
+    const result = resolve(liveManifest(), ['--all', '--shards', '4'], registry)
+    expect(hosts(result)).toEqual([...Array(4).fill('0.2.2-rc.1'), ...Array(4).fill('0.2.2-rc.2')])
+    const rows = JSON.parse(result.stdout).matrix.include
+    expect(new Set(rows.map((row: { 'dsh-version': string; 'shard-index': number }) => `${row['dsh-version']}/${row['shard-index']}`)).size).toBe(8)
+  })
+
+  it.each([undefined, '0', '-1', '1.5', 'invalid'])('rejects invalid shard counts: %j', value => {
+    const result = resolve(manifest(), ['--shards', ...(value === undefined ? [] : [value])])
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('--shards must be a positive integer')
+  })
+
   it.each([
     ['0.2.0-rc.1', false, false], ['0.2.0-rc.2', false, false],
     ['0.2.0-rc.99', false, false], ['0.2.0', false, false],
