@@ -21,9 +21,9 @@ export interface QuoteItem {
 
 /** One annotation's XML block（无注解时省略 <note>）。 */
 export function formatAnnotationXml(index: number, item: QuoteItem): string {
-  const note = item.note.trim()
+  const note = item.note.trim() ? `\n<note>${xmlText(item.note)}</note>` : ''
   const source = item.sourceSurface === 'side' ? 'side-chat' : 'main-chat'
-  return `<reference type="annotation" index="${item.number ?? index}" source="${source}">\n<quote>${xmlText(item.text)}</quote>${note ? `\n<note>${xmlText(note)}</note>` : ''}\n</reference>`
+  return `<reference type="annotation" index="${item.number ?? index}" source="${source}">\n<quote>${xmlText(item.text)}</quote>${note}\n</reference>`
 }
 
 /** All pending kinds share one native message and one protocol envelope. */

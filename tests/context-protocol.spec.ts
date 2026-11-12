@@ -35,7 +35,7 @@ describe('unified context protocol', () => {
   it('round-trips all kinds and hostile-looking text in one full-text prefix', () => {
     const wire = buildProtocolBlock([
       { text: literal, note: '', document, number: 1 },
-      { text: literal, note: literal.trim(), sourceSurface: 'side', number: 1 },
+      { text: literal, note: literal, sourceSurface: 'side', number: 1 },
     ], [{ ...reflow, text: literal, question: literal }]) + '\n\n正文 <reference>仍是正文</reference>'
     expect(wire.match(/<sidenote-context /g)).toHaveLength(1)
     expect(wire.match(/<guidance>/g)).toHaveLength(1)
@@ -47,7 +47,7 @@ describe('unified context protocol', () => {
     expect(wire).not.toContain('Private side title')
     const parsed = splitProtocolPrefix(wire)!
     expect(parsed.documents).toEqual([{ id: 1, quote: literal, document: { path: document.path, pageStart: 2, pageEnd: 3 } }])
-    expect(parsed.annotations).toEqual([{ id: 1, quote: literal, note: literal.trim() }])
+    expect(parsed.annotations).toEqual([{ id: 1, quote: literal, note: literal }])
     expect(parsed.reflows).toEqual([{ source: 'side-chat', content: literal + '\n' + literal }])
     expect(wire.slice(parsed.length)).toBe('正文 <reference>仍是正文</reference>')
   })
@@ -59,6 +59,12 @@ describe('unified context protocol', () => {
     expect(parsed.reflows).toEqual([{ source: 'side-chat', content: literal }])
     expect(wire.slice(parsed.length)).toBe('')
     expect(wire).not.toContain('<question>')
+  })
+
+  it('omits a whitespace-only note while keeping the quoted selection', () => {
+    const wire = buildProtocolBlock([{ text: literal, note: ' \n\t ' }])
+    expect(wire).not.toContain('<note>')
+    expect(splitProtocolPrefix(wire)?.annotations).toEqual([{ id: 1, quote: literal, note: '' }])
   })
 
   it.each(['notes.md', 'code.ts', 'plain.txt', 'paper.pdf', 'notes.docx', 'slides.pptx'])('keeps %s in the same document shape', path => {
