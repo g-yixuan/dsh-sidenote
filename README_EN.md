@@ -79,6 +79,10 @@ Click the **Bring back to main conversation** icon on the right of a side replyâ
 | Keeping the session list focused | Side chats stay out of the list and search until saved as regular sessions. |
 | A conversation worth keeping | Save it as a regular session and continue later. |
 
+Select excerpts from official sidebar previews of Markdown, plain text/code, selectable-text PDFs, and Word/PowerPoint files. They accumulate as **Document quotes** in the main conversation and travel with the next message, retaining file sources and PDF page numbers without markers in the document. Browser pages and scanned documents are not supported yet.
+
+Document quotes, chat annotations, and side-chat reflows share one reference block in the same message, preserving full content and distinguishing file sources, the main conversation, and side discussions. PDF/Office page numbers refer to the official preview; older messages remain readable.
+
 See the [user guide](docs/usage_EN.md) for controls, recovery behavior, and selection boundaries.
 
 ## Compatibility and help

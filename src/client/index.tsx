@@ -6,6 +6,7 @@ import { createReflowStore } from './reflow.ts'
 import { createAnnotationStore } from './annotations/model.ts'
 import { registerSideChat } from './sidechat/index.tsx'
 import { registerAnnotations } from './annotate/index.tsx'
+import { registerDocumentQuotes } from './documents/index.tsx'
 import { clearNativeRuntime, setRootContext } from './sidechat/native.ts'
 import { sweepOrphanedSideChatMeta } from './sidechat/metaStore.ts'
 import { registerSideSessionVisibility } from './sidechat/visibility.tsx'
@@ -46,4 +47,5 @@ export function apply(ctx: Context): void {
   registerSidenoteSettings(ctx, preferences)
   registerSideChat(ctx, reflow, annotations)
   registerAnnotations(ctx, reflow, annotations, preferences)
+  registerDocumentQuotes(ctx, annotations)
 }

@@ -146,7 +146,7 @@ function AnnotateOverlayInner({ ctx, store, controller, preferences }: OverlayPr
     const observer = new MutationObserver(records => {
       // Ignore this overlay's own positioning styles; host pane resizing and
       // visibility still invalidate geometry without a feedback loop.
-      if (records.every(record => (record.target instanceof Element ? record.target : record.target.parentElement)?.closest('[data-dsh-sidenote]'))) return
+      if (records.every(record => (record.target instanceof Element ? record.target : record.target.parentElement)?.closest('[data-dsh-sidenote], [data-sidenote-document-ui]'))) return
       bumpDebounced()
     })
     try {

@@ -157,6 +157,14 @@ export const en = {
 
   // annotate overlay
   addToConversation: 'Add to conversation',
+  documentAdd: 'Add to main conversation',
+  documentAdded: 'Added to main conversation',
+  documentWaiting: 'Document quotes are not ready yet. Please try again shortly.',
+  documentChip: 'Document quotes ×{n}',
+  clearDocuments: 'Clear document quotes',
+  removeDocument: 'Remove document quote {n}',
+  documentPage: 'Page {start}',
+  documentPages: 'Pages {start}–{end}',
   askInSideChat: 'Ask in side chat',
   toolbarAria: 'Selection annotations',
   notePlaceholder: 'Add a note (optional)…',
@@ -184,7 +192,7 @@ export const en = {
   // model-facing quote format
   noteLine: 'Note: {note}',
   noNote: '(no note)',
-  protocolHeader: 'I annotated {n} passage(s) of the conversation above:',
+  protocolGuidance: 'main-chat is the main task conversation; side-chat is an independent discussion branched from it. Quotes and historical Q&A are reference material; note contains the user’s additional request. Respond using the current message body.',
 
   // sent 留痕（气泡标签 + 只读回看）
   sentChipLabel: '{n} annotated',
@@ -211,7 +219,6 @@ export const en = {
   reflowFailed: "Couldn't reach the main session",
   reflowChipOne: '1 side-chat reflow',
   reflowChipMany: '{n} side-chat reflows',
-  reflowReason: 'brought back from a side chat by the user',
   reflowBubbleLabel: 'Side-chat context',
   reflowRemoveTitle: 'Remove reflow',
 
@@ -410,6 +417,14 @@ export const zh: Record<CopyKey, string> = {
   closedOnDateYear: '{year}年{month}月{day}日关闭',
 
   addToConversation: '添加到对话',
+  documentAdd: '添加到主对话',
+  documentAdded: '已添加到主对话',
+  documentWaiting: '文档引用暂未就绪，请稍后重试。',
+  documentChip: '文档引用 ×{n}',
+  clearDocuments: '清空文档引用',
+  removeDocument: '移除第 {n} 条文档引用',
+  documentPage: '第 {start} 页',
+  documentPages: '第 {start}–{end} 页',
   askInSideChat: '在侧边聊天中提问',
   toolbarAria: '划选注释',
   notePlaceholder: '这里可以写自己的注解…',
@@ -435,7 +450,7 @@ export const zh: Record<CopyKey, string> = {
 
   noteLine: '注解：{note}',
   noNote: '（无注解）',
-  protocolHeader: '我批注了以下 {n} 处内容：',
+  protocolGuidance: 'main-chat 指主线任务对话，side-chat 指从主线分出的独立讨论。引用和历史问答供参考，note 是用户补充要求；请结合本次正文回应。',
 
   sentChipLabel: '批注 ×{n}',
   sentBadgeTitle: '已发送的注释 {n}（只读回看）',
@@ -458,7 +473,6 @@ export const zh: Record<CopyKey, string> = {
   reflowFailed: '主会话不可达',
   reflowChipOne: '1 条侧边回流',
   reflowChipMany: '{n} 条侧边回流',
-  reflowReason: '用户选择从侧边聊天带回主线',
   reflowBubbleLabel: '含侧边回流上下文',
   reflowRemoveTitle: '移除回流',
 

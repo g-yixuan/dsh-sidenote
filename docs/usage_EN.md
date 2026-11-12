@@ -63,6 +63,16 @@ Badges and highlights appear only in the conversation receiving the annotation: 
 
 After a reload, cross-reply quotes locate each original fragment separately, with badges and highlights clipped to their source view. If a display-setting change or folding hides part of the source, the badge and highlight temporarily disappear while the full quote remains available. They return when the original text is visible again, without attaching to similar text elsewhere.
 
+### Quote documents from the official sidebar
+
+Open a Markdown, plain-text, code, PDF, or Word/PowerPoint preview in the official sidebar, select body text, and click **Add to main conversation**. Complete excerpts accumulate under **Document quotes ×N** above the current main composer. There is no annotation editor or persistent marker/highlight in the document. Adding an excerpt keeps your reading position so you can continue collecting passages from the same or other files.
+
+Hover or click the chip to read complete excerpts, filenames, and paths, remove individual items, or clear document quotes. Chat annotations, side-chat handbacks, and body text remain independent. PDF and converted Office previews show the selected page range using the preview's page order, starting at 1. Markdown never displays guessed source line numbers. Write questions in the main composer and send the excerpts with the next native message, or send excerpts on their own. Sent user bubbles retain the same document-quote preview.
+
+Each excerpt is a snapshot of its text and source when added; later file edits do not change it. Closing a file or reloading preserves pending excerpts in their original main conversation. Opening the same file in another conversation does not import them. Failed sends retain the full batch, and excerpts added during submission stay pending for the next message. Source metadata and selected text travel to the model together; the plugin does not automatically read or attach the whole file.
+
+Supported surfaces are the official Markdown, plain-text/code, and PDF previews with selectable text. Word/PowerPoint reuse the official converted PDF text layer and require a working host preview. Selections can span paragraphs or pages within one file; selections crossing files, tabs, or non-body controls are rejected. Browser pages, HTML, images, scanned PDFs, spreadsheet cells, terminals, and third-party renderers are not supported, and OCR is not provided. Complex or multi-column PDFs use the host text layer's selection order; review excerpts before sending.
+
 ### Sending and recovery
 
 Submissions use the host's native input flow, retaining attachments, references, and queue / steer arbitration. Only a durable message or an authoritative queue occurrence in the target session marks the batch as sent and adds an annotation-count label to the message. An empty composer alone does not prove acceptance. With only annotations or pending reflows, use the same bottom-right Send button or press Enter, even with an empty body. There is no separate annotation-send button. During a reply, queue new messages and manage the visible native queue. Ctrl/Cmd+Enter steers; the next send wakes work preserved by Stop.

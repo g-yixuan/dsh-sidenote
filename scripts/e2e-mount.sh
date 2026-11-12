@@ -299,7 +299,7 @@ say "运行 Playwright 无头渲染 lane..."
 if [ -n "$SMOKE" ]; then
   specs=(onboarding.e2e.ts mount-direct.e2e.ts core.e2e.ts body-selection.e2e.ts)
 else
-  specs=(onboarding.e2e.ts mount-direct.e2e.ts multiple.e2e.ts multiple-lifecycle.e2e.ts annotations.e2e.ts body-selection.e2e.ts native-quote.e2e.ts reply-defaults.e2e.ts core.e2e.ts running.e2e.ts side-selection.e2e.ts diagnostics.e2e.ts visibility.e2e.ts parity.e2e.ts interaction.e2e.ts context-reading.e2e.ts context-lifecycle.e2e.ts unified-context.e2e.ts recovery.e2e.ts review-boundaries.e2e.ts context-submission.e2e.ts compaction.e2e.ts official-model.e2e.ts)
+  specs=(onboarding.e2e.ts mount-direct.e2e.ts multiple.e2e.ts multiple-lifecycle.e2e.ts annotations.e2e.ts body-selection.e2e.ts document-quotes.e2e.ts native-quote.e2e.ts reply-defaults.e2e.ts core.e2e.ts running.e2e.ts side-selection.e2e.ts diagnostics.e2e.ts visibility.e2e.ts parity.e2e.ts interaction.e2e.ts context-reading.e2e.ts context-lifecycle.e2e.ts unified-context.e2e.ts recovery.e2e.ts review-boundaries.e2e.ts context-submission.e2e.ts compaction.e2e.ts official-model.e2e.ts)
 fi
 DSH_E2E_URL="$URL" DSH_E2E_WORKSPACE="$WORKSPACE_DIR" DSH_E2E_SEED_SESSION="$SEED_SESSION_ID" DSH_E2E_HOME="$DSH_HOME" \
 DSH_E2E_HOST_COMMAND="$DSH_CMD" DSH_E2E_SERVER_PID_FILE="$SCRATCH/server.pid" DSH_E2E_SERVER_LOG="$WEB_LOG" \

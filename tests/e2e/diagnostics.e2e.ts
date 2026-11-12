@@ -87,7 +87,7 @@ test('compatibility report is visible, observes real admission, and exports soft
   await expect(overlay.locator('textarea')).toBeVisible()
   await overlay.locator('textarea').press('Enter')
   await input.press('Enter')
-  await expect.poll(() => userMessagesOf(child).some(text => text.includes('diagnostics ordinary body') && text.includes('<annotation'))).toBe(true)
+  await expect.poll(() => userMessagesOf(child).some(text => text.includes('diagnostics ordinary body') && text.includes('<reference type="annotation"'))).toBe(true)
   await page.getByRole('button', { name: /^(Compatibility diagnostics|兼容诊断)/ }).click()
   const acceptance = dialog.getByRole('listitem').filter({ hasText: /Side message acceptance|侧聊消息接受/ })
   await expect(acceptance.locator('[data-state]')).toHaveAttribute('data-state', 'available')

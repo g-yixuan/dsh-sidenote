@@ -7,15 +7,15 @@
  * 可自带 `codec`（trigger/types.d.ts）——serialize 在提交时按调用、异步、
  * 失败阻断发送（不静默降级）。
  *
- * 序列化形态（与回流协议同族）：<side-chat source="侧边 N"> 内按序 <问>/<答>
+ * Native @ 引用保留宿主的引用边界，内部与回流共用 question/answer 字段。
  * 对。不截断（用户裁定），但只含问答对——工具卡/思考不进。
  */
 import type { Context } from '../host/contracts.ts'
 import { collectSideTabs, parseSideChatMeta } from './model.ts'
 import { betterSidebarOf, directNativeLeg } from './native.ts'
-import { sideChatMetasAll, sideChatMetasOf } from './metaStore.ts'
+import { sideChatMetasOf } from './metaStore.ts'
 import { sideChatTitleOf } from './identity.ts'
-import { xmlAttr } from '../protocol.ts'
+import { formatQuestionAnswer } from '../protocol.ts'
 import { transcriptOf, type ChatMessage } from '../chat/transcript.ts'
 import { chatSourceOf } from './lifecycle.ts'
 import { pairQuestions } from './model.ts'
@@ -62,24 +62,9 @@ export async function serializeSideChatRef(ctx: Context, childId: string): Promi
   const parts: string[] = []
   for (const m of messages) {
     if (m.role !== 'assistant' || m.text === '' || m.streaming === true) continue
-    const q = pairs.get(m.key)
-    if (q !== undefined) parts.push(`<问>${q}</问>`)
-    parts.push(`<答>${m.text}</答>`)
+    parts.push(formatQuestionAnswer(pairs.get(m.key), m.text))
   }
-  const title = (() => {
-    // 找回 Tab 标题（childId → tab）：直连腿查 metaStore，legacy 查布局快照。
-    try {
-      if (directNativeLeg(ctx)) {
-        const meta = sideChatMetasAll().find(m => m.childId === childId)
-        if (meta !== undefined) return sideChatTitleOf(meta)
-      }
-      for (const tab of collectSideTabs(betterSidebarOf(ctx)?.getSnapshot().state)) {
-        if (parseSideChatMeta(tab.meta).childId === childId) return tab.title
-      }
-    } catch { /* fall through */ }
-    return childId
-  })()
-  return `<side-chat-reference source="${xmlAttr(title)}" note="用户 @ 引用的侧边聊天内容（问答成对）">\n${parts.join('\n')}\n</side-chat-reference>`
+  return `<side-chat-reference source="side-chat">\n${parts.join('\n')}\n</side-chat-reference>`
 }
 
 /** 注册「@ 侧聊」触发源；服务缺席静默降级（不影响其他入口）。 */

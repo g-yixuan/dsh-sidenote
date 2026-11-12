@@ -119,6 +119,8 @@ export function selectedQuoteText(range: Range, browserText: string, anchorText:
     if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
     if (node instanceof Element && node.tagName === 'BR') return '\n'
     const text = [...node.childNodes].map(textOf).join('')
+    if (node instanceof Element && /^(TD|TH)$/.test(node.tagName)) return text + '\t'
+    if (node instanceof Element && node.tagName === 'TR') return text.trimEnd() + '\n'
     return node instanceof Element && /^(P|DIV|LI|PRE|BLOCKQUOTE|H[1-6])$/.test(node.tagName) ? text + '\n' : text
   }
   return textOf(fragment).trimEnd()

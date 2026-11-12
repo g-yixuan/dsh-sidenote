@@ -212,7 +212,7 @@ describe('scoped assistant selection', () => {
     store.add({ sessionId: 'main', anchorKey: captured.anchorKey, anchorText: captured.anchorText,
       occurrence: captured.occurrence, anchors: captured.anchors, text: captured.text, note: '' })
     const revived = createAnnotationStore(() => 2, storage).list('main')[0]!
-    expect(revived.anchors).toEqual(captured.anchors)
+    expect(!revived.document && revived.anchors).toEqual(captured.anchors)
     const { replies } = mainReplies()
     document.querySelector<HTMLElement>('[data-chat-flow-kind="tool-call"]')!.hidden = false
     const cache = new Map<number, CachedRange>()

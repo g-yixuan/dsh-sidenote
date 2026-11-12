@@ -113,7 +113,7 @@ test('older queued annotation cannot confirm a repeated batch before native admi
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes(newBody))).toHaveLength(1)
   const repeated = userMessagesOf(child).filter(text => text.includes('<note>same annotation repeated</note>'))
   expect(repeated).toHaveLength(2)
-  for (const text of repeated) expect(text).toContain('<annotation id="1">')
+  for (const text of repeated) expect(text).toContain('<reference type="annotation" index="1" source="main-chat">')
 })
 
 for (const withImage of [false, true]) test(`busy fork keeps the parent running and consumes its progress snapshot once after acceptance (${withImage ? 'image + text' : 'text'})`, async ({ page }) => {

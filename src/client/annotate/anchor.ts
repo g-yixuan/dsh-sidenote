@@ -71,6 +71,7 @@ function rangeOfOccurrence(root: HTMLElement, text: string, occurrence: number):
 export interface CachedRange { ranges: readonly Range[]; view: HTMLElement }
 
 export function resolveRanges(annotation: Annotation, cache: Map<number, CachedRange>, currentSessionId = ''): readonly Range[] | null {
+  if (annotation.document) return null
   try {
     const sessionId = annotation.sourceSessionId ?? annotation.sessionId
     const surface = annotation.sourceSurface ?? 'main'

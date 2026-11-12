@@ -40,6 +40,25 @@ function harness(modern = false) {
     send: () => submitAnnotations({ ctx, store, sessionId: 'child', input, annotations: store.listActive('child') }) }
 }
 
+it('keeps rejected document snapshots for retry and marks only the admitted batch sent', async () => {
+  const h = harness()
+  const source = { sessionId: 'source', path: 'notes.md' }
+  const saved = h.store.add({ sessionId: 'child', text: '原文快照', document: source })
+  const rejected = h.send()
+  await vi.waitFor(() => expect(h.submitted).toHaveBeenCalledOnce())
+  h.session.set({ ...h.session.getSnapshot(), promptError: { op: 'send', error: { message: 'native rejection' } } })
+  expect(await rejected).toBe(false)
+  expect(h.store.get(saved.id)?.state).toBe('active')
+  h.session.set({ ...h.session.getSnapshot(), promptError: null })
+  const accepted = h.send()
+  await vi.waitFor(() => expect(h.submitted).toHaveBeenCalledTimes(2))
+  const addedLater = h.store.add({ sessionId: 'child', text: '留给下一条', document: source })
+  h.session.set({ ...h.session.getSnapshot(), nodes: [...h.session.getSnapshot().nodes, { kind: 'user', seq: 2, content: [{ type: 'text', text: h.sentText() }] }] })
+  expect(await accepted).toBe(true)
+  expect(h.store.get(saved.id)).toBeUndefined()
+  expect(h.store.get(addedLater.id)?.state).toBe('active')
+})
+
 describe('controlled quote admission', () => {
   it('waiting for the target cannot silently submit newly typed body text', async () => {
     const h = harness()
@@ -166,8 +185,8 @@ describe('controlled quote admission', () => {
     await vi.waitFor(() => expect(h.submitted).toHaveBeenCalledOnce())
     h.session.set({ ...h.session.getSnapshot(), nodes: [...h.session.getSnapshot().nodes, { kind: 'user', seq: 2, content: [{ type: 'text', text: h.sentText() }] }] })
     expect(await result).toBe(true)
-    expect(h.sentText()).toContain('<annotation id="1">')
-    expect(h.sentText()).toContain('<annotation id="2">')
+    expect(h.sentText()).toContain('<reference type="annotation" index="1" source="main-chat">')
+    expect(h.sentText()).toContain('<reference type="annotation" index="2" source="main-chat">')
     // 冻结编号取消息里的 2，与气泡 chip 的反解析一致。
     expect(h.store.get(extra.id)).toMatchObject({ state: 'sent', number: 2 })
   })

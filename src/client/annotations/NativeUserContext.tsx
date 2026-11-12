@@ -4,10 +4,11 @@ import { createRoot } from 'react-dom/client'
 import type { Context, UiConversationLike } from '../host/contracts.ts'
 import { conversationViewOf, isPendingContextSurface, mountUserBubbleAddon, pendingTextNodes, pendingTextSurfaces, queuedTextSurfaces } from '../host/dom.ts'
 import { IconChevronDownOutline14, IconListPenOutline16, IconShareOutline16 } from '../host/icons.ts'
-import { flattenReflowContent, splitProtocolPrefix, splitSnapshotPrefix, type ProtocolPrefix } from './format.ts'
+import { splitProtocolPrefix, splitSnapshotPrefix, type ProtocolPrefix } from './format.ts'
 import { t } from '../locales.ts'
 import { withoutSnapshotImages } from '../../snapshotProtocol.ts'
 import { useLocaleTick } from '../locale-tick.ts'
+import { DocumentQuoteContent } from './DocumentQuoteContent.tsx'
 import css from './annotations.module.css'
 
 interface HistoryNode { kind: string; seq: number; source?: { kind?: string }; content?: readonly { type: string; text?: string }[] }
@@ -106,7 +107,7 @@ function ContextChip({ label, icon, children, interactive }: { label: string; ic
 
 export function SentContext({ protocol, interactive = true }: { protocol: ProtocolPrefix; interactive?: boolean }) {
   useLocaleTick()
-  if (protocol.annotations.length === 0 && protocol.reflows.length === 0) return null
+  if (protocol.annotations.length === 0 && protocol.reflows.length === 0 && !protocol.documents?.length) return null
   return <span className={css.sentChips} data-dsh-sidenote-bubble data-sidenote-no-quote>
     {protocol.annotations.length > 0 && <ContextChip label={t('sentChipLabel', { n: protocol.annotations.length })} icon={<IconListPenOutline16 size={12} />} interactive={interactive}>
       <ul className={css.contextList}>{protocol.annotations.map(annotation => <li className={css.contextItem} key={annotation.id}>
@@ -116,9 +117,14 @@ export function SentContext({ protocol, interactive = true }: { protocol: Protoc
         </div>
       </li>)}</ul>
     </ContextChip>}
+    {!!protocol.documents?.length && <ContextChip label={t('documentChip', { n: protocol.documents.length })} icon={<IconListPenOutline16 size={12} />} interactive={interactive}>
+      <ul className={css.contextList}>{protocol.documents.map(item => <li className={css.contextItem} key={item.id}>
+        <span className={css.contextNumber}>{item.id}.</span><DocumentQuoteContent source={item.document} text={item.quote} />
+      </li>)}</ul>
+    </ContextChip>}
     {protocol.reflows.length > 0 && <ContextChip label={t('reflowBubbleLabel')} icon={<IconShareOutline16 size={12} />} interactive={interactive}>
       <ul className={css.contextList}>{protocol.reflows.map((reflow, index) => <li className={css.contextItem} key={index}>
-        <span className={css.contextNumber}>{index + 1}.</span><div className={css.contextContent}><div className={css.contextSource}>{reflow.source}</div><div className={css.contextText}>{flattenReflowContent(reflow.content)}</div></div>
+        <span className={css.contextNumber}>{index + 1}.</span><div className={css.contextContent}><div className={css.contextSource}>{reflow.source === 'side-chat' ? t('tabBaseTitle') : reflow.source}</div><div className={css.contextText}>{reflow.content}</div></div>
       </li>)}</ul>
     </ContextChip>}
   </span>
@@ -260,7 +266,7 @@ export function registerUserContext(ctx: Context): void {
             const afterSnapshot = (injected ? injected + '\n\n' : '') + (snapshot?.rest ?? text)
             const protocol = nativeText ? null : splitProtocolPrefix(afterSnapshot)
             if (!snapshot && !protocol && !injected) return createElement(Original, props)
-            const body = protocol ? afterSnapshot.slice(protocol.length).trimStart() : afterSnapshot
+            const body = protocol ? afterSnapshot.slice(protocol.length) : afterSnapshot
             // Retain the native bubble for an annotation-only message; this
             // presentation-only word joiner never enters the durable content.
             const displayText = body || (protocol ? '\u2060' : '')

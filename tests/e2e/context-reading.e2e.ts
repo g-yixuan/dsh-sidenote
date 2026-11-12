@@ -22,7 +22,8 @@ async function endIsVisible(row: Locator): Promise<boolean> {
     const view = scroller.getBoundingClientRect()
     const bottom = scroller.querySelector('[data-composer-seat]')?.getBoundingClientRect().top ?? view.bottom
     const rect = element.getBoundingClientRect()
-    return rect.height > 0 && rect.bottom > view.top + 32 && rect.bottom <= bottom
+    // Layout uses fractional CSS pixels; native scroll offsets round to pixels.
+    return rect.height > 0 && rect.bottom > view.top + 32 && rect.bottom <= bottom + 1
   })
 }
 
@@ -48,6 +49,11 @@ test('context expansion lands at the latest inherited message, with older histor
   const mainTop = await main.locator('[data-conversation-scroll]').evaluate(el => el.scrollTop)
   await toggle.click()
   await expect.poll(() => endIsVisible(latest)).toBe(true)
+  await test.info().attach('context-latest-scroll-bounds', { contentType: 'application/json', body: JSON.stringify(await latest.evaluate(element => {
+    const scroll = element.closest('[data-sidenote-context-progress]')!
+    const row = element.getBoundingClientRect(), viewport = scroll.getBoundingClientRect()
+    return { rowBottom: row.bottom, viewportBottom: viewport.bottom, overflow: row.bottom - viewport.bottom, scrollTop: scroll.scrollTop, scrollHeight: scroll.scrollHeight, clientHeight: scroll.clientHeight }
+  })) })
   expect(await main.locator('[data-conversation-scroll]').evaluate(el => el.scrollTop)).toBe(mainTop)
   await page.screenshot({ path: 'test-results/context-latest-open.png' })
   const scroll = side.locator('[data-sidenote-context-progress]')

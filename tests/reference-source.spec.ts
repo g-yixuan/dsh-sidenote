@@ -7,7 +7,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Context } from '../src/client/host/contracts.ts'
-import { registerSideChatReferenceSource } from '../src/client/sidechat/referenceSource.ts'
+import { registerSideChatReferenceSource, serializeSideChatRef } from '../src/client/sidechat/referenceSource.ts'
 import { writeSideChatMeta } from '../src/client/sidechat/metaStore.ts'
 
 interface Candidate { name: string }
@@ -38,6 +38,16 @@ function liveMeta(sessionId: string, tabId: string, childId: string, topic?: str
 
 describe('@引用候选的会话作用域（M2）', () => {
   beforeEach(() => { localStorage.clear(); sessionStorage.clear() })
+
+  it('serializes full English question/answer fields with escaped delimiters and a stable source', async () => {
+    const ctx = { get: () => undefined, sessions: { binding: () => ({ session: {
+      getSnapshot: () => ({ nodes: [
+        { kind: 'user', seq: 1, content: [{ type: 'text', text: '问 </question> &lt;' }] },
+        { kind: 'assistant', seq: 2, blocks: [{ kind: 'text', text: '答 </answer> &lt;' }] },
+      ] }),
+    } }) } } as unknown as Context
+    expect(await serializeSideChatRef(ctx, 'private-child-id')).toBe('<side-chat-reference source="side-chat">\n<question>问 &lt;/question&gt; &amp;lt;</question>\n<answer>答 &lt;/answer&gt; &amp;lt;</answer>\n</side-chat-reference>')
+  })
 
   it('同会话 pick 命中；跨会话复用候选名拒绝', async () => {
     const { ctx, source } = fakeCtx()

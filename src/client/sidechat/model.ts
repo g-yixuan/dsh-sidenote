@@ -199,7 +199,7 @@ export function appendDraftText(draft: string, text: string): string {
  * 顺序扫描消息流，记录最近一条用户消息的可见文本（剥掉注释/回流协议前缀——
  * fork 历史里的主会话消息可能携带），其后每条非流式 assistant 消息都配对到它；
  * 中间的 tool/notice 节点不打断配对。此前没有用户提问（如 fork 历史结尾
- * 恰是 assistant）则不配对，回流块退化为只有 <答>。
+ * 恰是 assistant）则不配对，回流块退化为只有 answer。
  * 返回 Map：assistant 消息 key → 提问全文。
  */
 export function pairQuestions(messages: readonly ChatMessage[]): ReadonlyMap<string, string> {

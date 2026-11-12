@@ -19,6 +19,8 @@
 .contextLabel { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
 .contextLabel:not(:first-child) { margin-top: 6px; }
 .contextSource { margin-bottom: 8px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.documentPath { margin: -4px 0 6px; color: var(--dsw-alias-label-tertiary); font-size: 11px; overflow-wrap: anywhere; }
+.documentSource { overflow-wrap: anywhere; }
 .contextText { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; user-select: text; }
 .contextActions { display: flex; flex: none; gap: 2px; }
 .contextAction { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; transition: color 120ms, background 120ms; }

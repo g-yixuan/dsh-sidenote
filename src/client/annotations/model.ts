@@ -1,57 +1,63 @@
 /**
- * The annotation store: per-session numbered selection annotations. Pure
+ * Shared pending-context store for chat annotations and document snapshots. Pure
  * (DOM-free, React-free) so the whole lifecycle is unit-testable. One instance
  * per plugin activation.
  *
- * 待发送注释按创建顺序编号 1..n，删除后补齐；发送时冻结消息中的编号。
+ * 聊天批注和文档摘录分别按创建顺序编号 1..n，删除后补齐；发送时冻结消息中的编号。
  * 下一批重新从 1 开始。id 仅用于本地对象标识，不发送给模型。
  *
  * State machine per annotation: 'active' (counts in the composer chip, rides
  * the next message via the send interceptor) → 'sent' (the message it was
  * attached to went out; badge turns gray/read-only, chip no longer counts it).
+ * Accepted document drafts are removed; their durable message owns the snapshot.
  *
  * 持久化（Delivery_02 起）：每次 mutation 后按会话写 localStorage
  * （`dsh-sidenote:annotations:v1:<sessionId>`），刷新/切会话后重建；
  * 会话清空时删键。storage 不可用（测试/隐私模式）时退化为纯内存。
  */
-export interface Annotation {
+import { readDocumentSource, type DocumentSource } from './document.ts'
+
+interface AnnotationContent {
   /** Store-unique identity (monotonic across sessions). */
   readonly id: number
-  /** 本批显示及 <annotation id> 编号，发送时冻结。 */
+  /** 本批显示及 reference index 编号，发送时冻结。 */
   readonly number: number
   readonly sessionId: string
-  /** Source is independent of the send target. Missing fields revive legacy main quotes. */
-  readonly sourceSessionId?: string
-  readonly sourceSurface?: 'main' | 'side'
-  /** `data-chat-anchor-key` of the owning message (re-anchor key). */
-  readonly anchorKey: string | undefined
-  /** Full human-selected quote; chip truncation is visual only. */
+  /** Full selected text; preview truncation is visual only. */
   readonly text: string
-  /** Full selection text (re-anchor needle; untruncated). */
-  readonly anchorText: string
-  /** 0-based ordinal of the quote's occurrence inside the anchor element. */
-  readonly occurrence: number
-  /** Cross-reply quotes retain one anchor per body; legacy quotes use the fields above. */
-  readonly anchors?: readonly AnnotationAnchor[]
-  /** User-written note; '' means 纯引用. */
+  /** Documents always use an empty note and never enter the annotation editor. */
   readonly note: string
   readonly state: 'active' | 'sent'
   readonly createdAt: number
 }
 
-export type AnnotationAnchor = Pick<Annotation, 'anchorKey' | 'anchorText' | 'occurrence'>
+export interface AnnotationAnchor {
+  /** data-chat-anchor-key of the owning message. */
+  readonly anchorKey: string | undefined
+  /** Text projection used to restore the original selection. */
+  readonly anchorText: string
+  /** Zero-based occurrence within that message, disambiguating repeated phrases. */
+  readonly occurrence: number
+}
 
-export interface AnnotationDraft {
-  readonly sessionId: string
+export interface ChatAnnotation extends AnnotationContent, AnnotationAnchor {
+  readonly document?: undefined
+  /** Source is independent of the send target. Missing fields revive legacy main quotes. */
   readonly sourceSessionId?: string
   readonly sourceSurface?: 'main' | 'side'
-  readonly anchorKey: string | undefined
-  readonly text: string
-  readonly anchorText: string
-  readonly occurrence: number
+  /** Cross-reply quotes retain one anchor per body; legacy quotes use the fields above. */
   readonly anchors?: readonly AnnotationAnchor[]
-  readonly note: string
 }
+
+export interface DocumentAnnotation extends AnnotationContent {
+  readonly document: DocumentSource
+}
+
+export type Annotation = ChatAnnotation | DocumentAnnotation
+type Assigned = 'id' | 'number' | 'state' | 'createdAt'
+export type ChatAnnotationDraft = Omit<ChatAnnotation, Assigned>
+export type DocumentAnnotationDraft = Omit<DocumentAnnotation, Assigned | 'note'>
+export type AnnotationDraft = ChatAnnotationDraft | DocumentAnnotationDraft
 
 export interface AnnotationStore {
   /** Monotonic version, referentially stable between mutations (uSES-ready). */
@@ -62,6 +68,8 @@ export interface AnnotationStore {
   setSubmission(sessionId: string, state: { pending: boolean; error?: string }): void
   subscribe(fn: () => void): () => void
   /** Create an active annotation; returns it (id/number assigned). */
+  add(draft: ChatAnnotationDraft): ChatAnnotation
+  add(draft: DocumentAnnotationDraft): DocumentAnnotation
   add(draft: AnnotationDraft): Annotation
   setNote(id: number, note: string): void
   remove(id: number): void
@@ -87,9 +95,19 @@ function reviveStored(value: unknown): Annotation | null {
   const a = value as Record<string, unknown>
   if (typeof a.id !== 'number' || typeof a.number !== 'number') return null
   if (typeof a.sessionId !== 'string' || a.sessionId === '') return null
-  if (typeof a.text !== 'string' || typeof a.anchorText !== 'string') return null
-  if (typeof a.occurrence !== 'number') return null
+  if (typeof a.text !== 'string') return null
   if (a.state !== 'active' && a.state !== 'sent') return null
+  const common: AnnotationContent = {
+    id: a.id,
+    number: a.state === 'sent' && typeof a.localNumber === 'number' ? a.localNumber : a.number,
+    sessionId: a.sessionId, text: a.text, note: typeof a.note === 'string' ? a.note : '',
+    state: a.state, createdAt: typeof a.createdAt === 'number' ? a.createdAt : 0,
+  }
+  if (a.document !== undefined) {
+    const document = readDocumentSource(a.document)
+    return document ? { ...common, document, note: '' } : null
+  }
+  if (typeof a.anchorText !== 'string' || typeof a.occurrence !== 'number') return null
   if (a.anchors !== undefined) {
     if (!Array.isArray(a.anchors) || a.anchors.length < 2) return null
     for (const anchor of a.anchors) {
@@ -99,10 +117,7 @@ function reviveStored(value: unknown): Annotation | null {
     }
   }
   return {
-    id: a.id,
-    // 兼容预览版已发送记录的显示编号；待发送记录在水合后重排。
-    number: a.state === 'sent' && typeof a.localNumber === 'number' ? a.localNumber : a.number,
-    sessionId: a.sessionId,
+    ...common,
     sourceSessionId: typeof a.sourceSessionId === 'string' && a.sourceSessionId !== '' ? a.sourceSessionId : undefined,
     sourceSurface: a.sourceSurface === 'main' || a.sourceSurface === 'side' ? a.sourceSurface : undefined,
     anchorKey: typeof a.anchorKey === 'string' && a.anchorKey !== '' ? a.anchorKey : undefined,
@@ -110,9 +125,6 @@ function reviveStored(value: unknown): Annotation | null {
     anchorText: a.anchorText,
     occurrence: a.occurrence,
     ...(a.anchors ? { anchors: a.anchors as AnnotationAnchor[] } : {}),
-    note: typeof a.note === 'string' ? a.note : '',
-    state: a.state,
-    createdAt: typeof a.createdAt === 'number' ? a.createdAt : 0,
   }
 }
 
@@ -133,10 +145,11 @@ export function createAnnotationStore(
   /** 只重排目标会话的待发送编号，已发送编号保持冻结。 */
   const renumberActive = (sessionId: string): void => {
     const numbers = new Map<number, number>()
+    let chat = 0, documents = 0
     annotations
       .filter(a => a.sessionId === sessionId && a.state === 'active')
       .sort((left, right) => left.id - right.id)
-      .forEach((annotation, index) => { numbers.set(annotation.id, index + 1) })
+      .forEach(annotation => { numbers.set(annotation.id, annotation.document ? ++documents : ++chat) })
     annotations = annotations.map(a => {
       const number = numbers.get(a.id)
       return number === undefined || a.number === number ? a : { ...a, number }
@@ -213,11 +226,31 @@ export function createAnnotationStore(
   // 旧记录的 active 编号重排，sent 沿用已有的冻结编号。
   for (const sessionId of new Set(annotations.map(a => a.sessionId))) renumberActive(sessionId)
 
-  const replace = (id: number, patch: Partial<Annotation>): void => {
+  const replace = (id: number, patch: Partial<Pick<AnnotationContent, 'note'>>): void => {
     const target = annotations.find(a => a.id === id)
     annotations = annotations.map(a => (a.id === id ? { ...a, ...patch } : a))
     if (target !== undefined) persistTouched([target.sessionId])
     notify()
+  }
+
+  function add(draft: ChatAnnotationDraft): ChatAnnotation
+  function add(draft: DocumentAnnotationDraft): DocumentAnnotation
+  function add(draft: AnnotationDraft): Annotation
+  function add(draft: AnnotationDraft): Annotation {
+    const number = annotations.filter(a => a.sessionId === draft.sessionId && a.state === 'active' && !!a.document === !!draft.document).length + 1
+    const annotation: Annotation = {
+      ...draft,
+      id: nextId,
+      number,
+      note: draft.document ? '' : draft.note,
+      state: 'active',
+      createdAt: now(),
+    }
+    nextId += 1
+    annotations = [...annotations, annotation]
+    persistTouched([draft.sessionId])
+    notify()
+    return annotation
   }
 
   return {
@@ -230,31 +263,9 @@ export function createAnnotationStore(
       listeners.add(fn)
       return () => { listeners.delete(fn) }
     },
-    add(draft: AnnotationDraft): Annotation {
-      const number = countActiveOf(draft.sessionId) + 1
-      const annotation: Annotation = {
-        id: nextId,
-        number,
-        sessionId: draft.sessionId,
-        sourceSessionId: draft.sourceSessionId,
-        sourceSurface: draft.sourceSurface,
-        anchorKey: draft.anchorKey,
-        text: draft.text,
-        anchorText: draft.anchorText,
-        occurrence: draft.occurrence,
-        ...(draft.anchors ? { anchors: draft.anchors } : {}),
-        note: draft.note,
-        state: 'active',
-        createdAt: now(),
-      }
-      nextId += 1
-      annotations = [...annotations, annotation]
-      persistTouched([draft.sessionId])
-      notify()
-      return annotation
-    },
+    add,
     setNote(id: number, note: string): void {
-      if (!annotations.some(a => a.id === id)) return
+      if (!annotations.some(a => a.id === id && !a.document)) return
       replace(id, { note })
     },
     remove(id: number): void {
@@ -270,10 +281,10 @@ export function createAnnotationStore(
       const idSet = new Set(ids)
       if (!annotations.some(a => idSet.has(a.id) && a.state === 'active')) return
       const touched = new Set<string>()
-      annotations = annotations.map(a => {
-        if (!idSet.has(a.id) || a.state !== 'active') return a
+      annotations = annotations.flatMap((a): Annotation[] => {
+        if (!idSet.has(a.id) || a.state !== 'active') return [a]
         touched.add(a.sessionId)
-        return { ...a, state: 'sent', number: frozenNumbers?.get(a.id) ?? a.number }
+        return a.document ? [] : [{ ...a, state: 'sent', number: frozenNumbers?.get(a.id) ?? a.number }]
       })
       // 刚发送的这批编号就地冻结（保持此刻 1..k），剩余 active 重新紧凑排。
       for (const sessionId of touched) renumberActive(sessionId)

@@ -10,8 +10,7 @@
  * 持久化：localStorage 按会话键（dsh-sidenote:reflow:v1:<sessionId>），
  * 与注释 store 同款纪律（刷新不丢、容错 revive、空删键）。
  */
-import { t } from './locales.ts'
-import { xmlAttr } from './protocol.ts'
+import { formatQuestionAnswer } from './protocol.ts'
 
 /** 回流内容不截断（2026-09-06 用户裁定：静默截断让用户不知道内容少了，
  *  「会产生幻觉」；结论是用户亲手选择回流的，全文注入）。 */
@@ -41,25 +40,9 @@ export interface ReflowStore {
 
 const STORAGE_PREFIX = 'dsh-sidenote:reflow:v1:'
 
-/**
- * 回流块序列化（XML 形态，与注释协议同族）：
- *
- *   <reflow source="侧边 2" reason="用户选择从侧边聊天带回主线">
- *   <问>用户在侧边聊天里的提问</问>
- *   <答>结论全文（不截断）</答>
- *   </reflow>
- *
- * 问答成对：只有答没有问，模型理解打折；question 缺省时只有 <答>。
- * 来源与意图放在属性里，内容行保持纯净；模型对 XML 包裹的上下文理解最好
- * （Claude 官方推荐形态 / Codex additionalContext 同款思路）。
- */
-export function buildReflowBlock(item: ReflowItem): string {
-  const parts: string[] = []
-  if (item.question !== undefined && item.question.trim() !== '') {
-    parts.push(`<问>${item.question}</问>`)
-  }
-  parts.push(`<答>${item.text}</答>`)
-  return `<reflow source="${xmlAttr(item.sideTitle)}" reason="${t('reflowReason')}">\n${parts.join('\n')}\n</reflow>`
+/** One full-text reference; the shared sender wraps all references once. */
+export function buildReflowBlock(item: ReflowItem, index = 1): string {
+  return `<reference type="reflow" index="${index}" source="side-chat">\n${formatQuestionAnswer(item.question, item.text)}\n</reference>`
 }
 
 function revive(value: unknown): ReflowItem | null {
