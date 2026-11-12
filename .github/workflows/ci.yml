@@ -205,6 +205,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix: ${{ fromJSON(needs.host-discovery.outputs.matrix) }}
     env:
       DSH_TELEMETRY_DISABLED: '1'
