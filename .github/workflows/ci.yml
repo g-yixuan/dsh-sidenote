@@ -20,7 +20,8 @@ on:
     - cron: '0 1 * * *'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Scheduled/manual full regressions must not queue main pushes behind them.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -50,8 +51,10 @@ jobs:
         run: node scripts/ci-host-plan.mjs
       - name: Validate series ranges and resolve the boundary host matrix
         id: hosts
+        env:
+          SHARDS: ${{ steps.plan.outputs.host-mode == 'smoke' && '1' || '4' }}
         run: |
-          matrix=$(node scripts/host-window.mjs)
+          matrix=$(node scripts/host-window.mjs --shards "$SHARDS")
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
       - name: Arch gates (分层/边界/预算)
         run: pnpm check:arch
@@ -69,7 +72,7 @@ jobs:
   # seeded session jsonl makes the fork path work keyless.
   plugin-mount:
     needs: ci
-    name: plugin-mount (${{ matrix.dsh-version }}, ${{ matrix.bs-version }})
+    name: plugin-mount (${{ matrix.dsh-version }}, ${{ matrix.bs-version }}, shard ${{ matrix.shard-index }}/${{ matrix.shard-total }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # Minimum and latest verified host of each admitted series, deduplicated.
@@ -81,6 +84,7 @@ jobs:
       BS_VERSION: ${{ matrix.bs-version }}
       DSH_EXPECTED_VERSION: ${{ matrix.dsh-version }}
       DSH_E2E_CAPABILITY_FAULT: '1'
+      DSH_E2E_SHARD: ${{ matrix.shard-index }}/${{ matrix.shard-total }}
     steps:
       - uses: actions/checkout@v7
 
@@ -111,6 +115,7 @@ jobs:
           fi
 
       - name: Reject incompatible updates and retain the current compatible build
+        if: matrix.shard-index == 1
         run: pnpm test:compat
 
       - name: Summarize host journey timings
@@ -121,7 +126,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-dsh-${{ matrix.dsh-version }}-bs-${{ matrix.bs-version }}
+          name: playwright-report-dsh-${{ matrix.dsh-version }}-bs-${{ matrix.bs-version }}-shard-${{ matrix.shard-index }}
           path: |
             playwright-report/
             test-results/
@@ -168,7 +173,7 @@ jobs:
           npm view @deepseek-ai/dsh versions dist-tags --json > test-results/host-registry.json
           args=()
           if [ "$MANUAL" = true ] || [ "$(date -u +%u)" = 1 ]; then args+=(--all); fi
-          node scripts/host-window.mjs --discover test-results/host-registry.json "${args[@]}" > test-results/host-candidates.json
+          node scripts/host-window.mjs --discover test-results/host-registry.json --shards 4 "${args[@]}" > test-results/host-candidates.json
           node --input-type=module <<'JS'
           import { readFileSync, appendFileSync } from 'node:fs'
           const plan = JSON.parse(readFileSync('test-results/host-candidates.json', 'utf8'))
@@ -196,15 +201,18 @@ jobs:
     # Still exercise in-window hosts when a channel points outside the window.
     if: always() && needs.host-discovery.outputs.matrix != ''
     runs-on: ubuntu-latest
+    name: host-canary (${{ matrix.dsh-version }}, shard ${{ matrix.shard-index }}/${{ matrix.shard-total }})
     timeout-minutes: 30
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix: ${{ fromJSON(needs.host-discovery.outputs.matrix) }}
     env:
       DSH_TELEMETRY_DISABLED: '1'
       BS_VERSION: none
       DSH_EXPECTED_VERSION: ${{ matrix.dsh-version }}
       DSH_E2E_CAPABILITY_FAULT: '1'
+      DSH_E2E_SHARD: ${{ matrix.shard-index }}/${{ matrix.shard-total }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -220,6 +228,7 @@ jobs:
       - name: Full host journeys (build and pack through pretest)
         run: pnpm test:mount
       - name: Installer compatibility and rollback
+        if: matrix.shard-index == 1
         run: pnpm test:compat
       - name: Summarize host journey timings
         if: always()
@@ -228,7 +237,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: host-canary-evidence-${{ matrix.dsh-version }}
+          name: host-canary-evidence-${{ matrix.dsh-version }}-shard-${{ matrix.shard-index }}
           path: |
             playwright-report/
             test-results/

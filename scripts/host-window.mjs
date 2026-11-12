@@ -5,6 +5,9 @@ import semver from 'semver'
 
 const args = process.argv.slice(2)
 const manifest = JSON.parse(readFileSync(args[0] && !args[0].startsWith('--') ? args.shift() : 'package.json', 'utf8'))
+const shardOption = args.indexOf('--shards')
+const shards = shardOption === -1 ? 1 : Number(args.splice(shardOption, 2)[1])
+assert(Number.isSafeInteger(shards) && shards > 0, '--shards must be a positive integer')
 const support = manifest.dshSupport
 assert(support && typeof support === 'object', 'Missing dshSupport series window')
 assert.deepEqual(Object.keys(support).sort(), support.alpha === undefined ? ['minimum', 'verified'] : ['alpha', 'minimum', 'verified'], 'Expected the current series and at most one alpha series')
@@ -32,7 +35,11 @@ assert(!manifest.peerDependencies?.['dsh-better-sidebar'], 'Native hosts must no
 
 const verified = new Set(series.flatMap(entry => entry.verified))
 const eligible = version => releaseVersion(version) && semver.satisfies(version, range)
-const matrix = versions => ({ include: [...new Set(versions)].sort(semver.compare).map(version => ({ 'dsh-version': version, 'bs-version': 'none' })) })
+const matrix = versions => ({
+  include: [...new Set(versions)].sort(semver.compare).flatMap(version => Array.from({ length: shards }, (_, index) => ({
+    'dsh-version': version, 'bs-version': 'none', 'shard-index': index + 1, 'shard-total': shards,
+  }))),
+})
 const all = args.includes('--all')
 const mode = args.find(arg => arg !== '--all')
 if (mode === '--candidate') {

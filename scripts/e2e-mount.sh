@@ -10,6 +10,7 @@
 #
 # 用法：bash scripts/e2e-mount.sh [--smoke | --grep <playwright-filter>]
 # 环境变量：DSH_CMD / TARBALL / PORT / DSH_HOME_BASE / KEEP_HOME（同上游脚本）。
+# DSH_E2E_SHARD：Playwright 分片，例如 1/4；各分片必须使用独立宿主。
 # =============================================================================
 set -euo pipefail
 
@@ -303,7 +304,7 @@ else
 fi
 DSH_E2E_URL="$URL" DSH_E2E_WORKSPACE="$WORKSPACE_DIR" DSH_E2E_SEED_SESSION="$SEED_SESSION_ID" DSH_E2E_HOME="$DSH_HOME" \
 DSH_E2E_HOST_COMMAND="$DSH_CMD" DSH_E2E_SERVER_PID_FILE="$SCRATCH/server.pid" DSH_E2E_SERVER_LOG="$WEB_LOG" \
-  pnpm exec playwright test "${specs[@]}" ${GREP_FILTER:+--grep "$GREP_FILTER"}
+  pnpm exec playwright test "${specs[@]}" --shard "${DSH_E2E_SHARD:-1/1}" ${GREP_FILTER:+--grep "$GREP_FILTER"}
 
 assert_inventory
 
