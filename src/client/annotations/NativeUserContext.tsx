@@ -266,7 +266,7 @@ export function registerUserContext(ctx: Context): void {
             const afterSnapshot = (injected ? injected + '\n\n' : '') + (snapshot?.rest ?? text)
             const protocol = nativeText ? null : splitProtocolPrefix(afterSnapshot)
             if (!snapshot && !protocol && !injected) return createElement(Original, props)
-            const body = protocol ? afterSnapshot.slice(protocol.length).trimStart() : afterSnapshot
+            const body = protocol ? afterSnapshot.slice(protocol.length) : afterSnapshot
             // Retain the native bubble for an annotation-only message; this
             // presentation-only word joiner never enters the durable content.
             const displayText = body || (protocol ? '\u2060' : '')

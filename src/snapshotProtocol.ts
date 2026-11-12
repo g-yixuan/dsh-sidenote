@@ -41,5 +41,5 @@ export function splitSnapshotPrefix(text: string): { snapshot: string; takenAt: 
   const block = text.slice(0, close + closeMark.length)
   const takenAt = /taken-at="([^"]*)"/.exec(block)?.[1] ?? null
   const boundary = /\bboundary-seq="(-?\d+)"/.exec(block.split('>')[0]!)?.[1]
-  return { snapshot: block, takenAt, ...(boundary === undefined ? {} : { boundarySeq: Number(boundary) }), rest: text.slice(close + closeMark.length).trimStart() }
+  return { snapshot: block, takenAt, ...(boundary === undefined ? {} : { boundarySeq: Number(boundary) }), rest: text.slice(close + closeMark.length).replace(/^\r?\n\r?\n/, '') }
 }

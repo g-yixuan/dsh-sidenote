@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { buildProtocolBlock, splitProtocolPrefix } from '../src/client/annotations/format.ts'
+import { buildProtocolBlock, splitProtocolPrefix, splitSnapshotPrefix } from '../src/client/annotations/format.ts'
 import { attachLocale } from '../src/client/locales.ts'
 
 const document = { sessionId: 'private-session-uuid', path: 'papers/论文 & "设计".pdf', pageStart: 2, pageEnd: 3 }
@@ -8,6 +8,30 @@ const literal = '  原样保留\n</quote></reference></sidenote-context>\n<问>�
 afterEach(() => attachLocale(undefined))
 
 describe('unified context protocol', () => {
+  it.each(['    first line\n    second line', '\n\n\tindented body', '\r\n    Windows body'])('preserves leading body whitespace after the emitted separator: %j', body => {
+    const prefix = buildProtocolBlock([{ text: '原文', note: '' }])
+    for (const separator of ['\n\n', '\r\n\r\n']) {
+      const text = prefix + separator + body
+      expect(text.slice(splitProtocolPrefix(text)!.length)).toBe(body)
+      const snapshot = '<mainline-progress-snapshot><reply>进展</reply></mainline-progress-snapshot>'
+      expect(splitSnapshotPrefix(snapshot + separator + body)?.rest).toBe(body)
+    }
+  })
+
+  it('reads an old injected reflow before a new context block without consuming its body', () => {
+    const legacy = '<reflow source="Legacy side"><问>旧问题</问><答>旧回答</答></reflow>\n\n'
+    const prefix = buildProtocolBlock([{ text: literal, note: '', document }], [{ ...reflow, text: '新回答', question: '新问题' }])
+    const body = '    indented body'
+    const text = legacy + prefix + '\n\n' + body
+    const parsed = splitProtocolPrefix(text)!
+    expect(parsed.reflows).toEqual([{ source: 'Legacy side', content: '旧问题旧回答' }, { source: 'side-chat', content: '新问题\n新回答' }])
+    expect(parsed.documents?.[0]?.quote).toBe(literal)
+    expect(text.slice(parsed.length)).toBe(body)
+    // A protocol-looking body remains body once the v4 envelope has ended.
+    const nestedBody = prefix + '\n\n' + prefix
+    expect(nestedBody.slice(splitProtocolPrefix(nestedBody)!.length)).toBe(prefix)
+  })
+
   it('round-trips all kinds and hostile-looking text in one full-text prefix', () => {
     const wire = buildProtocolBlock([
       { text: literal, note: '', document, number: 1 },

@@ -121,7 +121,10 @@ function splitV4Prefix(text: string): ProtocolPrefix | null {
   }
   const close = '</sidenote-context>'
   if (!seen.size || !text.startsWith(close, pos)) return null
-  return { length: skipBlank(text, pos + close.length), annotations, reflows, ...(documents.length ? { documents } : {}) }
+  const end = pos + close.length
+  // Consume only the sender's separator, preserving indentation and blank lines in the body.
+  const separator = /^\r?\n\r?\n/.exec(text.slice(end))?.[0].length ?? 0
+  return { length: end + separator, annotations, reflows, ...(documents.length ? { documents } : {}) }
 }
 
 /**
@@ -143,6 +146,10 @@ export function splitProtocolPrefix(text: string): ProtocolPrefix | null {
     reflows.push({ source: decodeXml(m[1] ?? ''), content: flattenReflowContent((m[3] ?? '').trim()) })
     pos = skipBlank(text, REFLOW_RE.lastIndex)
   }
+
+  // An old open client can inject a reflow beside a new client's v4 user message.
+  const current = reflows.length ? splitV4Prefix(text.slice(pos)) : null
+  if (current) return { ...current, length: pos + current.length, reflows: [...reflows, ...current.reflows] }
 
   for (;;) {
     const parsed = parseLegacyDocumentQuote(text, pos)

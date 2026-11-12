@@ -58,6 +58,17 @@ function mount(text: string, modern: boolean, key = 'user', injected = '', image
 }
 
 describe.each([true, false])('sent context inside the native user bubble (UserText=%s)', modern => {
+  it.each([false, true])('preserves the body after a new context block with an old injected reflow=%s', injected => {
+    const body = '\n\n    const line = 1\n    print(line)'
+    const wire = annotation + '\n\n' + body
+    const { host, content, rerender } = mount(wire, modern, 'user', injected ? reflow : '')
+    expect(host.querySelector('[data-native-body]')?.textContent).toBe(body)
+    expect(host.querySelectorAll('[data-native-bubble] button[aria-expanded]')).toHaveLength(injected ? 2 : 1)
+    expect(content[1]!.text).toBe(wire)
+    rerender()
+    expect(host.querySelector('[data-native-body]')?.textContent).toBe(body)
+  })
+
   it('preserves literal XML inside decoded reflow answers', () => {
     const answer = '<问>原文标签</问>\n<answer>字面内容 &lt;</answer>\n</reference>'
     const wire = buildProtocolBlock([], [{ id: 1, sessionId: 'main', sideTitle: 'Title omitted from wire', text: answer, createdAt: 0 }])

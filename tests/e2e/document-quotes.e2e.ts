@@ -3,7 +3,7 @@ import { copyFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
-import { dragText, openSideChat, prepareSeedPage, registerSeedWorkspace, selectModel, sideChatOf, userMessagesOf, sessionEventsOf } from './journey'
+import { dragText, openSideChat, prepareSeedPage, registerSeedWorkspace, selectModel, sideChatOf, userMessagesOf, sessionEventsOf, USER_BUBBLE } from './journey'
 
 test.beforeAll(async () => {
   const workspace = process.env.DSH_E2E_WORKSPACE!
@@ -126,23 +126,27 @@ test('document quotes: Markdown, code and plain text accumulate, survive reload 
   await page.screenshot({ animations: 'disabled', path: 'test-results/document-quotes-draft.png' })
   await page.keyboard.press('Escape')
   const marker = 'Explain the collected document excerpts. [e2e:document-quotes]'
+  const body = '\n\n    ' + marker
   const before = sessionEventsOf(id).filter(event => event.type === 'turn/end').length
-  await main.locator('[data-composer-input]').fill(marker)
+  await main.locator('[data-composer-input]').fill(body)
   await main.locator('[data-composer-input]').press('Enter')
   await expect.poll(() => userMessagesOf(id).filter(text => text.includes(marker)).length).toBe(1)
   const wire = userMessagesOf(id).find(text => text.includes(marker))!
   expect(wire).toContain('document-notes.md'); expect(wire).toContain('document-code.ts'); expect(wire).toContain('document-plain.txt')
   expect(wire.match(/<reference type="document" /g)).toHaveLength(3)
+  expect(wire.endsWith(body)).toBe(true)
   await expect(docChip(main)).toHaveCount(0)
   await expect.poll(() => sessionEventsOf(id).filter(event => event.type === 'turn/end').length).toBe(before + 1)
   await expect(main.locator('[data-chat-flow-kind="assistant-step"]').last()).toContainText('Document sources and complete excerpts reached the model adapter.')
   const bubble = main.locator('[data-chat-flow-kind="user"]').filter({ hasText: marker }).last()
+  expect((await bubble.locator(USER_BUBBLE).textContent())?.endsWith(body)).toBe(true)
   await bubble.getByRole('button', { name: /Document quotes|文档引用/ }).click()
   await expect(page.locator('[data-sidenote-sent-preview]')).toContainText('Markdown excerpt marker.')
   await expect(page.locator('[data-sidenote-sent-preview]')).toContainText('code marker')
   await page.screenshot({ animations: 'disabled', path: 'test-results/document-quotes-sent.png' })
   await page.keyboard.press('Escape')
   await page.reload()
+  expect((await bubble.locator(USER_BUBBLE).textContent())?.endsWith(body)).toBe(true)
   await bubble.getByRole('button', { name: /Document quotes|文档引用/ }).click()
   await expect(page.locator('[data-sidenote-sent-preview]')).toContainText('Markdown excerpt marker.')
   const remaining = await page.evaluate(id => JSON.parse(localStorage.getItem('dsh-sidenote:annotations:v1:' + id) ?? '[]'), id)
