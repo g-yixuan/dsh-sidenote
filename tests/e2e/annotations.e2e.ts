@@ -383,7 +383,7 @@ test('real malformed-image rejection keeps quote and clean body, then retries on
   await side.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
   await send.click()
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes(body))).toHaveLength(1)
-  expect(userMessagesOf(child).find(text => text.includes(body))!.match(/<annotation id=/g)).toHaveLength(1)
+  expect(userMessagesOf(child).find(text => text.includes(body))!.match(/<reference type="annotation" index=/g)).toHaveLength(1)
   await expect.poll(childItems).toMatchObject([{ state: 'sent' }])
   await expect(input).toHaveText('')
 })
@@ -489,8 +489,8 @@ for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}annotatio
   await side.getByRole('button', { name: /^(Send message|发送消息)$/ }).click()
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes(prompt))).toHaveLength(1)
   const firstWire = userMessagesOf(child).find(text => text.includes(prompt))!
-  expect(firstWire).toContain('<annotation id="1">')
-  expect(firstWire).toContain('<annotation id="2">')
+  expect(firstWire).toContain('<reference type="annotation" index="1" source="main-chat">')
+  expect(firstWire).toContain('<reference type="annotation" index="2" source="main-chat">')
   await expect.poll(childItems).toMatchObject([{ state: 'sent', number: 1 }, { state: 'sent', number: 2 }])
   await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0, { timeout: 90_000 })
   if (real) {
@@ -514,7 +514,7 @@ for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}annotatio
   await input.fill(nextPrompt)
   await side.getByRole('button', { name: /^(Send message|发送消息)$/ }).click()
   await expect.poll(() => userMessagesOf(child).filter(text => text.includes(nextPrompt))).toHaveLength(1)
-  expect(userMessagesOf(child).find(text => text.includes(nextPrompt))).toContain('<annotation id="1">')
+  expect(userMessagesOf(child).find(text => text.includes(nextPrompt))).toContain('<reference type="annotation" index="1" source="main-chat">')
   await expect.poll(childItems).toMatchObject([{ state: 'sent', number: 1 }, { state: 'sent', number: 2 }, { state: 'sent', number: 1 }])
   await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0, { timeout: 90_000 })
   if (real) {

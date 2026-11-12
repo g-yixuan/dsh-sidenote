@@ -8,7 +8,9 @@ import { buildProtocolBlock } from '../src/client/annotations/format.ts'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const annotation = buildProtocolBlock([{ text: '引用原文\n第二行', note: '用户注解' }])
+const quote = { text: '引用原文\n第二行', note: '用户注解' }
+const annotation = buildProtocolBlock([quote])
+const combined = buildProtocolBlock([quote], [{ id: 1, sessionId: 'main', sideTitle: '侧边 · 调查', question: '问题', text: '完整回答', createdAt: 0 }])
 const reflow = '<reflow source="侧边 · 调查">\n<问>问题</问>\n<答>完整回答</答>\n</reflow>'
 const cleanup: (() => void)[] = []
 beforeEach(() => { vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
@@ -56,6 +58,17 @@ function mount(text: string, modern: boolean, key = 'user', injected = '', image
 }
 
 describe.each([true, false])('sent context inside the native user bubble (UserText=%s)', modern => {
+  it('preserves literal XML inside decoded reflow answers', () => {
+    const answer = '<问>原文标签</问>\n<answer>字面内容 &lt;</answer>\n</reference>'
+    const wire = buildProtocolBlock([], [{ id: 1, sessionId: 'main', sideTitle: 'Title omitted from wire', text: answer, createdAt: 0 }])
+    const { host } = mount(wire + '\n\n正文', modern)
+    expect(host.querySelector('[data-native-body]')?.textContent).toBe('正文')
+    act(() => { host.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click() })
+    const panel = document.querySelector('[data-sidenote-sent-preview]')!
+    expect(panel.textContent).toContain(answer)
+    expect(panel.textContent).toContain('Side')
+    expect(panel.textContent).not.toContain('side-chat')
+  })
   it('keeps document source and full excerpt in the same native bubble without comment controls', () => {
     const text = '引用全文 </quote> & 第二行\n结尾'
     const source = { sessionId: 'main', path: 'docs/paper.pdf', pageStart: 5, pageEnd: 6 }
@@ -92,7 +105,7 @@ describe.each([true, false])('sent context inside the native user bubble (UserTe
     expect(bubble.querySelectorAll('[data-dsh-sidenote-bubble]')).toHaveLength(1)
   })
   it.each(['user', 'steering'])('keeps the %s body, annotation and reflow together without changing durable content', key => {
-    const wire = reflow + '\n\n' + annotation + '\n\nhi @原生引用'
+    const wire = combined + '\n\nhi @原生引用'
     const { host, content, rerender } = mount(wire, modern, key)
     const bubble = host.querySelector('[data-native-bubble]')!
     expect(bubble.querySelector('[data-dsh-sidenote-bubble]')).not.toBeNull()
@@ -189,7 +202,7 @@ it.each(['data-pending-steering', 'data-submission-echo'])('projects legacy %s w
   host.setAttribute(surface, '')
   const bubble = document.createElement('div')
   bubble.className = 'native_bubble'
-  const wire = reflow + '\n\n' + annotation + '\n\n正文 '
+  const wire = combined + '\n\n正文 '
   const text = document.createTextNode(wire)
   const nativeReference = document.createElement('span')
   nativeReference.textContent = '@原生引用'
@@ -218,7 +231,7 @@ it('reads legacy queue details from full content instead of its flattened, trunc
   host.dataset.queueDock = ''
   const row = document.createElement('li'), preview = document.createElement('span')
   preview.className = 'native_preview'
-  const wire = reflow + '\n\n' + annotation + '\n\n正文 @引用'
+  const wire = combined + '\n\n正文 @引用'
   const truncated = wire.replace(/\s+/g, ' ').slice(0, 60) + '…'
   preview.textContent = truncated; row.append(preview); host.append(row); document.body.append(host)
   const root = createRoot(document.createElement('div'))

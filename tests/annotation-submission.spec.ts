@@ -185,8 +185,8 @@ describe('controlled quote admission', () => {
     await vi.waitFor(() => expect(h.submitted).toHaveBeenCalledOnce())
     h.session.set({ ...h.session.getSnapshot(), nodes: [...h.session.getSnapshot().nodes, { kind: 'user', seq: 2, content: [{ type: 'text', text: h.sentText() }] }] })
     expect(await result).toBe(true)
-    expect(h.sentText()).toContain('<annotation id="1">')
-    expect(h.sentText()).toContain('<annotation id="2">')
+    expect(h.sentText()).toContain('<reference type="annotation" index="1" source="main-chat">')
+    expect(h.sentText()).toContain('<reference type="annotation" index="2" source="main-chat">')
     // 冻结编号取消息里的 2，与气泡 chip 的反解析一致。
     expect(h.store.get(extra.id)).toMatchObject({ state: 'sent', number: 2 })
   })

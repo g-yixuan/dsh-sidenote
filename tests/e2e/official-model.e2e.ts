@@ -186,7 +186,7 @@ test('official Flash UI regressions: live context, empty annotation send and inl
   await returnChip.click()
   await expect(main.locator('[data-chat-flow-kind="assistant-step"]').filter({ hasText: '批注直发验证通过' }).last()).toBeVisible({ timeout: 90_000 })
   await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
-  expect(userMessagesOf(mainId).at(-1)).toContain('<reflow ')
+  expect(userMessagesOf(mainId).at(-1)).toContain('<reference type="reflow" ')
   expect(userMessagesOf(mainId).at(-1)?.endsWith(returnPrompt)).toBe(true)
 
   await openGeneralSettings(page)

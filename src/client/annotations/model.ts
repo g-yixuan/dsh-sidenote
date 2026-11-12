@@ -20,7 +20,7 @@ import { readDocumentSource, type DocumentSource } from './document.ts'
 interface AnnotationContent {
   /** Store-unique identity (monotonic across sessions). */
   readonly id: number
-  /** 本批显示及 <annotation id> 编号，发送时冻结。 */
+  /** 本批显示及 reference index 编号，发送时冻结。 */
   readonly number: number
   readonly sessionId: string
   /** Full selected text; preview truncation is visual only. */

@@ -5,7 +5,7 @@ import type { Annotation, AnnotationStore } from './model.ts'
 import { buildProtocolBlock } from './format.ts'
 import { resolveInput, inputAttachmentIds, addInputAttachments, removeInputAttachment } from '../host/input.ts'
 import { prepareContextImages, type ContextImages } from '../host/attachments.ts'
-import { buildReflowBlock, type ReflowStore } from '../reflow.ts'
+import type { ReflowItem, ReflowStore } from '../reflow.ts'
 import { submissionExtrasOf } from './submissionExtras.ts'
 import { t } from '../locales.ts'
 
@@ -16,6 +16,7 @@ export async function submitAnnotations(options: {
   sessionId: string
   input: SessionInput
   annotations: readonly Annotation[]
+  reflows?: readonly ReflowItem[]
   leadingBlocks?: readonly string[]
   contextImages?: ContextImages
   mode?: 'queue' | 'steer'
@@ -23,7 +24,8 @@ export async function submitAnnotations(options: {
   const { ctx, store, sessionId, input, annotations } = options
   cancelInputRollback(input)
   const parts = [...(options.leadingBlocks ?? [])]
-  if (annotations.length > 0) parts.push(buildProtocolBlock(annotations))
+  const context = buildProtocolBlock(annotations, options.reflows)
+  if (context) parts.push(context)
   // 拼块瞬间的编号；发送窗口内若发生删除重排，冻结仍沿用这里的编号。
   const wireNumbers = new Map(annotations.map(annotation => [annotation.id, annotation.number] as const))
   const block = parts.join('\n\n')
@@ -93,7 +95,7 @@ export async function submitControlledInput(ctx: Context, store: AnnotationStore
     // Context and body must share one host admission and delivery window.
     // An independent inject can run before a queued message or be repeated
     // when its acknowledgement arrives after the client timeout.
-    const accepted = await submitAnnotations({ ctx, store, sessionId, input, annotations: active, leadingBlocks: [...(prefix ? [prefix.text] : []), ...reflows.map(buildReflowBlock)], contextImages: prefix?.images, mode })
+    const accepted = await submitAnnotations({ ctx, store, sessionId, input, annotations: active, reflows, leadingBlocks: prefix ? [prefix.text] : [], contextImages: prefix?.images, mode })
     if (accepted) {
       for (const item of reflows) reflow.remove(item.id)
       extras?.onSubmitText(draft.draft)

@@ -30,18 +30,16 @@ it('keeps excerpt snapshots isolated and persistent, with numbering independent 
 
 it('round-trips full file content and source through a mixed message without letting XML-looking text break the prefix', () => {
   const text = '  多行代码\n</quote></document-quote>\n& &lt; <script> "quoted"\n' + '全文'.repeat(6000)
-  const wire = buildProtocolBlock([
+  const combined = buildProtocolBlock([
     { text, document: source, note: '', number: 1 },
     { text: '聊天原文', note: '意见', number: 1 },
-  ])
-  const reflow = '<reflow source="侧聊"><答>结论</答></reflow>\n\n'
-  const combined = reflow + wire + '\n\n问题正文'
+  ], [{ id: 1, sessionId: 'main', sideTitle: '侧聊', text: '结论', createdAt: 0 }]) + '\n\n问题正文'
   const parsed = splitProtocolPrefix(combined)!
-  expect(parsed.documents).toEqual([{ id: 1, quote: text, document: source }])
+  expect(parsed.documents).toEqual([{ id: 1, quote: text, document: { path: source.path, pageStart: 2, pageEnd: 3 } }])
   expect(parsed.annotations).toEqual([{ id: 1, quote: '聊天原文', note: '意见' }])
-  expect(parsed.reflows).toEqual([{ source: '侧聊', content: '<答>结论</答>' }])
+  expect(parsed.reflows).toEqual([{ source: 'side-chat', content: '结论' }])
   expect(combined.slice(parsed.length)).toBe('问题正文')
-  expect(splitProtocolPrefix(wire.replace('page-start="2"', 'page-start="0"'))).toBeNull()
+  expect(splitProtocolPrefix(combined.replace('page-start="2"', 'page-start="0"'))).toBeNull()
 })
 
 it('ignores corrupt document records without converting them into chat annotations', () => {

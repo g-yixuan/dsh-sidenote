@@ -1,6 +1,6 @@
 /**
  * 纯函数单测：注释 store（增删 / 批内编号 / 计数 / sent 迁移 / 持久化）、
- * 协议块 v2 序列化与反解析（发送给模型的数据形态）、截断。
+ * 协议块 v4 序列化、旧消息反解析与全文保留。
  * 全部为 node 环境的纯函数测试（无 jsdom 依赖）。
  */
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -8,7 +8,6 @@ import { createAnnotationStore } from '../src/client/annotations/model.ts'
 import type { ChatAnnotationDraft } from '../src/client/annotations/model.ts'
 import {
   PROTOCOL_HEADER_RE,
-  protocolHeader,
   buildProtocolBlock,
   splitProtocolPrefix,
 } from '../src/client/annotations/format.ts'
@@ -178,17 +177,17 @@ describe('annotation store', () => {
   })
 })
 
-describe('protocol block v3（XML 形态）', () => {
-  it('builds header + annotation XML blocks（无注解省略 <note>）', () => {
+describe('protocol block v4 and legacy readers', () => {
+  it('wraps typed references once and omits empty notes', () => {
     const block = buildProtocolBlock([
       { text: '原文片段 1', note: 'xxx', number: 1 },
       { text: '多行\n原文', note: '', number: 2 },
     ])
-    expect(block).toBe(
-      'I annotated 2 passage(s) of the conversation above:\n'
-      + '<annotation id="1">\n<quote>原文片段 1</quote>\n<note>xxx</note>\n</annotation>\n'
-      + '<annotation id="2">\n<quote>多行\n原文</quote>\n</annotation>',
-    )
+    expect(block).toMatch(/^<sidenote-context version="4">\n<guidance>/)
+    expect(block.match(/<guidance>/g)).toHaveLength(1)
+    expect(block).toContain('<reference type="annotation" index="1" source="main-chat">\n<quote>原文片段 1</quote>\n<note>xxx</note>\n</reference>')
+    expect(block).toContain('<reference type="annotation" index="2" source="main-chat">\n<quote>多行\n原文</quote>\n</reference>')
+    expect(block.endsWith('</sidenote-context>')).toBe(true)
   })
 
   it('嵌套消歧：引用内容自身含「」/markdown 不影响解析', () => {
@@ -216,7 +215,7 @@ describe('protocol block v3（XML 形态）', () => {
 
   it('回流块前缀一并反解析（回流在前、注释在后）', () => {
     const msg = '<reflow source="Side 2" reason="r">\n结论全文\n</reflow>\n\n'
-      + buildProtocolBlock([{ text: 'A', note: 'n', number: 1 }]) + '\n\n正文'
+      + '我批注了以下 1 处内容：\n<annotation id="1"><quote>A</quote><note>n</note></annotation>\n\n正文'
     const parsed = splitProtocolPrefix(msg)
     expect(parsed).not.toBeNull()
     expect(parsed!.reflows).toEqual([{ source: 'Side 2', content: '结论全文' }])
@@ -225,13 +224,13 @@ describe('protocol block v3（XML 形态）', () => {
   })
 
 
-  it('uses the original protocol with the same numbers as the source badges', () => {
+  it('keeps the reference indices equal to the source badge numbers', () => {
     const store = createAnnotationStore(() => 1, null)
     const old = store.add(draft('s1', '上一批'))
     store.markSent([old.id])
     const current = store.add(draft('s1', '本批原文', '说明'))
     const wire = buildProtocolBlock([current])
-    expect(wire).toBe(protocolHeader(1) + '\n<annotation id="1">\n<quote>本批原文</quote>\n<note>说明</note>\n</annotation>')
+    expect(wire).toContain('<reference type="annotation" index="1" source="main-chat">\n<quote>本批原文</quote>\n<note>说明</note>\n</reference>')
     expect(splitProtocolPrefix(wire)?.annotations).toEqual([{ id: 1, quote: '本批原文', note: '说明' }])
   })
 

@@ -1,7 +1,7 @@
 /**
  * 回流通道单测（纯函数，node 环境）：
  * - 受控 store：问答成对的存取、localStorage 持久化 revive、clearSession。
- * - buildReflowBlock：<问>/<答> XML 形态（有问成对、无问仅答、空白问视为无）。
+ * - buildReflowBlock：<question>/<answer> XML 形态（有问成对、无问仅答、空白问视为无）。
  * - pairQuestions：assistant 消息与最近用户提问的配对（协议前缀剥离、
  *   tool 节点不打断、流式不配、无提问不配）。
  * - flattenReflowContent：tooltip 展示剥标签。
@@ -31,24 +31,24 @@ const tool = (key: string): ChatMessage => ({ key, role: 'tool', text: '', toolN
 describe('buildReflowBlock（问答成对 XML）', () => {
   const base = { id: 1, sessionId: 's1', sideTitle: '侧边 2', createdAt: 0 }
 
-  it('有提问时 <问> 在 <答> 前，包裹在 <reflow> 块内', () => {
+  it('有提问时 question 在 answer 前，共用 reference 外层', () => {
     const block = buildReflowBlock({ ...base, text: '答全文', question: '问全文' })
-    expect(block).toContain('<reflow source="侧边 2"')
-    expect(block).toContain('<问>问全文</问>')
-    expect(block).toContain('<答>答全文</答>')
-    expect(block.indexOf('<问>')).toBeLessThan(block.indexOf('<答>'))
-    expect(block.trimEnd().endsWith('</reflow>')).toBe(true)
+    expect(block).toContain('<reference type="reflow" index="1" source="side-chat"')
+    expect(block).toContain('<question>问全文</question>')
+    expect(block).toContain('<answer>答全文</answer>')
+    expect(block.indexOf('<question>')).toBeLessThan(block.indexOf('<answer>'))
+    expect(block.trimEnd().endsWith('</reference>')).toBe(true)
   })
 
-  it('无提问时只有 <答>（fork 历史结尾等场景）', () => {
+  it('无提问时只有 <answer>（fork 历史结尾等场景）', () => {
     const block = buildReflowBlock({ ...base, text: '答全文' })
-    expect(block).not.toContain('<问>')
-    expect(block).toContain('<答>答全文</答>')
+    expect(block).not.toContain('<question>')
+    expect(block).toContain('<answer>答全文</answer>')
   })
 
   it('全空白提问按无提问处理', () => {
     const block = buildReflowBlock({ ...base, text: '答全文', question: '  \n ' })
-    expect(block).not.toContain('<问>')
+    expect(block).not.toContain('<question>')
   })
 })
 
@@ -69,7 +69,7 @@ describe('reflow store（问答成对的存取与持久化）', () => {
     expect(item?.text).toBe('答全文')
     expect(item?.question).toBe('问全文')
     // revive 后序列化仍成对
-    expect(buildReflowBlock(item!)).toContain('<问>问全文</问>')
+    expect(buildReflowBlock(item!)).toContain('<question>问全文</question>')
   })
 
   it('clearSession 清空该会话（含 question），其他会话不受影响', () => {
@@ -140,7 +140,7 @@ describe('pairQuestions（assistant ↔ 最近用户提问）', () => {
 })
 
 describe('flattenReflowContent（tooltip 展示剥标签）', () => {
-  it('<问>/<答> 标签剥离、内容保留', () => {
+  it('旧消息的中文问答标签剥离、内容保留', () => {
     const flat = flattenReflowContent('<问>多行\n提问</问>\n<答>结论</答>')
     expect(flat).toBe('多行\n提问\n结论')
   })

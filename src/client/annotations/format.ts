@@ -1,33 +1,13 @@
 import { t } from '../locales.ts'
-import { formatDocumentQuote, parseDocumentQuote, type DocumentSource, type DocumentQuote } from './document.ts'
+import { decodeXml, xmlText } from '../protocol.ts'
+import { buildReflowBlock, type ReflowItem } from '../reflow.ts'
+import { formatDocumentQuote, parseLegacyDocumentQuote, readDocumentLocation, type DocumentSource, type DocumentQuote } from './document.ts'
 
 /**
- * Wire format v3（2026-09-06 用户裁定）——发送给模型的数据形态与气泡
- * 反解析协议的唯一权威：
- *
- *   我批注了以下 2 处内容：
- *   <annotation id="1">
- *   <quote>引用原文（原样、可多行、不截断）</quote>
- *   <note>用户注解</note>
- *   </annotation>
- *   <annotation id="2">
- *   <quote>引用原文 2</quote>
- *   </annotation>
- *
- *   用户消息正文
- *
- * 为什么是 XML 块（替代 v2 的「」单行列表）：
- * - 嵌套消歧：「」在引用内容自身含「」时边界模糊（用户实测踩中）；XML 标签
- *   语义严谨、模型可读性是业界共识（Claude 官方推荐、Codex additionalContext
- *   用 <external_KEY> 同款）。
- * - 无注解的注释省略 <note>（而不是「（无注解）」占位噪音）。
- * - 气泡侧：宿主 user 气泡是纯文本渲染（UserStyleBubble/projectUserText，
- *   无 markdown 元素），隐藏手术按字符区间切文本节点完成，因此协议区必须
- *   是消息的**连续前缀**（send.ts 保证组装顺序）。
- *
- * 截断纪律（用户裁定 2026-09-06）：引用/回流内容一律全文，不截断——
- * 静默截断会让用户不知道内容少了（「产生幻觉」）。quote 是用户亲手划选的，
- * chip 预览用 CSS 省略即可，wire 上永远全文。
+ * v4: one versioned prefix, with typed references and escaped full-text fields.
+ * Indices match each kind's UI numbering and freeze on admission. The host owns
+ * the body after this prefix; no text is truncated or rewritten in history.
+ * The legacy reader below remains for already-persisted messages.
  */
 
 export interface QuoteItem {
@@ -35,30 +15,26 @@ export interface QuoteItem {
   readonly note: string
   /** 本条消息中的编号，与原文角标一致。 */
   readonly number?: number
+  readonly sourceSurface?: 'main' | 'side'
   readonly document?: DocumentSource
-}
-
-/** 协议头（双语）：zh「我批注了以下 2 处内容：」/ en 见 locales。 */
-export function protocolHeader(n: number): string {
-  return t('protocolHeader', { n })
 }
 
 /** One annotation's XML block（无注解时省略 <note>）。 */
 export function formatAnnotationXml(index: number, item: QuoteItem): string {
-  const id = item.number ?? index
   const note = item.note.trim()
-  return note === ''
-    ? `<annotation id="${id}">\n<quote>${item.text}</quote>\n</annotation>`
-    : `<annotation id="${id}">\n<quote>${item.text}</quote>\n<note>${note}</note>\n</annotation>`
+  const source = item.sourceSurface === 'side' ? 'side-chat' : 'main-chat'
+  return `<reference type="annotation" index="${item.number ?? index}" source="${source}">\n<quote>${xmlText(item.text)}</quote>${note ? `\n<note>${xmlText(note)}</note>` : ''}\n</reference>`
 }
 
-/** 注释协议块 = 头部句 + 每个注释一个 XML 块（行间无空行，与正文空一行）。 */
-export function buildProtocolBlock(items: readonly QuoteItem[]): string {
+/** All pending kinds share one native message and one protocol envelope. */
+export function buildProtocolBlock(items: readonly QuoteItem[], reflows: readonly ReflowItem[] = []): string {
   const annotations = items.filter(item => !item.document)
-  return [
+  const references = [
+    ...reflows.map((item, i) => buildReflowBlock(item, i + 1)),
     ...items.filter(item => item.document).map((item, i) => formatDocumentQuote(item.number ?? i + 1, item.text, item.document!)),
-    ...(annotations.length ? [protocolHeader(annotations.length), ...annotations.map((item, i) => formatAnnotationXml(i + 1, item))] : []),
-  ].join('\n')
+    ...annotations.map((item, i) => formatAnnotationXml(i + 1, item)),
+  ]
+  return references.length ? `<sidenote-context version="4">\n<guidance>${xmlText(t('protocolGuidance'))}</guidance>\n\n${references.join('\n\n')}\n</sidenote-context>` : ''
 }
 
 // ── 反解析（气泡手术用；纯函数可测） ─────────────────────────────────────────
@@ -79,7 +55,7 @@ export interface ParsedRefFlow {
 }
 
 export interface ProtocolPrefix {
-  /** 协议区在消息文本中的字符长度（前缀，手术按它切）。 */
+  /** Prefix length consumed by the host's text renderer. */
   readonly length: number
   readonly annotations: readonly ParsedAnnotation[]
   readonly reflows: readonly ParsedRefFlow[]
@@ -88,10 +64,13 @@ export interface ProtocolPrefix {
 
 const ANNOTATION_RE = /<annotation id="(\d+)"(?: local="(\d+)")?(?: scope="[^"]*")?>\s*<quote>([\s\S]*?)<\/quote>\s*(?:<note>([\s\S]*?)<\/note>\s*)?<\/annotation>/y
 const REFLOW_RE = /<reflow\s+source="([^"]*)"(?:\s+reason="([^"]*)")?\s*>([\s\S]*?)<\/reflow>/y
+const REFERENCE_RE = /<reference type="(document|annotation|reflow)" index="(\d+)" source="([^"]*)"(?: page-start="(\d+)" page-end="(\d+)")?>\s*([\s\S]*?)<\/reference>/y
+const QUOTE_RE = /^<quote>([^<]*)<\/quote>\s*(?:<note>([^<]*)<\/note>\s*)?$/
+const QA_RE = /^(?:<question>([^<]*)<\/question>\s*)?<answer>([^<]*)<\/answer>\s*$/
 
 /**
- * 气泡 tooltip / 面板留痕 chip 的展示拍平：剥掉 <问>/<答> 协议标签只留内容行
- * （协议标签是 wire 形态，不出现在 UI）。仅用于 title 悬浮文案。
+ * Only legacy messages contain unescaped Chinese question/answer tags.
+ * v4 fields are decoded individually, so literal XML in an answer stays text.
  */
 export function flattenReflowContent(content: string): string {
   return content
@@ -105,13 +84,52 @@ function skipBlank(text: string, pos: number): number {
   return pos
 }
 
+/** Parse only our emitted grammar; malformed/unknown versions stay visible as ordinary text. */
+function splitV4Prefix(text: string): ProtocolPrefix | null {
+  const header = /^<sidenote-context version="4">\s*<guidance>[^<]*<\/guidance>\s*/.exec(text)
+  if (!header) return null
+  let pos = header[0].length
+  const annotations: ParsedAnnotation[] = [], reflows: ParsedRefFlow[] = [], documents: DocumentQuote[] = []
+  const seen = new Set<string>()
+  for (;;) {
+    REFERENCE_RE.lastIndex = pos
+    const match = REFERENCE_RE.exec(text)
+    if (!match) break
+    const [, type, number, encodedSource, start, end, content] = match
+    const id = Number(number), source = decodeXml(encodedSource!)
+    const key = `${type}:${id}`
+    if (!Number.isSafeInteger(id) || id < 1 || seen.has(key)) return null
+    seen.add(key)
+    if (type === 'document') {
+      const fields = QUOTE_RE.exec(content!)
+      const document = readDocumentLocation({ path: source, ...(start === undefined ? {} : { pageStart: Number(start), pageEnd: Number(end) }) })
+      if (!fields || fields[2] !== undefined || !document) return null
+      documents.push({ id, quote: decodeXml(fields[1]!), document })
+    } else {
+      if (start !== undefined || (source !== 'main-chat' && source !== 'side-chat')) return null
+      if (type === 'annotation') {
+        const fields = QUOTE_RE.exec(content!)
+        if (!fields) return null
+        annotations.push({ id, quote: decodeXml(fields[1]!), note: decodeXml(fields[2] ?? '') })
+      } else {
+        const fields = QA_RE.exec(content!)
+        if (!fields || source !== 'side-chat') return null
+        reflows.push({ source, content: fields.slice(1).filter(field => field !== undefined).map(decodeXml).join('\n') })
+      }
+    }
+    pos = skipBlank(text, REFERENCE_RE.lastIndex)
+  }
+  const close = '</sidenote-context>'
+  if (!seen.size || !text.startsWith(close, pos)) return null
+  return { length: skipBlank(text, pos + close.length), annotations, reflows, ...(documents.length ? { documents } : {}) }
+}
+
 /**
- * 从消息文本开头解析协议前缀（回流块* → 注释块）：任一命中即返回。
- * 全部不命中返回 null（普通用户消息，零开销）。
- * 注意：内容里恰好含字面 `</quote>` 会在该处截断解析（已知极限，聊天引用
- * 场景可忽略；Codex 的 <external_KEY> 同款取舍）。
+ * Read v4 or legacy prefixes without migrating stored messages. Legacy payloads
+ * remain verbatim; only attributes/document text that were escaped are decoded.
  */
 export function splitProtocolPrefix(text: string): ProtocolPrefix | null {
+  if (text.startsWith('<sidenote-context')) return splitV4Prefix(text)
   let pos = 0
   const reflows: ParsedRefFlow[] = []
   const annotations: ParsedAnnotation[] = []
@@ -122,12 +140,12 @@ export function splitProtocolPrefix(text: string): ProtocolPrefix | null {
     REFLOW_RE.lastIndex = pos
     const m = REFLOW_RE.exec(text)
     if (m === null) break
-    reflows.push({ source: m[1] ?? '', content: (m[3] ?? '').trim() })
+    reflows.push({ source: decodeXml(m[1] ?? ''), content: flattenReflowContent((m[3] ?? '').trim()) })
     pos = skipBlank(text, REFLOW_RE.lastIndex)
   }
 
   for (;;) {
-    const parsed = parseDocumentQuote(text, pos)
+    const parsed = parseLegacyDocumentQuote(text, pos)
     if (!parsed) break
     documents.push(parsed.quote)
     pos = skipBlank(text, parsed.end)
@@ -138,7 +156,7 @@ export function splitProtocolPrefix(text: string): ProtocolPrefix | null {
   const headerMatch = /^([^\n]*)\n/.exec(rest)
   if (headerMatch !== null && PROTOCOL_HEADER_RE.test(headerMatch[1] ?? '')) {
     let cursor = pos + headerMatch[0].length
-    // 只读兼容旧预览消息；新消息沿用原始协议，不附加编号指令。
+    // Read-only compatibility for early preview messages.
     const legacyGuidance = /^Annotation ids stay stable within (?:their session scope|this conversation)\.[^\n]*\n/.exec(text.slice(cursor))
     if (legacyGuidance) cursor += legacyGuidance[0].length
     for (;;) {

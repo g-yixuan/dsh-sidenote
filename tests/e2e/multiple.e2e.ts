@@ -125,7 +125,7 @@ test('multiple: current-tab quote target stays frozen while switching and backgr
   await tabOf(page, tabA).click()
   await expect(side).toHaveAttribute('data-sidenote-chat-session', a)
   await send(side, a, 'SEND-QUOTE-A')
-  expect(userMessagesOf(a).some(t => t.includes('frozen in A') && t.includes('<annotation'))).toBe(true)
+  expect(userMessagesOf(a).some(t => t.includes('frozen in A') && t.includes('<reference type="annotation"'))).toBe(true)
   expect(userMessagesOf(b).some(t => t.includes('frozen in A'))).toBe(false)
   await inputOf(side).fill('RUN-A [e2e:hold]'); await inputOf(side).press('Enter')
   await expect(side.getByRole('button', { name: stop })).toBeVisible()
