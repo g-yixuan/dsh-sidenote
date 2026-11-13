@@ -4,12 +4,18 @@ import { createHash } from 'node:crypto'
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
+// Hosted runners can alternate image builds within the same OS series.
+export function validationEnvironment({ nodeVersion, platform, arch, imageOS }) {
+  if (!imageOS) return null
+  return createHash('sha256').update(JSON.stringify([nodeVersion, platform, arch, imageOS])).digest('hex')
+}
+
 /** Reuse only a successful run's explicit record of the tree it actually tested. */
 export async function planHostValidation({ eventName, event, ref, environment, git, api, now = Date.now() }) {
   const commit = git('rev-parse', 'HEAD').trim()
   const tree = git('rev-parse', 'HEAD^{tree}').trim()
   const full = { mode: 'full', commit, tree, environment, reason: 'No matching recent validation; run every host journey.' }
-  if (!environment) return { ...full, reason: 'Runner image is unknown; run every host journey.' }
+  if (!environment) return { ...full, reason: 'Runner OS is unknown; run every host journey.' }
   async function validatedRun(sha, expectedTree) {
     const { workflow_runs: runs } = await api(`actions/workflows/ci.yml/runs?head_sha=${sha}&per_page=10`)
     // A failed or unfinished rerun must not resurrect an older green result.
@@ -64,21 +70,24 @@ export async function planHostValidation({ eventName, event, ref, environment, g
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const environmentInfo = {
+    nodeVersion: process.version, platform: process.platform, arch: process.arch,
+    imageOS: process.env.ImageOS, imageVersion: process.env.ImageVersion,
+  }
   const plan = await planHostValidation({
     eventName: process.env.GITHUB_EVENT_NAME,
     event: JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')),
     ref: process.env.GITHUB_REF,
-    environment: process.env.ImageOS && process.env.ImageVersion ? createHash('sha256').update(JSON.stringify([
-      process.version, process.platform, process.arch, process.env.ImageOS, process.env.ImageVersion,
-    ])).digest('hex') : null,
+    environment: validationEnvironment(environmentInfo),
     git: (...args) => execFileSync('git', args, { encoding: 'utf8' }),
     api: async path => JSON.parse(execFileSync('gh', ['api', `repos/${process.env.GITHUB_REPOSITORY}/${path}`],
       { encoding: 'utf8', timeout: 15_000, stdio: ['ignore', 'pipe', 'pipe'] })),
   })
+  const report = { ...plan, runtime: environmentInfo }
   mkdirSync('test-results', { recursive: true })
-  writeFileSync('test-results/host-plan.json', `${JSON.stringify(plan, null, 2)}\n`)
+  writeFileSync('test-results/host-plan.json', `${JSON.stringify(report, null, 2)}\n`)
   appendFileSync(process.env.GITHUB_OUTPUT, `host-mode=${plan.mode}\ntree=${plan.tree}\nenvironment=${plan.environment}\n`)
   const source = plan.source ? `\nEvidence: https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${plan.source.run}\n` : ''
-  appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Host validation: ${plan.mode}\n\n${plan.reason}\n\nTested tree: \`${plan.tree}\`\n${source}`)
-  console.log(JSON.stringify(plan, null, 2))
+  appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Host validation: ${plan.mode}\n\n${plan.reason}\n\nTested tree: \`${plan.tree}\`\n\nRuntime: ${process.version} / ${process.platform} / ${process.arch} / ${environmentInfo.imageOS ?? 'unknown'}\n\nRunner image build (recorded only): ${environmentInfo.imageVersion ?? 'unknown'}\n${source}`)
+  console.log(JSON.stringify(report, null, 2))
 }

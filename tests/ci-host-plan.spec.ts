@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const script = new URL('../scripts/ci-host-plan.mjs', import.meta.url).href
-const { planHostValidation } = await import(script)
+const { planHostValidation, validationEnvironment } = await import(script)
 const now = Date.parse('2026-11-09T01:00:00Z')
 
 function fixture(options: {
@@ -50,6 +50,23 @@ function fixture(options: {
 }
 
 describe('host validation plan', () => {
+  const runtime = { nodeVersion: 'v24.22.2', platform: 'linux', arch: 'x64', imageOS: 'ubuntu26', imageVersion: '20261111.196.1' }
+
+  it.each(['pull_request', 'push'])('reuses verified content across runner image rebuilds (%s)', async eventName => {
+    const sourceEnvironment = validationEnvironment(runtime)
+    const input = fixture({ eventName, sourceEnvironment })
+    const environment = validationEnvironment({ ...runtime, imageVersion: '20261101.186.1' })
+    expect(await planHostValidation({ ...input, environment })).toMatchObject({ mode: 'smoke' })
+  })
+
+  it.each([
+    { nodeVersion: 'v24.23.0' }, { platform: 'darwin' }, { arch: 'arm64' }, { imageOS: 'ubuntu24' },
+  ])('requires full journeys after an actual runtime change: %j', async difference => {
+    const input = fixture({ sourceEnvironment: validationEnvironment(runtime) })
+    const environment = validationEnvironment({ ...runtime, ...difference })
+    expect(await planHostValidation({ ...input, environment })).toMatchObject({ mode: 'full' })
+  })
+
   it.each(['full', 'smoke'])('uses release smoke only on a verified version-only change (%s base)', async sourceMode => {
     const input = fixture({ sourceMode })
     expect(await planHostValidation(input)).toMatchObject({ mode: 'smoke', tree: 'merged-tree', source: { run: 42, tree: 'base-tree' } })
@@ -71,7 +88,7 @@ describe('host validation plan', () => {
   })
 
   it.each([
-    { sourceTree: 'different-tree' }, { sourceMode: 'unknown' }, { sourceEnvironment: 'different-runner-image' }, { ci: 'failure' },
+    { sourceTree: 'different-tree' }, { sourceMode: 'unknown' }, { sourceEnvironment: 'different-runner-os' }, { ci: 'failure' },
     { gate: 'skipped' }, { gate: 'cancelled' }, { step: 'skipped' }, { conclusion: 'cancelled' },
     { updated: '2026-11-07T00:00:00Z' }, { updated: 'invalid' }, { updated: '2026-11-10T00:00:00Z' },
     { head: 'different-head' }, { baseRun: false, merged: false }, { apiError: true },
@@ -95,7 +112,8 @@ describe('host validation plan', () => {
     expect(input.api).not.toHaveBeenCalled()
   })
 
-  it('does not reuse results from an unknown runner image', async () => {
+  it('does not reuse results from an unknown runner OS', async () => {
+    expect(validationEnvironment({ ...runtime, imageOS: undefined })).toBeNull()
     const input = { ...fixture(), environment: null }
     expect(await planHostValidation(input)).toMatchObject({ mode: 'full' })
     expect(input.api).not.toHaveBeenCalled()
