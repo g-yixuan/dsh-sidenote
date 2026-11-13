@@ -11,6 +11,24 @@ import { openSideChat, prepareSeedPage, registerSeedWorkspace } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
 
+test('顶栏侧边按钮在宿主大字号下保持紧凑', async ({ page }) => {
+  await prepareSeedPage(page)
+  const button = page.getByRole('button', { name: /Open a side chat|打开侧边聊天/ }).first()
+  await expect(button).toBeVisible()
+  await button.evaluate(element => {
+    element.parentElement!.style.fontSize = '16px'
+    element.parentElement!.style.lineHeight = '28px'
+  })
+
+  await expect(button.locator('..')).toHaveCSS('font-size', '16px')
+  await expect(button).toHaveCSS('font-size', '13px')
+  await expect(button).toHaveCSS('line-height', '20px')
+  await expect(button.locator('span')).toHaveCSS('font-size', '13px')
+  await expect(button.locator('svg')).toHaveCSS('width', '13px')
+  await expect(button.locator('svg')).toHaveCSS('height', '13px')
+  await page.screenshot({ path: 'test-results/header-side-font.png' })
+})
+
 test('无-BS 直连档：真实 fork、历史与输入框就绪，无插件崩溃', async ({ page }) => {
   const pageErrors: string[] = []
   const consoleErrors: string[] = []
