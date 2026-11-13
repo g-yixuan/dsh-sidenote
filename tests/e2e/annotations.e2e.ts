@@ -1,7 +1,8 @@
 import { test, expect, type Page } from '@playwright/test'
-import { prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, userMessageContentsOf, openGeneralSettings, openSideChat, selectModel, USER_BUBBLE } from './journey'
+import { prepareSeedPage, registerSeedWorkspace, sideChatOf, userMessagesOf, userMessageContentsOf, sessionEventsOf, openGeneralSettings, openSideChat, selectModel, USER_BUBBLE } from './journey'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { splitSnapshotPrefix } from '../../src/client/annotations/format'
 
 test.beforeAll(registerSeedWorkspace)
 
@@ -399,11 +400,14 @@ for (const surface of ['main', 'side'] as const) {
     await selectModel(page, conversation, 'Controlled E2E')
     const input = conversation.locator('[data-composer-input]')
     for (const [index, wire] of [annotation, reflow + '\n\n引用正文', reflow + '\n\n' + annotation + '\n\nhi'].entries()) {
+      const ended = sessionEventsOf(sessionId).filter(event => event.type === 'turn/end').length
       if (index === 2) await conversation.locator('input[type=file]').setInputFiles('tests/fixtures/quote-test.png')
       await input.fill(wire)
       await expect(conversation.getByRole('button', { name: /^(Send|Send message|发送|发送消息)$/ })).toBeEnabled()
       await input.press('Enter')
-      await expect.poll(() => userMessagesOf(sessionId).some(text => text === wire)).toBe(true)
+      await expect.poll(() => userMessagesOf(sessionId).some(text => (splitSnapshotPrefix(text)?.rest ?? text) === wire)).toBe(true)
+      // Wait for the reply to settle before testing hover on a following transcript.
+      await expect.poll(() => sessionEventsOf(sessionId).filter(event => event.type === 'turn/end').length, { timeout: 30_000 }).toBe(ended + 1)
       const row = conversation.locator('[data-chat-flow-kind="user"]').filter({ has: page.locator('[data-dsh-sidenote-bubble]') }).last()
       const bubble = row.locator(USER_BUBBLE)
       await expect(bubble.locator('[data-dsh-sidenote-bubble]')).toHaveCount(1)
@@ -445,7 +449,8 @@ for (const surface of ['main', 'side'] as const) {
       await page.screenshot({ path: `test-results/sent-context-${surface}-${index}.png` })
     }
     const countBeforeReload = await conversation.locator(`${USER_BUBBLE} [data-dsh-sidenote-bubble]`).count()
-    await page.reload()
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(conversation.locator('[data-composer-input]')).toBeVisible({ timeout: 30_000 })
     await expect(conversation.locator(`${USER_BUBBLE} [data-dsh-sidenote-bubble]`)).toHaveCount(countBeforeReload)
   })
 }
