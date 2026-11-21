@@ -63,7 +63,8 @@
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-interactive-bg-hover);
 }
-.nativeAction:disabled { opacity: .5; cursor: default; }
+.nativeAction:disabled { opacity: .5; cursor: default; pointer-events: none; }
+.tooltipAnchor { display: inline-flex; }
 .historyToggle { margin: 0; margin-inline-start: -6px; text-align: left; }
 .stateScreen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 24px 16px; }
 .emptyIcon { color: var(--dsw-alias-label-tertiary); }

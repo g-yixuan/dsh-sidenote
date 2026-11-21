@@ -1,5 +1,6 @@
 /** Side-chat lifecycle and product extensions around the shared Conversation. */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SessionReference, TabComponentProps } from '../host/contracts.ts'
 import { focusMainComposer, focusSideComposer } from '../host/dom.ts'
 import { activeNativeTabOf } from '../host/tabs.ts'
@@ -163,8 +164,13 @@ export function SideChatPanel(props: TabComponentProps & { closeSource: () => vo
     <div className={css.nativeToolbar}>
       <button type="button" className={css.nativeAction} onClick={() => { openSession(ctx, side.parentSessionId) }}>{t(parentPending ? 'parentPending' : parentSnapshot?.running ? 'parentRunning' : 'parentIdle')}</button>
       <span className={css.nativeToolbarActions}>
-        <button type="button" className={css.nativeAction} disabled={running || replies.length === 0 || allAdded} title={t(boundarySeq === undefined ? 'reflowPending' : 'reflowAllTitle')} aria-pressed={allAdded} onClick={() => { for (const reply of replies) addReply(side, reply, questions.get(reply.key)) }}>{t(allAdded ? 'reflowAllDone' : 'reflowAll')}</button>
-        <button type="button" className={css.nativeAction} disabled={running || composer.pending || hasDraft || saving} title={t(running || composer.pending ? 'promoteBusy' : hasDraft ? 'promoteDraftBusy' : 'promoteTitle')} onClick={() => { void promote() }}>{t('promote')}</button>
+        {/* Disabled buttons need a hover anchor to keep their explanation visible. */}
+        <Tooltip label={t(boundarySeq === undefined ? 'reflowPending' : 'reflowAllTitle')} side="bottom"><span className={css.tooltipAnchor}>
+          <button type="button" className={css.nativeAction} disabled={running || replies.length === 0 || allAdded} aria-pressed={allAdded} onClick={() => { for (const reply of replies) addReply(side, reply, questions.get(reply.key)) }}>{t(allAdded ? 'reflowAllDone' : 'reflowAll')}</button>
+        </span></Tooltip>
+        <Tooltip label={t(running || composer.pending ? 'promoteBusy' : hasDraft ? 'promoteDraftBusy' : 'promoteTitle')} side="bottom"><span className={css.tooltipAnchor}>
+          <button type="button" className={css.nativeAction} disabled={running || composer.pending || hasDraft || saving} onClick={() => { void promote() }}>{t('promote')}</button>
+        </span></Tooltip>
       </span>
     </div>
     {saveError && <div className={css.errorRow} role="alert">{saveError}</div>}
