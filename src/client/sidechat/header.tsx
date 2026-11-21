@@ -9,6 +9,7 @@
  */
 import { useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconNewChatOutline16 } from '../host/icons.ts'
 import type { Context } from '../host/contracts.ts'
 import { currentSessionIdOf } from '../host/currentSession.ts'
@@ -32,16 +33,15 @@ function HeaderSideButton({ ctx }: { ctx: Context }): ReactNode {
   if (sessionId === '' || !canForkFrom(ctx, sessionId)) return null
 
   return (
-    <button
+    <Tooltip label={t('headerSideTitle')} side="bottom"><button
       type="button"
       className={css.headerSide}
-      title={t('headerSideTitle')}
       aria-label={t('headerSideTitle')}
       onClick={() => { openOrFocusSideChat(ctx, sessionId) }}
     >
       <IconNewChatOutline16 size={13} />
       <span>{t('headerSide')}</span>
-    </button>
+    </button></Tooltip>
   )
 }
 
