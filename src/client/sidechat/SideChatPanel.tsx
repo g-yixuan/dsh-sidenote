@@ -94,10 +94,12 @@ export function SideChatPanel(props: TabComponentProps & { signal?: AbortSignal;
       } : undefined, props.signal)
     },
     onAccepted: (): void => {
+      if (props.signal?.aborted) return
       contextRef.current.accept()
       updateTabMeta(ctx, scope.sessionId, tab.id, current => ({ ...current, forkedMidTurn: undefined }))
     },
     onSubmitText: (text: string): void => {
+      if (props.signal?.aborted) return
       const topic = topicOf(text)
       if (topic && metaRef.current.topic === undefined) setSideChatTopic(ctx, scope.sessionId, tab.id, topic)
     },
