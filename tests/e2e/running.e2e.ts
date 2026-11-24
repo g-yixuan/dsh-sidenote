@@ -200,13 +200,14 @@ test('busy fork after repeated steering keeps side messages and answers outside 
   await side.locator('[data-composer-input]').fill(question)
   await side.locator('[data-composer-input]').press('Enter')
   try {
+    await expect(side).not.toHaveAttribute('data-sidenote-chat-session', child)
+    child = (await side.getAttribute('data-sidenote-chat-session'))!
     const echo = side.locator('[data-submission-echo]')
     const sendingDraft = side.locator('[data-composer-input][contenteditable="false"]')
     // Alpha publishes the native echo after Host acceptance and retains a
     // read-only draft while admission is pending. RC hosts show a local echo.
     await expect(echo.or(sendingDraft).filter({ hasText: question }).first()).toBeInViewport()
     if (await echo.count() > 0) await expect(echo).not.toContainText('mainline-progress-snapshot')
-    child = (await side.getAttribute('data-sidenote-chat-session'))!
     expect(userMessagesOf(child).some(text => text.includes(question))).toBe(false)
     await expect(context.locator(':scope > button')).toBeVisible()
   } finally { release() }
