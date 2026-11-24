@@ -106,6 +106,8 @@ Open DSH settings and select **Sidenote** in the left navigation. **Hide native 
 
 **Add a note before asking in side chat** is enabled by default. Turn it off to skip note entry for side-chat questions. This preference is also saved to the current host configuration and survives reloads and restarts. You can turn it back on at any time.
 
+**Show the Side button in the header** is enabled by default. Turn it off to hide the header button. You can still open side chat from the right sidebar, `/side`, or a text selection. Changes take effect after saving and survive reloads and restarts. Existing configurations without this field default to enabled. For a handwritten host profile configuration, set `showHeaderButton: false` under `config` on the `id: side-chat` entry.
+
 ## Installation and troubleshooting
 
 See the [overview](../README_EN.md#install) and [compatibility policy](compatibility_EN.md) for installation and verified versions. Supported native hosts need no BS. DSH 0.2.1 pins plugin 0.8.2; other outside-window hosts retain the last compatible package listed in the compatibility table. Engine ranges do not imply that every version inside them is verified.

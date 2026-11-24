@@ -45,7 +45,7 @@ export function apply(ctx: Context): void {
   ctx.effect(() => () => { preferences.dispose() }, 'dsh-sidenote: preferences')
   ctx.effect(() => initializeFinalReplies(form, forms.get('ui-chat')), 'dsh-sidenote: final replies default')
   registerSidenoteSettings(ctx, preferences)
-  registerSideChat(ctx, reflow, annotations)
+  registerSideChat(ctx, reflow, annotations, preferences)
   registerAnnotations(ctx, reflow, annotations, preferences)
   registerDocumentQuotes(ctx, annotations)
 }

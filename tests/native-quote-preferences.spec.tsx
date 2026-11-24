@@ -1,7 +1,8 @@
 /** @vitest-environment jsdom */
-import { act, createElement } from 'react'
+import { act, createElement, type ComponentType } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { registerHeaderEntry } from '../src/client/sidechat/header.tsx'
 import { Config } from '../src/settings.ts'
 import type { Context } from '../src/client/host/contracts.ts'
 import { registerNativeQuoteVisibility } from '../src/client/host/selection.tsx'
@@ -22,7 +23,7 @@ function preferenceFixture(initial?: ReturnType<SidenoteConfigForm['getSnapshot'
   const form = {
     getSnapshot: () => state,
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } },
-    set: vi.fn(async (field: 'hideNativeQuote' | 'showSideChatNote', value: boolean) => {
+    set: vi.fn(async (field: 'hideNativeQuote' | 'showSideChatNote' | 'showHeaderButton', value: boolean) => {
       state = { ...state, value: { hideNativeQuote: false, ...state.value, [field]: value } }
       for (const listener of listeners) listener()
       return true
@@ -34,6 +35,62 @@ function preferenceFixture(initial?: ReturnType<SidenoteConfigForm['getSnapshot'
 }
 
 describe('native quotation preferences', () => {
+  it('defaults to the header entry for old profiles and persists its opt-out independently', async () => {
+    expect(Config({}).showHeaderButton.get()).toBe(true)
+    expect(Config({ showHeaderButton: false }).showHeaderButton.get()).toBe(false)
+    const { form, preferences } = preferenceFixture()
+    expect(preferences.getSnapshot().showHeaderButton).toBe(true)
+    await preferences.setShowHeaderButton(false)
+    expect(form.set).toHaveBeenCalledWith('showHeaderButton', false)
+    await preferences.setHidden(true)
+    expect(preferences.getSnapshot()).toMatchObject({ hidden: true, showHeaderButton: false })
+    form.set.mockResolvedValueOnce(false)
+    await preferences.setShowHeaderButton(true)
+    expect(preferences.getSnapshot()).toMatchObject({ showHeaderButton: false, failed: true })
+    await preferences.setShowHeaderButton(true)
+    expect(preferences.getSnapshot()).toMatchObject({ showHeaderButton: true, failed: false })
+  })
+
+  it('updates the registered header on preference and session changes', async () => {
+    const { preferences } = preferenceFixture()
+    const listeners = new Set<() => void>()
+    let session = { current: 'main', byId: { main: { blank: false } } }
+    let Header!: ComponentType
+    const ctx = {
+      sessions: { list: {
+        getSnapshot: () => session,
+        subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } },
+      } },
+      slots: {
+        inject(_name: string, callback: () => unknown) { callback() },
+        register(_options: unknown, component: ComponentType) { Header = component; return () => {} },
+      },
+    } as unknown as Context
+    registerHeaderEntry(ctx, preferences)
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    cleanup.push(() => { act(() => { root.unmount() }); expect(listeners.size).toBe(0) })
+    act(() => { root.render(<Header />) })
+    expect(host.querySelector('button')).not.toBeNull()
+    await act(async () => { await preferences.setShowHeaderButton(false) })
+    expect(host.querySelector('button')).toBeNull()
+    await act(async () => { await preferences.setShowHeaderButton(true) })
+    expect(host.querySelector('button')).not.toBeNull()
+    for (const blank of [true, false]) {
+      act(() => {
+        session = { ...session, byId: { main: { blank } } }
+        for (const listener of listeners) listener()
+      })
+      expect(host.querySelector('button') !== null).toBe(!blank)
+    }
+    act(() => {
+      session = { ...session, current: '' }
+      for (const listener of listeners) listener()
+    })
+    expect(host.querySelector('button')).toBeNull()
+  })
+
   it('defaults to showing side-chat notes and saves the opt-out independently', async () => {
     expect(Config({}).showSideChatNote.get()).toBe(true)
     expect(Config({ showSideChatNote: false }).showSideChatNote.get()).toBe(false)
@@ -80,6 +137,7 @@ describe('native quotation preferences', () => {
     const writing = preferences.setHidden(true)
     await preferences.setHidden(false)
     await preferences.setShowSideChatNote(false)
+    await preferences.setShowHeaderButton(false)
     expect(form.set).toHaveBeenCalledTimes(1)
     expect(preferences.getSnapshot().saving).toBe(true)
     finish(false)
