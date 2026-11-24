@@ -6,7 +6,7 @@ import { restartHost } from './host'
 import { openSideChat, prepareSeedPage, registerSeedWorkspace, selectModel, sessionEventsOf, sideChatOf, userMessagesOf } from './journey'
 
 test.beforeAll(registerSeedWorkspace)
-test.afterEach(async ({ page }, info) => { await page.screenshot({ path: info.outputPath('recovery.png') }) })
+test.afterEach(async ({ page }, info) => { if (info.status !== 'skipped') await page.screenshot({ path: info.outputPath('recovery.png') }) })
 const stop = /^(Stop generating|停止生成)$/
 const reflow = /^(Bring back to main conversation|带回主对话)$/
 const toggleOf = (view: Locator) => view.locator('[data-sidenote-main-context] > button')

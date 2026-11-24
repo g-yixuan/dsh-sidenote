@@ -83,7 +83,10 @@ test('侧聊入口和工具栏使用宿主提示，禁用时仍能悬停查看�
   await page.screenshot({ path: 'test-results/side-toolbar-tooltip-disabled.png' })
   await page.mouse.move(0, 0)
   await expect(tooltip).toHaveCount(0)
-  await side.locator('[data-composer-input]').fill('')
+  const input = side.locator('[data-composer-input]')
+  await input.press('ControlOrMeta+a')
+  await input.press('Backspace')
+  await expect(input).toHaveText('')
   await expect(save).toBeEnabled()
 })
 
