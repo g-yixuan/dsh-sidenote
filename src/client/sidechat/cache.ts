@@ -4,6 +4,8 @@ import { resolveInput } from '../host/input.ts'
 import { readModelSelection, writeModelSelection } from '../host/models.ts'
 import { sessionVisibilityOf } from '../host/sessionVisibility.ts'
 import { clearForkQueue } from '../host/submission.ts'
+import { rootContext } from '../host/sidebar.ts'
+import { hasSideChatSession } from './metaStore.ts'
 import { buildMainlineSnapshot } from './snapshot.ts'
 
 /** Never discard child-owned work or command settings to gain a longer prefix. */
@@ -17,7 +19,9 @@ export function canRefreshContext(session: SessionFace, boundary: number): boole
 
 /** Freeze one observed parent cut before awaiting fork. The host copies original
  * messages, headers, tool history and compactions; only the uncommitted tail is XML. */
-export async function prepareCachedContext(ctx: Context, parentId: string, childId: string, boundary: number) {
+export async function prepareCachedContext(ctx: Context, parentId: string, childId: string, boundary: number, signal?: AbortSignal) {
+  const checkOpen = (): void => { if (signal?.aborted) throw new Error('侧聊已关闭，正文已保留') }
+  checkOpen()
   const child = ctx.sessions.binding(childId)?.session
   if (!child) return undefined
   await loadInheritedContext(child, boundary)
@@ -37,14 +41,32 @@ export async function prepareCachedContext(ctx: Context, parentId: string, child
     const text = buildMainlineSnapshot(ctx, parentId, new Date(), cut)
     if (text === null) throw new Error('主线上下文尚未就绪，内容已保留')
     const visibility = sessionVisibilityOf(ctx)
+    checkOpen()
     const finish = visibility.begin(ctx.sessions.list.getSnapshot())
     let reference: ReturnType<typeof retainSession>
+    let sessionId: string | undefined
+    let adopted = false
+    const dispose = async (): Promise<void> => {
+      try {
+        if (!sessionId || adopted || hasSideChatSession(sessionId)) return
+        const candidate = ctx.sessions.binding(sessionId)?.session
+        await loadInheritedContext(candidate, cut)
+        const events = contextEventSource(candidate)?.getSnapshot()
+        // A running-parent fork may add synthetic closing events after its cut.
+        if (candidate && !candidate.getSnapshot().running && events
+          && (!events.hasMore || (events.entries[0]?.event.seq ?? Infinity) <= cut + 1)
+          && events.entries.every(({ event }) => event.seq <= cut || ['session/end-seed', 'model/selection', 'session/title', 'tool/result', 'step/end', 'turn/end'].includes(event.type))
+          && !hasSideChatSession(sessionId)) await rootContext(ctx).workspaces.archiveSession(sessionId)
+      } catch (error) { console.warn('[dsh-sidenote] 归档未交付的侧聊失败:', error) }
+      finally { reference?.release(); reference = undefined }
+    }
     try {
-      const sessionId = await ctx.sessions.fork({ sessionId: parentId, atSeq: cut })
+      sessionId = await ctx.sessions.fork({ sessionId: parentId, atSeq: cut })
       visibility.hide(sessionId)
       reference = retainSession(ctx, sessionId)
       const target = reference ? await reference.ready : ctx.sessions.binding(sessionId)
       if (!target || await loadForkBoundary(target.session) !== cut) throw new Error('侧聊继承边界不一致，内容已保留')
+      checkOpen()
       await clearForkQueue(target)
       if (!await writeModelSelection(ctx, sessionId, selection)) throw new Error('无法保留侧聊模型选择，内容已保留')
       const input = resolveInput(ctx, sessionId)
@@ -52,8 +74,9 @@ export async function prepareCachedContext(ctx: Context, parentId: string, child
       const current = await readModelSelection(ctx, childId)
       if (current?.provider !== selection.provider || current?.model !== selection.model || current?.reasoningEffort !== selection.reasoningEffort) throw new Error('准备期间侧聊模型已改变，请重新发送')
       if (!canRefreshContext(child, boundary)) throw new Error('准备期间侧聊已产生新内容，请重新发送')
-      return { text, boundary: cut, sessionId, input, dispose: () => reference?.release() }
-    } catch (error) { reference?.release(); throw error }
+      checkOpen()
+      return { text, boundary: cut, sessionId, input, adopt: () => { adopted = true }, dispose }
+    } catch (error) { await dispose(); throw error }
     finally { finish() }
   } finally { parent?.release() }
 }

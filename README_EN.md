@@ -81,6 +81,8 @@ Click the **Bring back to main conversation** icon on the right of a side replyâ
 
 Before the first send, newly recorded mainline messages are inherited in their native form, with unfinished output added as a progress snapshot. Drafts with attachments, native references, annotations or handbacks, and side chats with their own commands or content, keep their original session and snapshot path to preserve content and settings. Actual cache hits depend on the model service; new questions, uncached output, model changes and compaction can still cause misses.
 
+If the side chat closes during first-send preparation or the session handoff cannot be saved, submission stops and the original draft is retained. Closing the panel does not retract a message already submitted. Failed candidates that were never handed over and have no independent work are archived where possible and released; history files and previously displayed side chats are kept. First-send preparation can add latency, and cache hits do not reduce context-window usage.
+
 Select excerpts from official sidebar previews of Markdown, plain text/code, selectable-text PDFs, and Word/PowerPoint files. They accumulate as **Document quotes** in the main conversation and travel with the next message, retaining file sources and PDF page numbers without markers in the document. Browser pages and scanned documents are not supported yet.
 
 Document quotes, chat annotations, and side-chat reflows share one reference block in the same message, preserving full content and distinguishing file sources, the main conversation, and side discussions. PDF/Office page numbers refer to the official preview; older messages remain readable.

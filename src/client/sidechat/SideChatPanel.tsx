@@ -9,6 +9,7 @@ import { useMainContext } from './useMainContext.ts'
 import { useComposer } from './composer.ts'
 import { canTransferDraft, resolveInput } from '../host/input.ts'
 import { createFoldStore } from '../chat/viewState.ts'
+import { readSideChatMeta, switchSideChatSession } from './metaStore.ts'
 import { SIDE_TAB_TYPE, appendDraftText, clearPendingDraft, pairQuestions, parseSideChatMeta, phaseOf } from './model.ts'
 import { StateScreen } from './rows.tsx'
 import { ensurePanelOpen, forkAndRegister, openSession, openSessionWindow, retainSession, saveSideChatSession, setSideChatTopic, unarchiveSideSession, updateTabMeta } from './lifecycle.ts'
@@ -26,7 +27,7 @@ import css from './sidechat.module.css'
 
 const NOOP_UNSUBSCRIBE = (): void => {}
 
-export function SideChatPanel(props: TabComponentProps & { closeSource: () => void; reflow: ReflowStore; annotations: AnnotationStore; renderConversation: RenderConversation }) {
+export function SideChatPanel(props: TabComponentProps & { signal?: AbortSignal; closeSource: () => void; reflow: ReflowStore; annotations: AnnotationStore; renderConversation: RenderConversation }) {
   useLocaleTick()
   const { ctx, scope, tab, visible } = props
   const meta = parseSideChatMeta(tab.meta)
@@ -81,15 +82,16 @@ export function SideChatPanel(props: TabComponentProps & { closeSource: () => vo
     needsFirstSend: (): boolean => contextRef.current.contextPending === true,
     firstSendPrefix: () => {
       const previousId = metaRef.current.childId
+      const previous = readSideChatMeta(scope.sessionId, tab.id)
       const input = previousId ? resolveInput(ctx, previousId) : undefined
-      const transferable = previousId && input && canTransferDraft(input)
+      const transferable = previousId && previous?.childId === previousId && props.signal && input && canTransferDraft(input)
         && props.annotations.countActive(previousId) === 0 && props.reflow.list(previousId).length === 0
       return contextRef.current.firstSendPrefix(transferable ? (id, boundary) => {
-        if (metaRef.current.childId !== previousId) throw new Error('侧聊已切换，内容已保留')
+        if (props.signal?.aborted) throw new Error('侧聊已关闭，正文已保留')
         const expanded = createFoldStore(`dsh-sidenote:fold:v1:${previousId}`).isOpen('inherited')
         createFoldStore(`dsh-sidenote:fold:v1:${id}`).setAll(['inherited'], expanded)
-        updateTabMeta(ctx, scope.sessionId, tab.id, current => ({ ...current, childId: id, boundarySeq: boundary, snapshotOnly: undefined }))
-      } : undefined)
+        switchSideChatSession(previous!, id, boundary)
+      } : undefined, props.signal)
     },
     onAccepted: (): void => {
       contextRef.current.accept()
@@ -99,7 +101,7 @@ export function SideChatPanel(props: TabComponentProps & { closeSource: () => vo
       const topic = topicOf(text)
       if (topic && metaRef.current.topic === undefined) setSideChatTopic(ctx, scope.sessionId, tab.id, topic)
     },
-  }), [ctx, scope.sessionId, tab.id, props.annotations, props.reflow])
+  }), [ctx, scope.sessionId, tab.id, props.annotations, props.reflow, props.signal])
   const composer = useComposer(ctx, session, childId)
   useEffect(() => childId === undefined ? undefined : registerSubmissionExtras(childId, extras), [childId, extras])
   useEffect(() => {

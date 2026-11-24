@@ -27,19 +27,20 @@ export function useMainContext(ctx: Context, parentSessionId: string, childId: s
   const saved = useMemo(() => boundarySeq === undefined ? undefined : savedContextOf(legacy?.nodes ?? [], childWindow?.entries ?? [], childWindow?.hasMore, boundarySeq), [legacy, childWindow, boundarySeq]) ?? accepted
   const pending = useRef(forkedMidTurn)
   pending.current = forkedMidTurn && !saved
-  const firstSendPrefix = useCallback(async (activate?: (id: string, boundary: number) => void): Promise<SubmissionContext | null> => {
+  const firstSendPrefix = useCallback(async (activate?: (id: string, boundary: number) => void, signal?: AbortSignal): Promise<SubmissionContext | null> => {
     if (!pending.current) return null
     if (!childId) throw new Error('侧聊上下文尚未就绪，请稍后重试')
     const boundary = snapshotOnly ? -1 : await loadForkBoundary(session)
-    const cached = activate ? await prepareCachedContext(ctx, parentSessionId, childId, boundary) : undefined
+    if (signal?.aborted) throw new Error('侧聊已关闭，正文已保留')
+    const cached = activate ? await prepareCachedContext(ctx, parentSessionId, childId, boundary, signal) : undefined
     if (cached) {
       sending.current = splitSnapshotPrefix(cached.text)
-      return { text: cached.text, target: { ...cached, activate: () => activate!(cached.sessionId, cached.boundary) } }
+      return { text: cached.text, signal, target: { ...cached, activate: () => { activate!(cached.sessionId, cached.boundary); cached.adopt() } } }
     }
     const text = await loadMainlineSnapshot(ctx, parentSessionId, boundary)
     sending.current = splitSnapshotPrefix(text)
     const attachments = snapshotImages(text)
-    return { text, ...(attachments.length ? { images: { sessionId: parentSessionId, attachments } } : {}) }
+    return { text, signal, ...(attachments.length ? { images: { sessionId: parentSessionId, attachments } } : {}) }
   }, [ctx, parentSessionId, childId, session, snapshotOnly])
   const accept = useCallback(() => { if (sending.current) setAccepted(sending.current) }, [])
   const preview = forkedMidTurn && !saved

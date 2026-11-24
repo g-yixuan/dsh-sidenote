@@ -6,6 +6,7 @@ import { createAnnotationStore } from '../src/client/annotations/model.ts'
 import { registerSubmissionExtras } from '../src/client/annotations/submissionExtras.ts'
 import { submitControlledInput } from '../src/client/annotations/send.ts'
 import { submitNativeWithContext } from '../src/client/annotations/NativeComposer.tsx'
+import { dropSideChatMeta, readSideChatMeta, switchSideChatSession, writeSideChatMeta } from '../src/client/sidechat/metaStore.ts'
 
 const SESSION = 's1'
 
@@ -124,7 +125,117 @@ describe('native composer context submission', () => {
 
   afterEach(() => {
     harness = undefined
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
+    sessionStorage.clear()
+    localStorage.clear()
+  })
+
+  it.each([false, true])('waits for the unmounted chat projection and releases subscriptions (cancel=%s)', async cancel => {
+    const source = makeHarness({ draft: '等待消息确认数据', withAnnotation: false })
+    const controller = new AbortController()
+    const listeners = new Set<() => void>()
+    let loaded = false
+    const ctx = { ...source.ctx, get: (name: string) => name === 'uiConversation' ? {
+      binding: () => ({ target: () => ({
+        getSnapshot: () => loaded ? { legacy: source.ctx.sessions.binding(SESSION)!.session.getSnapshot() } : undefined,
+        subscribe: (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn) } },
+      }) }),
+    } : source.ctx.get(name) } as unknown as Context
+    const off = registerSubmissionExtras(SESSION, {
+      needsFirstSend: () => true, firstSendPrefix: async () => ({ text: '上下文', signal: controller.signal }), onAccepted: () => {}, onSubmitText: () => {},
+    })
+    try {
+      const sending = submitControlledInput(ctx, source.store, source.reflow, SESSION)
+      await flushMicrotasks()
+      expect(source.texts).toEqual([])
+      if (cancel) controller.abort()
+      else { loaded = true; for (const listener of [...listeners]) listener() }
+      expect(await sending).toBe(!cancel)
+      expect(source.texts).toHaveLength(cancel ? 0 : 1)
+      expect(source.draft()).toBe(cancel ? '等待消息确认数据' : '')
+      expect(listeners.size).toBe(0)
+    } finally { off() }
+  })
+
+  it.each(['storage-both', 'storage-local', 'storage-window', 'closed', 'replaced', 'aborted', 'edited', 'quoted'])(
+    'keeps the original draft and error without sending when handoff fails: %s', async failure => {
+      const source = makeHarness({ draft: '保留我的问题', withAnnotation: false })
+      const target = makeHarness({ withAnnotation: false })
+      let ready!: () => void
+      const waiting = new Promise<void>(resolve => { ready = resolve })
+      const controller = new AbortController()
+      const ctx = {
+        ...source.ctx,
+        sessions: { ...source.ctx.sessions,
+          retain: () => ({ ready: waiting.then(() => target.ctx.sessions.binding('fresh')), release: () => {} }),
+        },
+      } as unknown as Context
+      writeSideChatMeta({ sessionId: 'parent', tabId: 'tab', childId: SESSION, nativeAddress: 'instance', createdAt: 1, number: 1 })
+      const previous = readSideChatMeta('parent', 'tab')!
+      const dispose = vi.fn(), accepted = vi.fn()
+      const off = registerSubmissionExtras(SESSION, {
+        needsFirstSend: () => true,
+        firstSendPrefix: async () => ({ text: '<mainline-progress-snapshot>tail</mainline-progress-snapshot>', signal: controller.signal,
+          target: { sessionId: 'fresh', input: target.input, activate: () => switchSideChatSession(previous, 'fresh', 12), dispose } }),
+        onAccepted: accepted, onSubmitText: () => {},
+      })
+      try {
+        const sending = submitControlledInput(ctx, source.store, source.reflow, SESSION)
+        await flushMicrotasks()
+        if (failure.startsWith('storage')) {
+          const setItem = Storage.prototype.setItem
+          vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
+            if (failure === 'storage-both' || this === (failure === 'storage-local' ? localStorage : sessionStorage)) throw new DOMException('full', 'QuotaExceededError')
+            setItem.call(this, key, value)
+          })
+        } else if (failure === 'closed') dropSideChatMeta('parent', 'tab')
+        else if (failure === 'replaced') writeSideChatMeta({ ...previous, nativeAddress: 'replacement' })
+        else if (failure === 'aborted') controller.abort()
+        else if (failure === 'edited') source.type('（修改）')
+        else source.store.add({ sessionId: SESSION, anchorKey: 'new', text: '引用', anchorText: '引用', occurrence: 0, note: '' })
+        ready()
+        expect(await sending).toBe(false)
+        expect(source.draft()).toBe(failure === 'edited' ? '保留我的问题（修改）' : '保留我的问题')
+        expect(source.error()).toBeTruthy()
+        expect(target.texts).toEqual([])
+        expect(source.texts).toEqual([])
+        expect(accepted).not.toHaveBeenCalled()
+        expect(dispose).toHaveBeenCalledOnce()
+        expect(source.store.getSubmission(SESSION).pending).toBe(false)
+        expect(source.store.getSubmission('fresh').pending).toBe(false)
+        if (failure.startsWith('storage')) {
+          for (const store of [localStorage, sessionStorage]) expect(JSON.parse(store.getItem('dsh-sidenote:side-meta:v1:parent:tab')!).childId).toBe(SESSION)
+        }
+      } finally { off() }
+    },
+  )
+
+  it('keeps the adopted target when the tab closes after native submit but before acknowledgement', async () => {
+    const source = makeHarness({ draft: '已提交的问题', withAnnotation: false })
+    const target = makeHarness({ withAnnotation: false, deferAdmission: true })
+    const controller = new AbortController()
+    const ctx = { ...source.ctx, sessions: { ...source.ctx.sessions, binding: (id: string) => (id === SESSION ? source : target).ctx.sessions.binding(id) } } as unknown as Context
+    writeSideChatMeta({ sessionId: 'parent', tabId: 'tab', childId: SESSION, createdAt: 1, number: 1 })
+    const previous = readSideChatMeta('parent', 'tab')!
+    const accepted = vi.fn(), dispose = vi.fn()
+    const off = registerSubmissionExtras(SESSION, {
+      needsFirstSend: () => true,
+      firstSendPrefix: async () => ({ text: '上下文', signal: controller.signal, target: { sessionId: 'fresh', input: target.input, activate: () => switchSideChatSession(previous, 'fresh', 12), dispose } }),
+      onAccepted: accepted, onSubmitText: () => {},
+    })
+    try {
+      const sending = submitControlledInput(ctx, source.store, source.reflow, SESSION)
+      await flushMicrotasks()
+      expect(target.texts).toHaveLength(1)
+      expect(readSideChatMeta('parent', 'tab')?.childId).toBe('fresh')
+      controller.abort()
+      target.acknowledge()
+      expect(await sending).toBe(true)
+      expect(source.draft()).toBe('')
+      expect(accepted).toHaveBeenCalledOnce()
+      expect(dispose).toHaveBeenCalledOnce()
+    } finally { off() }
   })
 
   it.each(['edit', 'failure', 'success'] as const)('preserves first-send context during asynchronous preparation: %s', async outcome => {

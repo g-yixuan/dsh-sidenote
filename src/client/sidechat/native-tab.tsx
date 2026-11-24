@@ -184,7 +184,7 @@ function NativeSideChatBodyInner(props: NativeBodyInjected & NativeTabFrameworkP
 
   return (
     <div className={css.nativeHost} data-dsh-sidenote-native-host="">
-      <SideChatPanel ctx={ctx} store={undefined} scope={scope} tab={tab} visible={nativeTab.visible} closeSource={() => closeNativeTab(nativeTab)} reflow={reflow} annotations={annotations} renderConversation={(reference, side) => renderSideConversation(props, reference, side)} />
+      <SideChatPanel ctx={ctx} store={undefined} scope={scope} tab={tab} visible={nativeTab.visible} signal={nativeTab.signal} closeSource={() => closeNativeTab(nativeTab)} reflow={reflow} annotations={annotations} renderConversation={(reference, side) => renderSideConversation(props, reference, side)} />
     </div>
   )
 }

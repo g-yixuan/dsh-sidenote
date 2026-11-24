@@ -11,15 +11,17 @@ export function apply(ctx, config) {
     globalThis.fetch = async function (url, init) {
       if (!String(url).startsWith('https://api.deepseek.com/') || typeof init?.body !== 'string') return original.call(this, url, init)
       const body = JSON.parse(init.body)
+      const started = performance.now()
       const lastUser = body.messages?.findLast(message => message.role === 'user')
       const lastUserImageCount = Array.isArray(lastUser?.content) ? lastUser.content.filter(block => block.type === 'image_url').length : 0
-      const record = { model: body.model, protocol: String(url).includes('/anthropic/') ? 'messages' : 'chat-completions', thinking: body.thinking ?? null, reasoningEffort: body.reasoning_effort ?? null, reasoningCharacters: 0, toolDeltas: 0, lastUserImageCount }
+      const record = { startedAt: new Date().toISOString(), model: body.model, protocol: String(url).includes('/anthropic/') ? 'messages' : 'chat-completions', thinking: body.thinking ?? null, reasoningEffort: body.reasoning_effort ?? null, reasoningCharacters: 0, toolDeltas: 0, lastUserImageCount }
       const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex')
       record.messageHashes = body.messages?.map(hash)
       record.toolsHash = hash(body.tools ?? [])
       records.push(record)
       const response = await original.call(this, url, init)
       record.status = response.status
+      record.headersMs = Math.round(performance.now() - started)
       write()
       void (async () => {
         let pending = ''
@@ -31,8 +33,9 @@ export function apply(ctx, config) {
             const event = JSON.parse(line.slice(6))
             if (event.model) record.responseModel = event.model
             if (event.usage) record.usage = event.usage
-            if (event.type === 'message_stop') { record.finished = true; write(); return }
+            if (event.type === 'message_stop') { record.finished = true; record.elapsedMs = Math.round(performance.now() - started); write(); return }
             const delta = event.choices?.[0]?.delta
+            if (record.firstTokenMs === undefined && (delta?.content || delta?.reasoning_content || delta?.tool_calls?.length || event.type === 'content_block_delta')) record.firstTokenMs = Math.round(performance.now() - started)
             record.reasoningCharacters += delta?.reasoning_content?.length ?? 0
             record.toolDeltas += delta?.tool_calls?.length ?? 0
             if (event.delta?.type === 'thinking_delta') record.reasoningCharacters += event.delta.thinking?.length ?? 0
@@ -40,6 +43,7 @@ export function apply(ctx, config) {
           }
         }
         record.finished = true
+        record.elapsedMs = Math.round(performance.now() - started)
         write()
       })().catch(error => { record.observationAborted = error.name === 'AbortError'; record.observationFailed = !record.observationAborted; write() })
       return response

@@ -16,5 +16,6 @@ export function registerSubmissionExtras(sessionId: string, value: SubmissionExt
 export interface SubmissionContext {
   text: string
   images?: ContextImages
-  target?: { sessionId: string; input: SessionInput; activate(): void; dispose(): void }
+  signal?: AbortSignal
+  target?: { sessionId: string; input: SessionInput; activate(): void; dispose(): void | Promise<void> }
 }

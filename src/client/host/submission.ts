@@ -51,9 +51,10 @@ export interface SubmissionReceipt {
 
 /** Observe real target admission, never an empty draft or pendingSubmissions echo.
  * The baseline excludes earlier identical quotes and fork-inherited history. */
-export async function prepareSubmission(ctx: Context, sessionId: string, input: SessionInput, needle: string): Promise<SubmissionReceipt> {
+export async function prepareSubmission(ctx: Context, sessionId: string, input: SessionInput, needle: string, signal?: AbortSignal): Promise<SubmissionReceipt> {
   const retained = retainSession(ctx, sessionId)
   let binding: SessionBinding | undefined
+  const off: (() => void)[] = []
   try {
     binding = retained === undefined ? ctx.sessions.binding(sessionId) : await retained.ready
     if (binding === undefined) throw new Error('目标会话尚未就绪')
@@ -63,7 +64,22 @@ export async function prepareSubmission(ctx: Context, sessionId: string, input: 
       if (typeof session.open === 'function') await session.open()
     }
     const chat = chatSourceOf(ctx, binding)
-    if (chat === undefined || chat.getLegacy() === null) throw new Error('宿主消息确认能力尚未就绪；注释已保留')
+    if (chat === undefined) throw new Error('宿主消息确认能力尚未就绪；注释已保留')
+    // Unpublished fork candidates have no mounted Conversation to retain this projection.
+    off.push(chat.subscribe(() => {}))
+    if (chat.getLegacy() === null) await new Promise<void>((resolve, reject) => {
+      let unsubscribe = (): void => {}
+      const finish = (error?: Error): void => {
+        clearTimeout(timer); unsubscribe(); signal?.removeEventListener('abort', abort)
+        if (error) reject(error); else resolve()
+      }
+      const abort = (): void => finish(new Error('侧聊已关闭，正文已保留'))
+      const check = (): void => { if (chat.getLegacy() !== null) finish() }
+      const timer = setTimeout(() => finish(new Error('宿主消息确认能力尚未就绪；内容已保留')), 15_000)
+      unsubscribe = chat.subscribe(check)
+      signal?.addEventListener('abort', abort, { once: true })
+      if (signal?.aborted) abort(); else check()
+    })
     const inbox = inboxFaceOf(binding)
     const nodes = (): readonly Message[] => chat.getLegacy()?.nodes as readonly Message[] ?? []
     const maxSeq = Math.max(-1, ...nodes().map(node => node.seq ?? -1))
@@ -71,7 +87,6 @@ export async function prepareSubmission(ctx: Context, sessionId: string, input: 
     const queueIds = new Set(queuedBefore.map(message => message.messageId ?? message.id))
     const previousError = binding.session.getSnapshot().promptError
     const previousNoticeSeq = input.notices?.getSnapshot()?.seq ?? -1
-    const off: (() => void)[] = []
     let timer: ReturnType<typeof setTimeout> | undefined
     let submitted = false
     let settled = false
@@ -140,5 +155,5 @@ export async function prepareSubmission(ctx: Context, sessionId: string, input: 
         }
       },
     }
-  } catch (error) { retained?.release(); throw error }
+  } catch (error) { for (const unsubscribe of off) unsubscribe(); retained?.release(); throw error }
 }
