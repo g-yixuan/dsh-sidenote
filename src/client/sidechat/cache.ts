@@ -26,6 +26,12 @@ export async function prepareCachedContext(ctx: Context, parentId: string, child
   if (!child) return undefined
   await loadInheritedContext(child, boundary)
   if (!canRefreshContext(child, boundary)) return undefined
+  const sourceSeq = contextEventSource(child)?.getSnapshot().entries.at(-1)?.event.seq
+  const assertCurrent = (): void => {
+    checkOpen()
+    if (ctx.sessions.binding(childId)?.session !== child || !canRefreshContext(child, boundary)
+      || contextEventSource(child)?.getSnapshot().entries.at(-1)?.event.seq !== sourceSeq) throw new Error('准备期间侧聊的模型、权限或内容已改变；正文已保留，请重新发送')
+  }
   const selection = await readModelSelection(ctx, childId)
   if (!selection) return undefined
   const parent = retainSession(ctx, parentId)
@@ -36,6 +42,9 @@ export async function prepareCachedContext(ctx: Context, parentId: string, child
     // Live stream rows use fractional positions and cannot be native fork cuts.
     const cut = unfinishedCompactionCut(binding?.session) ?? window?.entries.findLast(({ event }) => Number.isSafeInteger(event.seq))?.event.seq
     if (cut === undefined || cut <= boundary || cut < 0) return undefined
+    // A new fork must not silently inherit the parent's newer access policy.
+    if (window?.entries.some(({ event }) => event.seq > boundary && event.seq <= cut
+      && ['permission/preset', 'sandbox/mode', 'approval/policy'].includes(event.type))) return undefined
     if (!window?.entries.some(({ event }) => event.seq > boundary && event.seq <= cut
       && ['system/message', 'developer/message', 'user/message', 'assistant/message', 'tool/result'].includes(event.type))) return undefined
     const text = buildMainlineSnapshot(ctx, parentId, new Date(), cut)
@@ -71,11 +80,8 @@ export async function prepareCachedContext(ctx: Context, parentId: string, child
       if (!await writeModelSelection(ctx, sessionId, selection)) throw new Error('无法保留侧聊模型选择，内容已保留')
       const input = resolveInput(ctx, sessionId)
       if (!input) throw new Error('侧聊输入尚未就绪，内容已保留')
-      const current = await readModelSelection(ctx, childId)
-      if (current?.provider !== selection.provider || current?.model !== selection.model || current?.reasoningEffort !== selection.reasoningEffort) throw new Error('准备期间侧聊模型已改变，请重新发送')
-      if (!canRefreshContext(child, boundary)) throw new Error('准备期间侧聊已产生新内容，请重新发送')
-      checkOpen()
-      return { text, boundary: cut, sessionId, input, adopt: () => { adopted = true }, dispose }
+      assertCurrent()
+      return { text, boundary: cut, sessionId, input, adopt: (activate: () => void) => { assertCurrent(); activate(); adopted = true }, dispose }
     } catch (error) { await dispose(); throw error }
     finally { finish() }
   } finally { parent?.release() }

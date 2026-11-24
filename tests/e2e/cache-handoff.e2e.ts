@@ -6,6 +6,33 @@ test.afterEach(async ({ page }, info) => {
   if (info.status !== info.expectedStatus) await page.screenshot({ path: info.outputPath('failure.png') })
 })
 
+test('cache handoff keeps the side permission when the parent changes access mode', async ({ page }) => {
+  await prepareSeedPage(page)
+  const mainId = process.env.DSH_E2E_SEED_SESSION!
+  const main = page.locator(`[data-conversation-session="${mainId}"]`)
+  await selectModel(page, main, 'Controlled E2E')
+  const access = /^(Access mode, current:|访问模式，当前：)/
+  await main.getByRole('button', { name: access }).click()
+  await page.getByRole('menuitem', { name: /Read.only|只读/i }).click()
+  await expect(main.getByRole('button', { name: access })).toHaveAccessibleName(/Read.only|只读/i)
+  const original = await openSideChat(page)
+  const side = sideChatOf(page)
+  await selectModel(page, side, 'Controlled E2E')
+  await expect(side.getByRole('button', { name: access })).toHaveAccessibleName(/Read.only|只读/i)
+  await main.getByRole('button', { name: access }).click()
+  await page.getByRole('menuitem', { name: /Workspace Write|工作区内修改/ }).click()
+  const update = 'Parent update after changing permission; do not call tools.'
+  await main.locator('[data-composer-input]').fill(update)
+  await main.locator('[data-composer-input]').press('Enter')
+  await expect.poll(() => userMessagesOf(mainId).includes(update) && sessionEventsOf(mainId).at(-1)?.type === 'turn/end').toBe(true)
+  const question = 'Keep my side chat read-only; answer without tools.'
+  await side.locator('[data-composer-input]').fill(question)
+  await side.locator('[data-composer-input]').press('Enter')
+  await expect.poll(async () => userMessagesOf((await side.getAttribute('data-sidenote-chat-session'))!).some(text => text.endsWith(question))).toBe(true)
+  await expect(side.getByRole('button', { name: access })).toHaveAccessibleName(/Read.only|只读/i)
+  await expect(side).toHaveAttribute('data-sidenote-chat-session', original)
+})
+
 for (const failure of ['storage', 'closed']) test(`cache handoff preserves the draft without sending after ${failure}`, async ({ page }) => {
   await prepareSeedPage(page)
   const mainId = process.env.DSH_E2E_SEED_SESSION!

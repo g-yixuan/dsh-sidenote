@@ -32,8 +32,9 @@ describe('cache-preserving first send', () => {
     const input = { state: { getSnapshot: () => ({ phase: 'plain' }) }, draftSnapshot: { quotes: [{}] } } as unknown as SessionInput
     expect(canTransferDraft(input)).toBe(false)
   })
-  it('uses one exact native fork cut and freezes the uncommitted tail before fork resolves', async () => {
+  it.each([undefined, 'permission/preset', 'sandbox/mode', 'approval/policy'])('uses the exact fork cut unless the parent access policy changes: %s', async policy => {
     const entries = [event(0, 'turn/start'), event(1, 'user/message'), event(2, 'assistant/message'), event(2.5, 'assistant/stream')]
+    if (policy) entries.push(event(3, policy))
     let partial = 'unfinished at click'
     const parent = session(entries, { getSnapshot: () => ({ running: true, nodes: [], partial }) })
     const child = session([event(0, 'session/end-seed'), event(1, 'model/selection')], {
@@ -55,21 +56,28 @@ describe('cache-preserving first send', () => {
       get: (name: string) => name === 'remote.session' ? { selectModel } : name === 'conversation' ? { input: { for: () => input } } : undefined,
     } as unknown as Context
     const prepared = await prepareCachedContext(ctx, 'parent', 'child', -1)
+    if (policy) {
+      expect(prepared).toBeUndefined()
+      expect(fork).not.toHaveBeenCalled()
+      expect(releases).toEqual(['parent'])
+      return
+    }
     expect(fork).toHaveBeenCalledWith({ sessionId: 'parent', atSeq: 2 })
     expect(prepared?.text).toContain('unfinished at click')
     expect(prepared?.text).not.toContain('later output')
     expect(selectModel).toHaveBeenCalledWith({ sessionId: 'new-child', provider: 'test', model: 'flash', reasoningEffort: 'low' })
     expect(releases).toEqual(['parent'])
-    prepared!.adopt()
+    prepared!.adopt(() => {})
     await prepared!.dispose()
     expect(releases).toEqual(['parent', 'new-child'])
     expect(ctx.workspaces.archiveSession).not.toHaveBeenCalled()
   })
 
-  it.each(['unused', 'fork-cancelled', 'model-failed', 'adopted', 'referenced', 'user-message', 'running', 'archive-failed'])(
+  it.each(['unused', 'fork-cancelled', 'model-failed', 'adopted', 'referenced', 'user-message', 'running', 'archive-failed', 'late-model/selection', 'late-permission/preset', 'late-user/message'])(
     'archives only unused, unpublished candidates and releases them: %s', async scenario => {
       const controller = new AbortController()
-      const child = session([event(0, 'session/end-seed')], { projections: { faceOf: () => ({ getSnapshot: () => ({ next: { provider: 'test', model: 'flash' } }) }) } })
+      const childEvents = [event(0, 'session/end-seed')]
+      const child = session(childEvents, { projections: { faceOf: () => ({ getSnapshot: () => ({ next: { provider: 'test', model: 'flash' } }) }) } })
       const targetEvents = [event(3, 'session/end-seed', { inherited: true }), event(4, 'tool/result'), event(5, 'step/end'), event(6, 'turn/end')]
       const target = session(targetEvents, { getSnapshot: () => ({ running: scenario === 'running', nodes: [] }) })
       const bindings = { parent: { session: session([event(1, 'user/message'), event(2, 'assistant/message')]) }, child: { session: child }, fresh: { session: target } }
@@ -88,9 +96,15 @@ describe('cache-preserving first send', () => {
       if (scenario === 'fork-cancelled' || scenario === 'model-failed') await expect(prepareCachedContext(ctx, 'parent', 'child', -1, controller.signal)).rejects.toThrow(scenario === 'fork-cancelled' ? '关闭' : '模型')
       else {
         const prepared = (await prepareCachedContext(ctx, 'parent', 'child', -1, controller.signal))!
-        if (scenario === 'adopted') prepared.adopt()
+        if (scenario === 'adopted') prepared.adopt(() => {})
         if (scenario === 'referenced') writeSideChatMeta({ sessionId: 'parent', tabId: 'tab', childId: 'fresh', createdAt: 1, number: 1 })
         if (scenario === 'user-message') targetEvents.push(event(7, 'user/message'))
+        if (scenario.startsWith('late-')) {
+          childEvents.push(event(1, scenario.slice(5)))
+          const activate = vi.fn()
+          expect(() => prepared.adopt(activate)).toThrow('已改变')
+          expect(activate).not.toHaveBeenCalled()
+        }
         await prepared.dispose()
       }
       expect(archive).toHaveBeenCalledTimes(['adopted', 'referenced', 'user-message', 'running'].includes(scenario) ? 0 : 1)

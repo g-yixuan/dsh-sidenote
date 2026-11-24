@@ -35,7 +35,7 @@ export function useMainContext(ctx: Context, parentSessionId: string, childId: s
     const cached = activate ? await prepareCachedContext(ctx, parentSessionId, childId, boundary, signal) : undefined
     if (cached) {
       sending.current = splitSnapshotPrefix(cached.text)
-      return { text: cached.text, signal, target: { ...cached, activate: () => { activate!(cached.sessionId, cached.boundary); cached.adopt() } } }
+      return { text: cached.text, signal, target: { ...cached, activate: () => cached.adopt(() => activate!(cached.sessionId, cached.boundary)) } }
     }
     const text = await loadMainlineSnapshot(ctx, parentSessionId, boundary)
     sending.current = splitSnapshotPrefix(text)
