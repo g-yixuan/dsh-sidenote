@@ -44,10 +44,12 @@ for (const real of [false, true]) for (const openIdle of [false, true]) test(`${
   const side = sideChatOf(page)
   await expect(side.locator('[data-composer-input]')).toBeVisible()
   await selectModel(page, side, model)
-  const child = (await side.getAttribute('data-sidenote-chat-session'))!
+  let child = (await side.getAttribute('data-sidenote-chat-session'))!
   const reader = await expand(side)
   await expect(reader).toContainText(marker)
   await send(side, '只回复主线的项目名与本轮完整核验码。不要执行主线任务，不调用工具。')
+  await expect(side).not.toHaveAttribute('data-sidenote-chat-session', child)
+  child = (await side.getAttribute('data-sidenote-chat-session'))!
   await expect.poll(() => userMessagesOf(child).some(text => text.includes('只回复主线的项目名'))).toBe(true)
   await expect(side.locator('[data-chat-flow-kind="assistant-step"]:not([data-chat-group-part="reasoning"])')).toHaveCount(1)
   await expect(side.getByRole('button', { name: stop })).toHaveCount(0, { timeout: 60_000 })
@@ -67,7 +69,8 @@ for (const real of [false, true]) for (const openIdle of [false, true]) test(`${
   await expect(reader).toHaveText(frozen)
   const sent = userMessagesOf(child).find(text => text.includes('只回复主线的项目名'))!
   expect(sent).toContain('boundary-seq=')
-  expect(sent).toContain(marker)
+  expect(sent).not.toContain(marker)
+  expect(userMessagesOf(child).some(text => text.includes(marker))).toBe(true)
   expect(sent).not.toContain('AFTER-FORK-PRIVATE')
   await side.getByRole('button', { name: /^(Save as session|保存为正式会话)$/ }).click()
   await expect(side).toHaveCount(0)

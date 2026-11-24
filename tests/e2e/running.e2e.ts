@@ -188,7 +188,7 @@ test('busy fork after repeated steering keeps side messages and answers outside 
   }
   await expect.poll(() => sessionEventsOf(mainId).filter(event => event.seq > before && event.type === 'tool/result').length).toBe(3)
   expect(sessionEventsOf(mainId).filter(event => event.seq > before && event.type === 'turn/start')).toHaveLength(1)
-  const child = await openSideChat(page)
+  let child = await openSideChat(page)
   const side = sideChatOf(page)
   const context = side.locator('[data-sidenote-main-context]')
   await context.locator(':scope > button').click()
@@ -206,6 +206,7 @@ test('busy fork after repeated steering keeps side messages and answers outside 
     // read-only draft while admission is pending. RC hosts show a local echo.
     await expect(echo.or(sendingDraft).filter({ hasText: question }).first()).toBeInViewport()
     if (await echo.count() > 0) await expect(echo).not.toContainText('mainline-progress-snapshot')
+    child = (await side.getAttribute('data-sidenote-chat-session'))!
     expect(userMessagesOf(child).some(text => text.includes(question))).toBe(false)
     await expect(context.locator(':scope > button')).toBeVisible()
   } finally { release() }
