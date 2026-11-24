@@ -82,7 +82,7 @@ function ContextComposer({ Original, props, ctx, annotations, reflow }: { Origin
   const disabled = pending || input?.phase !== 'plain' || props.disabled || props.blocked !== undefined || session?.removed || offline || !keyboard || !props.inputActions
   const mode = session?.running ? busyMode : undefined
   const label = props.t(session?.running ? mode === 'steer' ? 'input.send.steer' : 'input.send.queue' : 'input.send')
-  return <div className={css.userContextHost} ref={root}>
+  return <div className={css.composerHost} ref={root}>
     {createElement(Original, { ...props, keyboard, useInput })}
     {contextOnly && nativeButton && createPortal(<button type="button" data-sidenote-submit className={nativeButton.className} disabled={disabled} aria-label={label} title={label} onClick={() => { keyboard?.submit(mode, 'click') }}>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6" /></svg>

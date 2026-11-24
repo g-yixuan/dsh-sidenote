@@ -11,6 +11,38 @@ import { openSideChat, prepareSeedPage, registerSeedWorkspace, sideChatOf } from
 
 test.beforeAll(registerSeedWorkspace)
 
+for (const target of ['主聊', '侧聊'] as const) test(`${target}输入框保留外部槽位的 flex 排序`, async ({ page }) => {
+  await prepareSeedPage(page)
+  if (target === '侧聊') await openSideChat(page)
+  const view = target === '侧聊' ? sideChatOf(page) : page.locator('[data-conversation-session]').first()
+  const slot = view.locator('[data-slot="conversation.composer.bar"]')
+
+  // Reproduce a skin sorting slot children without assuming the plugin's wrapper class.
+  await slot.evaluate(element => {
+    const stack = element.parentElement!
+    stack.dataset.composerLayoutTest = ''
+    stack.style.cssText += '; display: flex; flex-direction: column; height: 400px; width: min(100%, 360px)'
+    const panel = document.createElement('div')
+    panel.dataset.composerLayoutPanel = ''
+    panel.textContent = '输入框应排在此内容区下方'
+    panel.style.cssText = 'order: 1; flex: 1; min-height: 120px'
+    stack.prepend(panel)
+  })
+  await page.addStyleTag({ content: '[data-composer-layout-test] > [data-slot="conversation.composer.bar"] > * { order: 3; }' })
+
+  const card = slot.locator('[data-composer-card]')
+  const panel = view.locator('[data-composer-layout-panel]')
+  await card.scrollIntoViewIfNeeded()
+  const cardBounds = (await card.boundingBox())!
+  const panelBounds = (await panel.boundingBox())!
+  const stackBounds = (await slot.locator('..').boundingBox())!
+  expect(cardBounds.y).toBeGreaterThanOrEqual(panelBounds.y + panelBounds.height)
+  expect(cardBounds.width).toBeGreaterThan(200)
+  expect(cardBounds.x).toBeGreaterThanOrEqual(stackBounds.x)
+  expect(cardBounds.x + cardBounds.width).toBeLessThanOrEqual(stackBounds.x + stackBounds.width)
+  await page.screenshot({ path: `test-results/composer-layout-${target === '主聊' ? 'main' : 'side'}.png` })
+})
+
 test('侧聊入口和工具栏使用宿主提示，禁用时仍能悬停查看原因', async ({ page }) => {
   await prepareSeedPage(page)
   const header = page.getByRole('button', { name: /Open a side chat|打开侧边聊天/ }).first()

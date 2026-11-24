@@ -37,6 +37,8 @@
 @media (prefers-reduced-motion: reduce) { .contextPanel { animation: none; } .chip, .chipDismissShade, .chipDismiss, .contextItem, .contextAction { transition: none; } }
 
 .userContextHost { display: contents; }
+/* Slot-level flex order must target a box, including when another plugin styles it. */
+.composerHost { display: block; min-width: 0; }
 :global([data-sidenote-context-replaced]) { display: none !important; }
 .sentChips { display: inline; white-space: normal; }
 .sentChipGroup { display: inline; }
