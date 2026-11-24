@@ -198,3 +198,60 @@ test('native quotation layout stays within main and side at narrow widths', asyn
     await page.screenshot({ path: `test-results/sidenote-narrow-${name}.png` })
   }
 })
+
+test('header button preference survives reload and restart while side chat remains usable', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', error => errors.push(String(error)))
+  await prepareSeedPage(page)
+  const header = page.getByRole('button', { name: /^(Open a side chat|打开侧边聊天)/ }).first()
+  const setShown = async (show: boolean): Promise<void> => {
+    await openGeneralSettings(page)
+    const dialog = page.getByRole('dialog', { name: /^(Settings|设置)$/ })
+    await dialog.getByRole('button', { name: 'Sidenote', exact: true }).click()
+    const toggle = dialog.getByRole('switch', { name: /^(Show the Side button in the header|显示顶栏侧边按钮)$/ })
+    await expect(toggle).toBeEnabled()
+    if (await toggle.getAttribute('aria-checked') !== String(show)) await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-checked', String(show))
+    await expect(toggle).toBeEnabled()
+    await expect(dialog.getByRole('alert')).toHaveCount(0)
+    await page.screenshot({ path: `test-results/header-button-${show ? 'shown' : 'hidden'}.png` })
+    await dialog.getByRole('button', { name: /^(Close(?: settings)?|关闭(?:设置)?)$/i }).click()
+  }
+  try {
+    await expect(header).toBeVisible()
+    await setShown(false)
+    await expect(header).toHaveCount(0)
+    await page.reload()
+    await expect(page.locator('[data-conversation-session]').first()).toBeVisible()
+    await expect(header).toHaveCount(0)
+    await restartHost(page)
+    await prepareSeedPage(page)
+    await expect(header).toHaveCount(0)
+    const main = page.locator('[data-conversation-session]').first()
+    await inputOf(main).fill('/side')
+    await page.getByRole('option', { name: /^side /i }).click()
+    await page.getByRole('option', { name: /^(New side chat|新建侧边聊天)/ }).first().click()
+    const side = sideChatOf(page)
+    await expect(side.locator('[data-composer-input]')).toBeVisible()
+    const childId = (await side.getAttribute('data-sidenote-chat-session'))!
+    expect(childId).toBeTruthy()
+    expect(childId).not.toBe(process.env.DSH_E2E_SEED_SESSION)
+    await selectModel(page, side, 'Controlled E2E')
+    const message = `Header preference side message ${randomUUID()}`
+    await submit(side, childId, message)
+    expect(userMessagesOf(process.env.DSH_E2E_SEED_SESSION!)).not.toContain(message)
+    await page.getByRole('button', { name: /^(New tab|新标签页)$/ }).click()
+    await page.locator('[data-sidebar-right-guide-entry="dsh-sidenote:side"]').click()
+    await expect(side).not.toHaveAttribute('data-sidenote-chat-session', childId)
+    await expect(side.locator('[data-composer-input]')).toBeVisible()
+    const sidebarChildId = await side.getAttribute('data-sidenote-chat-session')
+    await page.screenshot({ path: 'test-results/header-hidden-side-chat.png' })
+    await setShown(true)
+    await expect(header).toBeVisible()
+    await header.click()
+    await expect(side).toHaveAttribute('data-sidenote-chat-session', sidebarChildId!)
+    expect(errors).toEqual([])
+  } finally {
+    await setShown(true)
+  }
+})

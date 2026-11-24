@@ -7,13 +7,14 @@ import { registerNativeConversation } from './NativeConversation.tsx'
 import { registerNativeSideChatTab } from './native-tab.tsx'
 import { captureSideChatTarget } from './target.ts'
 import { t } from '../locales.ts'
+import type { SidenotePreferences } from '../preferences.ts'
 import { registerHeaderEntry } from './header.tsx'
 import { registerSideCommand } from './slash.ts'
 import { registerSideChatReferenceSource } from './referenceSource.ts'
 import { registerToastHost } from './toast.tsx'
 import { registerCompletionNotify } from './notify.ts'
 
-export function registerSideChat(ctx: Context, reflow: ReflowStore, annotations: AnnotationStore): void {
+export function registerSideChat(ctx: Context, reflow: ReflowStore, annotations: AnnotationStore, preferences: SidenotePreferences): void {
   // Both admitted hosts share the native Conversation and sidebar registration.
   registerNativeConversation(ctx)
   registerNativeSideChatTab(ctx, reflow, annotations)
@@ -31,8 +32,8 @@ export function registerSideChat(ctx: Context, reflow: ReflowStore, annotations:
   registerSideCommand(ctx)
   // WI-04：主输入框 @ 引用侧边聊天（触发源 + codec 序列化）。
   registerSideChatReferenceSource(ctx)
-  // 顶栏「侧边」入口（发现性）：会话头部右上角常驻按钮。
-  registerHeaderEntry(ctx)
+  // 顶栏「侧边」入口随用户偏好显示。
+  registerHeaderEntry(ctx, preferences)
   // 全局瞬态通知宿主（P4：转正确认等跨 Tab 寿命的反馈）。
   registerToastHost(ctx)
   // 完成通知（WI-03）：侧聊 running 翻转 → toast。

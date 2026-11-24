@@ -15,6 +15,15 @@ function SidenoteSettings({ preferences }: { preferences: SidenotePreferences })
     <section className={css.page} aria-labelledby={`${id}-title`}>
       <h2 id={`${id}-title`} className={css.title}>Sidenote</h2>
       <p className={css.description}>{t('settingsDescription')}</p>
+      <div className={css.row} role="group" aria-labelledby={`${id}-header-label`} aria-describedby={`${id}-header-description`}>
+        <div className={css.copy}>
+          <span id={`${id}-header-label`} className={css.label}>{t('showHeaderButton')}</span>
+          <p id={`${id}-header-description`} className={css.hint}>{t('showHeaderButtonHint')}</p>
+        </div>
+        <Switch checked={state.showHeaderButton} label={t('showHeaderButton')} title={t('showHeaderButtonHint')}
+          disabled={state.status !== 'ready' || !state.writable || state.saving}
+          onChange={show => { void preferences.setShowHeaderButton(show) }} />
+      </div>
       <div className={css.row} role="group" aria-labelledby={`${id}-label`} aria-describedby={`${id}-description`}>
         <div className={css.copy}>
           <span id={`${id}-label`} className={css.label}>{t('hideNativeQuote')}</span>
