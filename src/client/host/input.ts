@@ -46,6 +46,15 @@ export function inputAttachmentIds(input: SessionInput): readonly string[] {
   return state.attachmentIds ?? state.imageIds ?? []
 }
 
+/** shortcut: rich drafts stay in their original session until the host provides
+ * a public transfer verb preserving reference nodes and attachment ownership. */
+export function canTransferDraft(input: SessionInput): boolean {
+  const state = input.state.getSnapshot()
+  const document = (input as SessionInput & { draftSnapshot?: { quotes?: readonly unknown[] } }).draftSnapshot
+  return state.phase === 'plain' && inputAttachmentIds(input).length === 0
+    && !state.occurrences?.length && !document?.quotes?.length
+}
+
 export function addInputAttachments(input: SessionInput, ids: readonly string[]): boolean {
   if (typeof input.addAttachments === 'function') return input.addAttachments(ids)
   return input.addImages?.(ids) ?? false

@@ -1,4 +1,5 @@
 import type { ContextImages } from '../host/attachments.ts'
+import type { SessionInput } from '../host/contracts.ts'
 /** Extra context belongs to one mounted conversation; the native input still owns submission. */
 export interface SubmissionExtras {
   needsFirstSend(): boolean
@@ -12,4 +13,8 @@ export function registerSubmissionExtras(sessionId: string, value: SubmissionExt
   extras.set(sessionId, value)
   return () => { if (extras.get(sessionId) === value) extras.delete(sessionId) }
 }
-export interface SubmissionContext { text: string; images?: ContextImages }
+export interface SubmissionContext {
+  text: string
+  images?: ContextImages
+  target?: { sessionId: string; input: SessionInput; activate(): void; dispose(): void }
+}

@@ -1,12 +1,12 @@
 import type { Context, SessionInput } from '../host/contracts.ts'
-import { prependInputText, rollbackInputPrefix, cancelInputRollback } from '../host/input.ts'
+import { prependInputText, rollbackInputPrefix, cancelInputRollback, canTransferDraft } from '../host/input.ts'
 import { prepareSubmission } from '../host/submission.ts'
 import type { Annotation, AnnotationStore } from './model.ts'
 import { buildProtocolBlock } from './format.ts'
 import { resolveInput, inputAttachmentIds, addInputAttachments, removeInputAttachment } from '../host/input.ts'
 import { prepareContextImages, type ContextImages } from '../host/attachments.ts'
 import type { ReflowItem, ReflowStore } from '../reflow.ts'
-import { submissionExtrasOf } from './submissionExtras.ts'
+import { submissionExtrasOf, type SubmissionContext } from './submissionExtras.ts'
 import { t } from '../locales.ts'
 
 /** Main and side composers use this same native transaction and acceptance boundary. */
@@ -79,7 +79,7 @@ export async function submitAnnotations(options: {
 /** Shared by native input gestures and the explicit annotation/reflow actions. */
 export async function submitControlledInput(ctx: Context, store: AnnotationStore, reflow: ReflowStore, sessionId: string, mode?: 'queue' | 'steer'): Promise<boolean> {
   if (store.getSubmission(sessionId).pending) return false
-  const input = resolveInput(ctx, sessionId)
+  let input = resolveInput(ctx, sessionId)
   if (!input) { store.setSubmission(sessionId, { pending: false, error: t('inputUnavailable') }); return false }
   const draft = input.state.getSnapshot()
   if (draft.phase !== 'plain' || draft.draft.trimStart().startsWith('/')) return false
@@ -87,11 +87,25 @@ export async function submitControlledInput(ctx: Context, store: AnnotationStore
   const reflows = reflow.list(sessionId)
   if (draft.draft.trim() === '' && inputAttachmentIds(input).length === 0 && active.length === 0 && reflows.length === 0) return false
   const extras = submissionExtrasOf(sessionId)
+  const originalId = sessionId
+  let prefix: SubmissionContext | null | undefined
   store.setSubmission(sessionId, { pending: true })
   try {
-    const prefix = await extras?.firstSendPrefix()
+    prefix = await extras?.firstSendPrefix()
     const current = input.state.getSnapshot()
     if (current.draft !== draft.draft || current.draftRev !== draft.draftRev) throw new Error('加载上下文期间草稿已改变；内容已保留，请重新发送')
+    if (prefix?.target) {
+      const target = prefix.target
+      if (!canTransferDraft(input) || store.countActive(sessionId) || reflow.list(sessionId).length) throw new Error('加载上下文期间新增了引用或附件；内容已保留，请重新发送')
+      if (!canTransferDraft(target.input) || target.input.state.getSnapshot().draft !== '') throw new Error('新侧聊输入已有内容，请重新发送')
+      target.input.setDraft(draft.draft)
+      if (target.input.state.getSnapshot().draft !== draft.draft) throw new Error('无法保留侧聊草稿，请重新发送')
+      target.activate()
+      input.setDraft('')
+      sessionId = target.sessionId
+      input = target.input
+      store.setSubmission(sessionId, { pending: true })
+    }
     // Context and body must share one host admission and delivery window.
     // An independent inject can run before a queued message or be repeated
     // when its acknowledgement arrives after the client timeout.
@@ -106,6 +120,8 @@ export async function submitControlledInput(ctx: Context, store: AnnotationStore
     store.setSubmission(sessionId, { pending: false, error: error instanceof Error ? error.message : String(error) })
     return false
   } finally {
+    prefix?.target?.dispose()
+    if (originalId !== sessionId) store.setSubmission(originalId, { pending: false })
     store.setSubmission(sessionId, { ...store.getSubmission(sessionId), pending: false })
   }
 }

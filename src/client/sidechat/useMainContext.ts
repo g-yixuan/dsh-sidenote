@@ -6,6 +6,8 @@ import { transcriptOf } from '../chat/transcript.ts'
 import { contextEntriesOf, contextHistory, savedContextOf } from './context.ts'
 import { snapshotImages, type ImageBlock } from '../../snapshotProtocol.ts'
 import { effectiveContextNodes, loadMainlineSnapshot, snapshotEntriesFromText, snapshotEntriesOf, splitSnapshotPrefix } from './snapshot.ts'
+import { prepareCachedContext } from './cache.ts'
+import type { SubmissionContext } from '../annotations/submissionExtras.ts'
 
 const noop = () => () => {}
 
@@ -22,19 +24,24 @@ export function useMainContext(ctx: Context, parentSessionId: string, childId: s
   const messages = useMemo(() => transcriptOf(legacy), [legacy])
   const sending = useRef<ReturnType<typeof splitSnapshotPrefix>>(null)
   const [accepted, setAccepted] = useState<(NonNullable<ReturnType<typeof splitSnapshotPrefix>> & { content?: readonly ImageBlock[] }) | null>(null)
+  const saved = useMemo(() => boundarySeq === undefined ? undefined : savedContextOf(legacy?.nodes ?? [], childWindow?.entries ?? [], childWindow?.hasMore, boundarySeq), [legacy, childWindow, boundarySeq]) ?? accepted
   const pending = useRef(forkedMidTurn)
-  pending.current = forkedMidTurn && !accepted
-  const firstSendPrefix = useCallback(async () => {
+  pending.current = forkedMidTurn && !saved
+  const firstSendPrefix = useCallback(async (activate?: (id: string, boundary: number) => void): Promise<SubmissionContext | null> => {
     if (!pending.current) return null
     if (!childId) throw new Error('侧聊上下文尚未就绪，请稍后重试')
     const boundary = snapshotOnly ? -1 : await loadForkBoundary(session)
+    const cached = activate ? await prepareCachedContext(ctx, parentSessionId, childId, boundary) : undefined
+    if (cached) {
+      sending.current = splitSnapshotPrefix(cached.text)
+      return { text: cached.text, target: { ...cached, activate: () => activate!(cached.sessionId, cached.boundary) } }
+    }
     const text = await loadMainlineSnapshot(ctx, parentSessionId, boundary)
     sending.current = splitSnapshotPrefix(text)
     const attachments = snapshotImages(text)
     return { text, ...(attachments.length ? { images: { sessionId: parentSessionId, attachments } } : {}) }
   }, [ctx, parentSessionId, childId, session, snapshotOnly])
   const accept = useCallback(() => { if (sending.current) setAccepted(sending.current) }, [])
-  const saved = useMemo(() => boundarySeq === undefined ? undefined : savedContextOf(legacy?.nodes ?? [], childWindow?.entries ?? [], childWindow?.hasMore, boundarySeq), [legacy, childWindow, boundarySeq]) ?? accepted
   const preview = forkedMidTurn && !saved
   const parent = preview ? ctx.sessions.binding(parentSessionId)?.session : undefined
   const parentChat = useMemo(() => preview ? chatSourceOf(ctx, ctx.sessions.binding(parentSessionId)) : undefined, [ctx, parentSessionId, parent, preview])

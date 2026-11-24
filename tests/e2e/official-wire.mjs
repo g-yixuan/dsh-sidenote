@@ -1,6 +1,7 @@
 /** Passive metadata only: no headers, prompts, tool arguments or response text.
  * Requests go directly from the native adapter to the official API unchanged. */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 export const name = 'sidenote-e2e-official-wire'
 export function apply(ctx, config) {
   const records = existsSync(config.output) ? JSON.parse(readFileSync(config.output, 'utf8')) : []
@@ -13,6 +14,9 @@ export function apply(ctx, config) {
       const lastUser = body.messages?.findLast(message => message.role === 'user')
       const lastUserImageCount = Array.isArray(lastUser?.content) ? lastUser.content.filter(block => block.type === 'image_url').length : 0
       const record = { model: body.model, protocol: String(url).includes('/anthropic/') ? 'messages' : 'chat-completions', thinking: body.thinking ?? null, reasoningEffort: body.reasoning_effort ?? null, reasoningCharacters: 0, toolDeltas: 0, lastUserImageCount }
+      const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex')
+      record.messageHashes = body.messages?.map(hash)
+      record.toolsHash = hash(body.tools ?? [])
       records.push(record)
       const response = await original.call(this, url, init)
       record.status = response.status
@@ -25,6 +29,8 @@ export function apply(ctx, config) {
           for (const line of lines) {
             if (!line.startsWith('data: ') || line === 'data: [DONE]') continue
             const event = JSON.parse(line.slice(6))
+            if (event.model) record.responseModel = event.model
+            if (event.usage) record.usage = event.usage
             if (event.type === 'message_stop') { record.finished = true; write(); return }
             const delta = event.choices?.[0]?.delta
             record.reasoningCharacters += delta?.reasoning_content?.length ?? 0

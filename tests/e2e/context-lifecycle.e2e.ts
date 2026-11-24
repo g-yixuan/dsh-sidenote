@@ -38,7 +38,7 @@ for (const real of [false, true]) test(`${real ? 'official Flash' : 'native'} ze
   const sideStop = side.getByRole('button', { name: stopName })
   try {
     await expect(side.locator('[data-composer-input]')).toBeVisible()
-    const child = (await side.getAttribute('data-sidenote-chat-session'))!
+    let child = (await side.getAttribute('data-sidenote-chat-session'))!
     expect(sessionEventsOf(child).some(event => event.type === 'session/end-seed')).toBe(false)
     expect(sessionEventsOf(mainId).some(event => event.type === 'turn/end')).toBe(false)
     const toggle = side.locator('[data-sidenote-main-context] > button')
@@ -54,6 +54,7 @@ for (const real of [false, true]) test(`${real ? 'official Flash' : 'native'} ze
     await expect(side.getByRole('button', { name: /^(Send message|发送消息)$/ })).toBeEnabled()
     await side.locator('[data-composer-input]').press('Enter')
     await expect(sideStop).toBeVisible()
+    child = (await side.getAttribute('data-sidenote-chat-session'))!
     await expect(side.locator('[data-chat-running]')).toHaveCount(1)
     await expect(side.locator('[data-chat-flow-kind="user"]')).toHaveCount(1)
     await contextPrecedesOwnMessages(side)

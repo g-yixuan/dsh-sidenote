@@ -7,6 +7,8 @@ import { activeNativeTabOf } from '../host/tabs.ts'
 import { loadForkBoundary, sessionStatusSource } from '../host/chat.ts'
 import { useMainContext } from './useMainContext.ts'
 import { useComposer } from './composer.ts'
+import { canTransferDraft, resolveInput } from '../host/input.ts'
+import { createFoldStore } from '../chat/viewState.ts'
 import { SIDE_TAB_TYPE, appendDraftText, clearPendingDraft, pairQuestions, parseSideChatMeta, phaseOf } from './model.ts'
 import { StateScreen } from './rows.tsx'
 import { ensurePanelOpen, forkAndRegister, openSession, openSessionWindow, retainSession, saveSideChatSession, setSideChatTopic, unarchiveSideSession, updateTabMeta } from './lifecycle.ts'
@@ -77,7 +79,18 @@ export function SideChatPanel(props: TabComponentProps & { closeSource: () => vo
   contextRef.current = context
   const extras = useMemo(() => ({
     needsFirstSend: (): boolean => contextRef.current.contextPending === true,
-    firstSendPrefix: () => contextRef.current.firstSendPrefix(),
+    firstSendPrefix: () => {
+      const previousId = metaRef.current.childId
+      const input = previousId ? resolveInput(ctx, previousId) : undefined
+      const transferable = previousId && input && canTransferDraft(input)
+        && props.annotations.countActive(previousId) === 0 && props.reflow.list(previousId).length === 0
+      return contextRef.current.firstSendPrefix(transferable ? (id, boundary) => {
+        if (metaRef.current.childId !== previousId) throw new Error('侧聊已切换，内容已保留')
+        const expanded = createFoldStore(`dsh-sidenote:fold:v1:${previousId}`).isOpen('inherited')
+        createFoldStore(`dsh-sidenote:fold:v1:${id}`).setAll(['inherited'], expanded)
+        updateTabMeta(ctx, scope.sessionId, tab.id, current => ({ ...current, childId: id, boundarySeq: boundary, snapshotOnly: undefined }))
+      } : undefined)
+    },
     onAccepted: (): void => {
       contextRef.current.accept()
       updateTabMeta(ctx, scope.sessionId, tab.id, current => ({ ...current, forkedMidTurn: undefined }))
@@ -86,7 +99,7 @@ export function SideChatPanel(props: TabComponentProps & { closeSource: () => vo
       const topic = topicOf(text)
       if (topic && metaRef.current.topic === undefined) setSideChatTopic(ctx, scope.sessionId, tab.id, topic)
     },
-  }), [ctx, scope.sessionId, tab.id])
+  }), [ctx, scope.sessionId, tab.id, props.annotations, props.reflow])
   const composer = useComposer(ctx, session, childId)
   useEffect(() => childId === undefined ? undefined : registerSubmissionExtras(childId, extras), [childId, extras])
   useEffect(() => {
@@ -153,7 +166,7 @@ export function SideChatPanel(props: TabComponentProps & { closeSource: () => vo
   useSyncExternalStore(props.annotations.subscribe, props.annotations.getSnapshot)
   if (phase === 'fork-error') return <StateScreen title={t('forkErrorTitle')} detail={forkError ?? undefined} hint={t('forkErrorHint')} />
   if (phase === 'missing') return <StateScreen title={t('missingTitle')} detail={t('missingDetail')} hint={t('missingHint')} />
-  if (phase !== 'chat' || !reference || !childId) return <StateScreen title={t('preparing')} />
+  if (phase !== 'chat' || !reference || reference.binding.session !== session || !childId) return <StateScreen title={t('preparing')} />
   const side: SideConversation = { sessionId: childId, parentSessionId: meta.parentSessionId ?? scope.sessionId, title: tab.title, boundarySeq, reflow: props.reflow, history, loadImage, progress, loadContext, loadError: boundaryError, loadProgressImage: context.loadProgressImage, contextPending: context.contextPending }
   const replies = finalReplies(messages, boundarySeq, new Set(chat?.getCompletedReplySeqs?.() ?? []))
   const questions = pairQuestions(messages)

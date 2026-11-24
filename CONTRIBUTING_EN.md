@@ -42,6 +42,8 @@ Build before testing: bundle integrity tests use the generated `lib/` output. Fo
 
 Interaction, session orchestration, and host compatibility changes need relevant E2E or manual validation. Example for the direct host path:
 
+To run local host validation in Edge, prefix the command with `DSH_E2E_BROWSER_CHANNEL=msedge`.
+
 ```bash
 pnpm exec playwright install chromium
 BS_VERSION=none DSH_EXPECTED_VERSION=0.2.2-rc.1 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.2-rc.1 dsh" pnpm test:mount

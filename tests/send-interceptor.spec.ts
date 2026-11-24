@@ -4,11 +4,16 @@ import type { Context, SessionInput } from '../src/client/host/contracts.ts'
 import type { ReflowStore } from '../src/client/reflow.ts'
 import { createAnnotationStore } from '../src/client/annotations/model.ts'
 import { registerSubmissionExtras } from '../src/client/annotations/submissionExtras.ts'
+import { submitControlledInput } from '../src/client/annotations/send.ts'
 import { submitNativeWithContext } from '../src/client/annotations/NativeComposer.tsx'
 
 const SESSION = 's1'
 
 interface Harness {
+  ctx: Context
+  input: SessionInput
+  store: ReturnType<typeof createAnnotationStore>
+  reflow: ReflowStore
   send: (mode?: 'queue' | 'steer') => void
   submitted: string[]
   texts: string[]
@@ -97,6 +102,7 @@ function makeHarness(options: { draft?: string; missingInput?: boolean; withAnno
   }
 
   return {
+    ctx, input, store, reflow,
     send: mode => submitNativeWithContext(ctx, store, reflow, SESSION, input.submit.bind(input), mode, 'click'),
     submitted,
     texts,
@@ -144,6 +150,38 @@ describe('native composer context submission', () => {
         expect(harness.error()).toBeTruthy()
         expect(accepted).not.toHaveBeenCalled()
       }
+    } finally { off() }
+  })
+
+  it.each([false, true])('moves a plain first send once and retains the target draft on rejection=%s', async rejected => {
+    const source = makeHarness({ draft: 'first side question', withAnnotation: false })
+    const target = makeHarness({ withAnnotation: false, rejectFirstSend: rejected })
+    const ctx = {
+      ...source.ctx,
+      sessions: { ...source.ctx.sessions,
+        scope: (id: string) => ({ sessionId: id }),
+        binding: (id: string) => (id === SESSION ? source : target).ctx.sessions.binding(id),
+      },
+      get: (name: string) => name === 'conversation' ? { input: { for: (scope: { sessionId: string }) => (scope.sessionId === SESSION ? source : target).input } } : undefined,
+    } as unknown as Context
+    const activate = vi.fn(), dispose = vi.fn(), accepted = vi.fn()
+    const off = registerSubmissionExtras(SESSION, {
+      needsFirstSend: () => true,
+      firstSendPrefix: async () => ({ text: '<mainline-progress-snapshot>tail</mainline-progress-snapshot>', target: { sessionId: 'fresh', input: target.input, activate, dispose } }),
+      onAccepted: accepted, onSubmitText: () => {},
+    })
+    try {
+      expect(await submitControlledInput(ctx, source.store, source.reflow, SESSION)).toBe(!rejected)
+      expect(activate).toHaveBeenCalledOnce()
+      expect(dispose).toHaveBeenCalledOnce()
+      expect(source.texts).toEqual([])
+      expect(source.draft()).toBe('')
+      expect(target.texts).toHaveLength(1)
+      expect(target.texts[0]).toContain('first side question')
+      expect(target.draft()).toBe(rejected ? 'first side question' : '')
+      expect(accepted).toHaveBeenCalledTimes(rejected ? 0 : 1)
+      expect(source.store.getSubmission('fresh').pending).toBe(false)
+      expect(source.store.getSubmission('fresh').error).toBe(rejected ? 'host rejected this send' : undefined)
     } finally { off() }
   })
 
