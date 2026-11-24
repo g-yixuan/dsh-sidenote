@@ -136,8 +136,9 @@ export async function submitControlledInput(ctx: Context, store: AnnotationStore
     store.setSubmission(handedOff ? sessionId : originalId, { pending: false, error: error instanceof Error ? error.message : String(error) })
     return false
   } finally {
-    await prefix?.target?.dispose()
     if (originalId !== sessionId) store.setSubmission(originalId, { ...store.getSubmission(originalId), pending: false })
     store.setSubmission(sessionId, { ...store.getSubmission(sessionId), pending: false })
+    // Candidate cleanup may outlive a retry; it must not overwrite that retry's state.
+    await prefix?.target?.dispose()
   }
 }

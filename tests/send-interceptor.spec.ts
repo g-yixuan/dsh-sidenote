@@ -238,6 +238,36 @@ describe('native composer context submission', () => {
     } finally { off() }
   })
 
+  it('does not clear a retry pending flag when earlier candidate cleanup finishes', async () => {
+    const source = makeHarness({ draft: 'retry this question', withAnnotation: false })
+    const target = makeHarness({ withAnnotation: false })
+    let release!: () => void, resume!: () => void
+    const cleaning = new Promise<void>(resolve => { release = resolve })
+    const preparing = new Promise<void>(resolve => { resume = resolve })
+    let attempts = 0
+    const off = registerSubmissionExtras(SESSION, {
+      needsFirstSend: () => true,
+      firstSendPrefix: async () => {
+        if (++attempts > 1) { await preparing; return { text: 'context' } }
+        return { text: 'context', target: { sessionId: 'fresh', input: target.input, activate: () => { throw new Error('handoff failed') }, dispose: () => cleaning } }
+      },
+      onAccepted: () => {}, onSubmitText: () => {},
+    })
+    let retry: Promise<boolean> | undefined
+    try {
+      const first = submitControlledInput(source.ctx, source.store, source.reflow, SESSION)
+      await flushMicrotasks()
+      expect(source.draft()).toBe('retry this question')
+      retry = submitControlledInput(source.ctx, source.store, source.reflow, SESSION)
+      expect(source.store.getSubmission(SESSION).pending).toBe(true)
+      release()
+      expect(await first).toBe(false)
+      expect(source.store.getSubmission(SESSION).pending).toBe(true)
+    } finally { release(); resume(); await retry; off() }
+    expect(source.texts).toHaveLength(1)
+    expect(source.store.getSubmission(SESSION).pending).toBe(false)
+  })
+
   it.each(['edit', 'failure', 'success'] as const)('preserves first-send context during asynchronous preparation: %s', async outcome => {
     harness = makeHarness({ draft: '原始问题', withAnnotation: false })
     let resolve!: (text: string) => void, reject!: (error: Error) => void
