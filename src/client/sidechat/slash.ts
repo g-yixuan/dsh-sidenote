@@ -1,133 +1,115 @@
-/** /side offers explicit creation, focusing open tabs, and reopening original children. */
+/** /side opens a session-scoped selector for new, open and closed side chats. */
+import { createElement, useSyncExternalStore } from 'react'
 import type { Context } from '../host/contracts.ts'
-import { canForkFrom, collectSideTabs } from './model.ts'
-import { betterSidebarOf, directNativeLeg, focusNativeTab } from './native.ts'
+import { currentSessionIdOf } from '../host/currentSession.ts'
+import { canForkFrom, collectSideTabs, parseSideChatMeta } from './model.ts'
+import { betterSidebarOf, directNativeLeg, focusNativeTab, sideChatOpening } from './native.ts'
 import { createSideChat, reopenSideChat, sideChatTabsOf } from './open.ts'
 import { dropClosedSideChat, listClosedSideChats } from './recentClosed.ts'
 import { formatClosedAt, sideChatTitleOf } from './identity.ts'
 import { t } from '../locales.ts'
+import { SideChatMenu, type SideMenuItem } from './SideChatMenu.tsx'
 
-/** dsh-client-ui-commands ClientSessionContext 的最小镜像（只有 sessionId）。 */
-interface CommandSession {
-  readonly sessionId: string
-}
-
-/** popupSelect 选项行镜像。 */
-interface SelectOption {
-  readonly id: string
-  readonly label: string
-  readonly detail?: string
-}
-
-/** ctx.commandUi 的最小镜像（CommandUiContract.register）。 */
+interface CommandSession { readonly sessionId: string }
 interface CommandUiService {
   register(contribution: {
     readonly name: string
-    // 契约在 0.1.5 从 string 改为 () => string（authority:
-    // dsh-client-ui-commands 0.1.5-rc.2 contract.d.ts `readonly description: () => string`；
-    // 0.1.1~0.1.3 为 string）。传错形状会在候选合成时炸掉整个斜杠菜单
-    // （ui-input-trigger 的 contribution.description() 对 string 抛 TypeError）。
-    readonly description: string | (() => string)
+    readonly description: () => string
     available(session: CommandSession): boolean
-    readonly ui: {
-      readonly kind: 'popupSelect'
-      options(session: CommandSession, signal: AbortSignal): Promise<readonly SelectOption[]>
-      onSelect(option: SelectOption, session: CommandSession): void | Promise<void>
-    }
+    readonly ui: { readonly kind: 'action'; run(session: CommandSession): void }
   }): () => void
 }
 
-/** 0.1.5 信号：`connection.api.sessions` 面在 0.1.5 被删（与模型面迁移同判据）。 */
-function isDsh015Plus(ctx: Context): boolean {
-  const legacy = (ctx as { connection?: { api?: { sessions?: unknown } } }).connection?.api?.sessions
-  return legacy === undefined || legacy === null
-}
-
-/** 单个命令名对应的完整贡献（side / 侧边 共用）。 */
-function makeContribution(ctx: Context, name: string) {
-  return {
-    name,
-    description: isDsh015Plus(ctx) ? () => t('cmdDesc') : t('cmdDesc'),
-    available: (session: CommandSession) => canForkFrom(ctx, session.sessionId),
-    ui: {
-      kind: 'popupSelect' as const,
-      options: (session: CommandSession) => {
-        const options: SelectOption[] = []
-        const native = directNativeLeg(ctx)
-        const lives = native ? sideChatTabsOf(ctx, session.sessionId) : []
-        options.push({ id: 'new', label: t('cmdNew'), detail: t('cmdNewDetail') })
-        // 已并存的侧边聊天列为聚焦项（命令弹层即多实例管理入口）。
-        // Native membership comes from DSH, including not-yet-mounted tabs;
-        // legacy：读布局快照（现状）。
-        if (native) {
-          for (const tab of lives) {
-            const meta = tab.meta
-            options.push({ id: `focus:${tab.id}`, label: t('cmdFocus', { title: meta ? sideChatTitleOf(meta) : tab.title }), detail: t('cmdFocusDetail') })
-          }
-        } else {
-          const snapshot = betterSidebarOf(ctx)?.getSnapshot()
-          if (snapshot !== undefined && snapshot.sessionId === session.sessionId && snapshot.state !== undefined) {
-            for (const tab of collectSideTabs(snapshot.state)) {
-              options.push({ id: `focus:${tab.id}`, label: t('cmdFocus', { title: tab.title }), detail: t('cmdFocusDetail') })
-            }
-          }
-        }
-        const openChildren = new Set(lives.map(tab => tab.meta?.childId))
-        for (const entry of listClosedSideChats(session.sessionId)) {
-          if (openChildren.has(entry.childId)) continue
-          options.push({
-            id: `reopen:${entry.childId}`,
-            label: t('cmdReopen', { title: entry.topic ?? entry.title }),
-            detail: formatClosedAt(entry.closedAt),
-          })
-        }
-        return Promise.resolve(options)
-      },
-      onSelect: (option: SelectOption, session: CommandSession) => {
-        if (option.id === 'new') {
-          // 「新建侧边聊天」必须真新建——既有实例的聚焦项在弹层里另列，
-          // 走 openOrFocusSideChat 会在已有侧边聊天时静默聚焦（标签说谎）。
-          createSideChat(ctx, session.sessionId)
-          return
-        }
-        if (option.id.startsWith('focus:')) {
-          const tabId = option.id.slice('focus:'.length)
-          // native 宿主的 activateTab 是空操作——聚焦走 ISidebarRight.focus 探测；
-          // betterSidebar 缺席（optional peer）时无回退面，跳过。
-          if (!focusNativeTab(ctx, tabId)) betterSidebarOf(ctx)?.activateTab(tabId, { sessionId: session.sessionId })
-          return
-        }
-        if (option.id.startsWith('reopen:')) {
-          const childId = option.id.slice('reopen:'.length)
-          // topic 随重开恢复（Delivery_05）：option 只带 id，回查登记处取条目。
-          const entry = listClosedSideChats(session.sessionId).find(e => e.childId === childId)
-          const opts = entry === undefined ? undefined : {
-            ...(entry.topic !== undefined ? { topic: entry.topic } : {}),
-            ...(entry.savedMeta !== undefined ? { savedMeta: entry.savedMeta } : {}),
-          }
-          if (reopenSideChat(ctx, session.sessionId, childId, opts)) {
-            dropClosedSideChat(session.sessionId, childId)
-          }
-        }
-      },
-    },
+export function sideMenuItems(ctx: Context, sessionId: string): SideMenuItem[] {
+  const items: SideMenuItem[] = [{ kind: 'new', id: 'new', label: t('cmdNew'), detail: t('cmdNewDetail') }]
+  const openChildren = new Set<string>()
+  if (directNativeLeg(ctx)) {
+    for (const tab of sideChatTabsOf(ctx, sessionId)) {
+      const meta = tab.meta
+      const child = meta?.childId ?? sideChatOpening(sessionId, tab.id)?.childId
+      if (child) openChildren.add(child)
+      items.push({ kind: 'focus', id: tab.id, label: t('cmdFocus', { title: meta ? sideChatTitleOf(meta) : tab.title }), detail: t('cmdFocusDetail') })
+    }
+  } else {
+    const snapshot = betterSidebarOf(ctx)?.getSnapshot()
+    if (snapshot?.sessionId === sessionId && snapshot.state !== undefined) {
+      for (const tab of collectSideTabs(snapshot.state)) {
+        const child = parseSideChatMeta(tab.meta).childId
+        if (child) openChildren.add(child)
+        items.push({ kind: 'focus', id: tab.id, label: t('cmdFocus', { title: tab.title }), detail: t('cmdFocusDetail') })
+      }
+    }
   }
+  for (const entry of listClosedSideChats(sessionId)) {
+    if (openChildren.has(entry.childId)) continue
+    const title = entry.topic ?? entry.title
+    items.push({ kind: 'reopen', id: entry.childId, title, label: t('cmdReopen', { title }), detail: formatClosedAt(entry.closedAt) })
+  }
+  return items
 }
 
-/** 注册 /side 与中文别名「/侧边」；不可行时静默降级（不影响 Tab 入口）。 */
+export function selectSideMenuItem(ctx: Context, sessionId: string, item: SideMenuItem): boolean {
+  if (currentSessionIdOf(ctx) !== sessionId) return false
+  if (item.kind === 'new') return createSideChat(ctx, sessionId)
+  if (item.kind === 'focus') {
+    if (!sideMenuItems(ctx, sessionId).some(row => row.kind === 'focus' && row.id === item.id)) return false
+    if (focusNativeTab(ctx, item.id)) return true
+    const sidebar = betterSidebarOf(ctx)
+    if (!sidebar) return false
+    sidebar.activateTab(item.id, { sessionId })
+    return true
+  }
+  const entry = listClosedSideChats(sessionId).find(e => e.childId === item.id)
+  if (!entry) return false
+  if (!reopenSideChat(ctx, sessionId, item.id, { topic: entry.topic, savedMeta: entry.savedMeta })) return false
+  dropClosedSideChat(sessionId, item.id)
+  return true
+}
+
+export function removeSideMenuItem(ctx: Context, sessionId: string, item: SideMenuItem): boolean {
+  if (currentSessionIdOf(ctx) !== sessionId || item.kind !== 'reopen' || !sideMenuItems(ctx, sessionId).some(row => row.kind === 'reopen' && row.id === item.id)) return false
+  return dropClosedSideChat(sessionId, item.id)
+}
+
 export function registerSideCommand(ctx: Context): void {
   let commandUi: CommandUiService | undefined
-  try {
-    commandUi = ctx.get('commandUi') as CommandUiService | undefined
-  } catch {
-    return
+  try { commandUi = ctx.get('commandUi') as CommandUiService | undefined }
+  catch { return }
+  if (!commandUi?.register) return
+  // The host picker has no secondary row action. Use its composer overlay slot
+  // and action command contract to keep the menu scoped to the invoking session.
+  let sequence = 0
+  let request: { sessionId: string; sequence: number } | undefined
+  const listeners = new Set<() => void>()
+  const publish = (next: typeof request): void => {
+    request = next
+    for (const listener of listeners) listener()
   }
-  if (commandUi === undefined || typeof commandUi.register !== 'function') return
+  const subscribe = (listener: () => void): (() => void) => {
+    listeners.add(listener)
+    return () => { listeners.delete(listener) }
+  }
+  const snapshot = () => request
+  function Overlay({ sessionId }: { sessionId: string }) {
+    const opened = useSyncExternalStore(subscribe, snapshot)
+    if (opened?.sessionId !== sessionId) return null
+    return createElement(SideChatMenu, {
+      key: opened.sequence,
+      readItems: () => sideMenuItems(ctx, sessionId),
+      onSelect: item => selectSideMenuItem(ctx, sessionId, item),
+      onRemove: item => removeSideMenuItem(ctx, sessionId, item),
+      onClose: () => { if (request === opened) publish(undefined) },
+    })
+  }
+  ctx.slots.inject('conversation.input.overlay', () => ctx.slots.register({
+    name: 'conversation.input.overlay', id: 'dsh-sidenote-side-menu', order: 1,
+    inject: sessionId => ({ sessionId }),
+  }, Overlay))
   for (const name of ['side', '侧边']) {
-    try {
-      ctx.effect(() => commandUi.register(makeContribution(ctx, name)), `dsh-sidenote: /${name} command`)
-    } catch (error) {
-      console.warn(`[dsh-sidenote] /${name} 命令注册失败（Tab 入口不受影响）:`, error)
-    }
+    ctx.effect(() => commandUi.register({
+      name, description: () => t('cmdDesc'),
+      available: session => canForkFrom(ctx, session.sessionId),
+      ui: { kind: 'action', run: session => publish({ sessionId: session.sessionId, sequence: ++sequence }) },
+    }), `dsh-sidenote: /${name} command`)
   }
 }

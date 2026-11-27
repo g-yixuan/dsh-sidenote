@@ -392,6 +392,7 @@ export interface SlotRegisterOptions {
 export type KnownSlotKey =
   | 'sidebar.workspaces'
   | 'conversation.input.dock'
+  | 'conversation.input.overlay'
   | 'conversation.session.header.utilities'
   | 'settings.general.item'
   | 'settings.section'

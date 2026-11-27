@@ -126,7 +126,7 @@ test('恢复身份缺失时提示找回，不悄悄新建侧聊', async ({ page 
   await openSideChat(page)
   await page.addInitScript(() => {
     for (const store of [sessionStorage, localStorage]) for (const key of Object.keys(store)) {
-      if (key.startsWith('dsh-sidenote:side-meta:v1:') || key.startsWith('dsh-sidenote:closed-side:v1:')) store.removeItem(key)
+      if (key.startsWith('dsh-sidenote:side-meta:v1:') || key.startsWith('dsh-sidenote:closed-side:')) store.removeItem(key)
     }
   })
   let forks = 0
