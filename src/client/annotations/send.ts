@@ -1,12 +1,12 @@
 import type { Context, SessionInput } from '../host/contracts.ts'
-import { prependInputText, rollbackInputPrefix, cancelInputRollback } from '../host/input.ts'
+import { prependInputText, rollbackInputPrefix, cancelInputRollback, canTransferDraft } from '../host/input.ts'
 import { prepareSubmission } from '../host/submission.ts'
 import type { Annotation, AnnotationStore } from './model.ts'
 import { buildProtocolBlock } from './format.ts'
 import { resolveInput, inputAttachmentIds, addInputAttachments, removeInputAttachment } from '../host/input.ts'
 import { prepareContextImages, type ContextImages } from '../host/attachments.ts'
 import type { ReflowItem, ReflowStore } from '../reflow.ts'
-import { submissionExtrasOf } from './submissionExtras.ts'
+import { submissionExtrasOf, type SubmissionContext } from './submissionExtras.ts'
 import { t } from '../locales.ts'
 
 /** Main and side composers use this same native transaction and acceptance boundary. */
@@ -20,6 +20,8 @@ export async function submitAnnotations(options: {
   leadingBlocks?: readonly string[]
   contextImages?: ContextImages
   mode?: 'queue' | 'steer'
+  beforeSubmit?: () => void
+  signal?: AbortSignal
 }): Promise<boolean> {
   const { ctx, store, sessionId, input, annotations } = options
   cancelInputRollback(input)
@@ -38,7 +40,7 @@ export async function submitAnnotations(options: {
   let receipt: Awaited<ReturnType<typeof prepareSubmission>> | undefined
   try {
     if (options.contextImages) images = await prepareContextImages(ctx, sessionId, options.contextImages)
-    receipt = await prepareSubmission(ctx, sessionId, input, block)
+    receipt = await prepareSubmission(ctx, sessionId, input, block, options.signal)
     const draft = input.state.getSnapshot()
     if (draft.draft !== draftBeforeWait.draft || draft.draftRev !== draftBeforeWait.draftRev || JSON.stringify(inputAttachmentIds(input)) !== JSON.stringify(attachmentsBeforeWait)) {
       throw new Error('等待会话就绪期间草稿已改变；正文和注释已保留，请重新发送')
@@ -49,6 +51,7 @@ export async function submitAnnotations(options: {
       if (!addInputAttachments(input, images.ids)) throw new Error('无法加入主线上下文图片，内容已保留')
       staged = true
     }
+    options.beforeSubmit?.()
     receipt.submit(options.mode)
     await receipt.outcome
     // Edits/new quotes made while admission was in flight remain active. A
@@ -79,7 +82,7 @@ export async function submitAnnotations(options: {
 /** Shared by native input gestures and the explicit annotation/reflow actions. */
 export async function submitControlledInput(ctx: Context, store: AnnotationStore, reflow: ReflowStore, sessionId: string, mode?: 'queue' | 'steer'): Promise<boolean> {
   if (store.getSubmission(sessionId).pending) return false
-  const input = resolveInput(ctx, sessionId)
+  let input = resolveInput(ctx, sessionId)
   if (!input) { store.setSubmission(sessionId, { pending: false, error: t('inputUnavailable') }); return false }
   const draft = input.state.getSnapshot()
   if (draft.phase !== 'plain' || draft.draft.trimStart().startsWith('/')) return false
@@ -87,15 +90,42 @@ export async function submitControlledInput(ctx: Context, store: AnnotationStore
   const reflows = reflow.list(sessionId)
   if (draft.draft.trim() === '' && inputAttachmentIds(input).length === 0 && active.length === 0 && reflows.length === 0) return false
   const extras = submissionExtrasOf(sessionId)
+  const originalId = sessionId
+  const originalInput = input
+  let handedOff = false
+  let prefix: SubmissionContext | null | undefined
   store.setSubmission(sessionId, { pending: true })
   try {
-    const prefix = await extras?.firstSendPrefix()
+    prefix = await extras?.firstSendPrefix()
     const current = input.state.getSnapshot()
     if (current.draft !== draft.draft || current.draftRev !== draft.draftRev) throw new Error('加载上下文期间草稿已改变；内容已保留，请重新发送')
+    if (prefix?.target) {
+      const target = prefix.target
+      if (!canTransferDraft(input) || store.countActive(sessionId) || reflow.list(sessionId).length) throw new Error('加载上下文期间新增了引用或附件；内容已保留，请重新发送')
+      if (!canTransferDraft(target.input) || target.input.state.getSnapshot().draft !== '') throw new Error('新侧聊输入已有内容，请重新发送')
+      target.input.setDraft(draft.draft)
+      if (target.input.state.getSnapshot().draft !== draft.draft) throw new Error('无法保留侧聊草稿，请重新发送')
+      sessionId = target.sessionId
+      input = target.input
+      store.setSubmission(sessionId, { pending: true })
+    }
     // Context and body must share one host admission and delivery window.
     // An independent inject can run before a queued message or be repeated
     // when its acknowledgement arrives after the client timeout.
-    const accepted = await submitAnnotations({ ctx, store, sessionId, input, annotations: active, reflows, leadingBlocks: prefix ? [prefix.text] : [], contextImages: prefix?.images, mode })
+    const accepted = await submitAnnotations({ ctx, store, sessionId, input, annotations: active, reflows, leadingBlocks: prefix ? [prefix.text] : [], contextImages: prefix?.images, mode, signal: prefix?.signal, beforeSubmit: () => {
+      if (prefix?.signal?.aborted) throw new Error('侧聊已关闭，正文已保留')
+      if (!prefix?.target) return
+      const current = originalInput.state.getSnapshot()
+      if (current.draft !== draft.draft || current.draftRev !== draft.draftRev || !canTransferDraft(originalInput)
+        || store.countActive(originalId) || reflow.list(originalId).length) throw new Error('等待期间草稿或引用已改变，内容已保留，请重新发送')
+      prefix.target.activate()
+      handedOff = true
+      originalInput.setDraft('')
+    } })
+    // Until handoff succeeds the original composer owns both the draft and errors.
+    if (!accepted && !handedOff && sessionId !== originalId) {
+      store.setSubmission(originalId, { ...store.getSubmission(sessionId), pending: false })
+    }
     if (accepted) {
       for (const item of reflows) reflow.remove(item.id)
       extras?.onSubmitText(draft.draft)
@@ -103,9 +133,12 @@ export async function submitControlledInput(ctx: Context, store: AnnotationStore
     }
     return accepted
   } catch (error) {
-    store.setSubmission(sessionId, { pending: false, error: error instanceof Error ? error.message : String(error) })
+    store.setSubmission(handedOff ? sessionId : originalId, { pending: false, error: error instanceof Error ? error.message : String(error) })
     return false
   } finally {
+    if (originalId !== sessionId) store.setSubmission(originalId, { ...store.getSubmission(originalId), pending: false })
     store.setSubmission(sessionId, { ...store.getSubmission(sessionId), pending: false })
+    // Candidate cleanup may outlive a retry; it must not overwrite that retry's state.
+    await prefix?.target?.dispose()
   }
 }

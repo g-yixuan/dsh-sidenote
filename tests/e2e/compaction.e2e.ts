@@ -89,7 +89,7 @@ for (const real of [false, true]) for (const busy of [false, true]) test(`${real
   await page.getByRole('button', { name: /Open a side chat|打开侧边聊天/ }).first().click()
   const side = sideChatOf(page)
   await expect(side.locator('[data-composer-input]')).toBeVisible()
-  const child = (await side.getAttribute('data-sidenote-chat-session'))!
+  let child = (await side.getAttribute('data-sidenote-chat-session'))!
   expect(sessionEventsOf(child).some(event => event.seq === checkpoint.seq && event.type === 'user/message' && event.data.source?.kind === 'compact-checkpoint')).toBe(true)
   const context = side.locator('[data-sidenote-main-context]')
   await context.locator(':scope > button').click()
@@ -104,6 +104,7 @@ for (const real of [false, true]) for (const busy of [false, true]) test(`${real
   await side.locator('[data-composer-input]').press('Enter')
   const reply = side.locator('[data-chat-flow-kind="assistant-step"]').last()
   await expect(reply).toBeVisible({ timeout: 60_000 })
+  child = (await side.getAttribute('data-sidenote-chat-session'))!
   if (real) { await expect(reply).toContainText(marker, { timeout: 60_000 }); await expect(reply).toContainText(/阶段[：:为是\s]*(?:第\s*)?(?:2|二)|第?\s*(?:2|二)\s*阶段/) }
   await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
   expect(userMessagesOf(child).filter(text => text.includes('根据继承上下文回复当前项目核验码和阶段'))).toHaveLength(1)

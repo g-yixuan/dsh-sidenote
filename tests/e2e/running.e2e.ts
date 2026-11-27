@@ -188,7 +188,7 @@ test('busy fork after repeated steering keeps side messages and answers outside 
   }
   await expect.poll(() => sessionEventsOf(mainId).filter(event => event.seq > before && event.type === 'tool/result').length).toBe(3)
   expect(sessionEventsOf(mainId).filter(event => event.seq > before && event.type === 'turn/start')).toHaveLength(1)
-  const child = await openSideChat(page)
+  let child = await openSideChat(page)
   const side = sideChatOf(page)
   const context = side.locator('[data-sidenote-main-context]')
   await context.locator(':scope > button').click()
@@ -200,6 +200,8 @@ test('busy fork after repeated steering keeps side messages and answers outside 
   await side.locator('[data-composer-input]').fill(question)
   await side.locator('[data-composer-input]').press('Enter')
   try {
+    await expect(side).not.toHaveAttribute('data-sidenote-chat-session', child)
+    child = (await side.getAttribute('data-sidenote-chat-session'))!
     const echo = side.locator('[data-submission-echo]')
     const sendingDraft = side.locator('[data-composer-input][contenteditable="false"]')
     // Alpha publishes the native echo after Host acceptance and retains a

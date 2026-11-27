@@ -82,7 +82,7 @@ test('running context follows history, tracks live progress, and respects reader
   const stop = main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })
   await expect(stop).toBeVisible()
   await expect(replies).toHaveCount(before + 1)
-  const child = await openSideChat(page)
+  let child = await openSideChat(page)
   const side = sideChatOf(page)
   const progress = side.locator('[data-sidenote-context-progress]')
   await expect.poll(() => progress.evaluate(el => ({
@@ -116,6 +116,7 @@ test('running context follows history, tracks live progress, and respects reader
   await expect(side.locator('[data-sidenote-main-context]')).toContainText(/As of|截至/)
   const bubble = side.locator('[data-chat-flow-kind="user"]').filter({ hasText: 'Use this frozen progress' })
   await expect(bubble).toBeVisible()
+  child = (await side.getAttribute('data-sidenote-chat-session'))!
   expect((await progress.boundingBox())!.y).toBeLessThan((await bubble.boundingBox())!.y)
   const frozen = await live()
   const latestMain = main.locator('[data-chat-flow-kind="assistant-step"]').last()
@@ -171,9 +172,10 @@ test('long side history restores the first-send progress when expanding after re
   await main.locator('[data-composer-input]').fill('Initial main progress must survive side history pagination [e2e:hold]')
   await main.locator('[data-composer-input]').press('Enter')
   await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toBeVisible()
-  const child = await openSideChat(page)
+  let child = await openSideChat(page)
   const side = sideChatOf(page)
   await send(side, 'Keep this first mainline progress snapshot')
+  child = (await side.getAttribute('data-sidenote-chat-session'))!
   await main.getByRole('button', { name: /^(Stop generating|停止生成)$/ }).click()
   const toggle = side.locator('[data-sidenote-main-context] > button')
   await toggle.click()
@@ -221,9 +223,10 @@ test('delayed context loading yields to newer reader intent and repairs a legacy
   await main.locator('[data-composer-input]').fill('Review snapshot marker [e2e:hold]')
   await main.locator('[data-composer-input]').press('Enter')
   await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toBeVisible()
-  const child = await openSideChat(page)
+  let child = await openSideChat(page)
   const side = sideChatOf(page)
   await send(side, 'First side question for delayed history')
+  child = (await side.getAttribute('data-sidenote-chat-session'))!
   await main.getByRole('button', { name: /^(Stop generating|停止生成)$/ }).click()
   const toggle = side.locator('[data-sidenote-main-context] > button')
   await toggle.click()
@@ -288,7 +291,7 @@ test('delayed context loading yields to newer reader intent and repairs a legacy
 })
 
 
-for (const real of [false, true]) test(`${real ? 'official Flash' : 'native'} first-send snapshot covers a mainline gap beyond the tail page`, async ({ page }) => {
+for (const real of [false, true]) test(`${real ? 'official Flash' : 'native'} first-send context covers a mainline gap beyond the tail page`, async ({ page }) => {
   test.skip(real && !process.env.DSH_E2E_REAL_MODEL, 'Requires the official DeepSeek lane')
   test.setTimeout(300_000)
   const main = await isolatedMain(page, real)
@@ -298,7 +301,7 @@ for (const real of [false, true]) test(`${real ? 'official Flash' : 'native'} fi
   await main.locator('[data-composer-input]').press('Enter')
   await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toBeVisible()
   if (real) await expect.poll(() => sessionEventsOf(mainId).some(event => event.type === 'tool/call' && JSON.stringify(event.data).includes('sleep 45')), { timeout: 30_000 }).toBe(true)
-  const child = await openSideChat(page)
+  let child = await openSideChat(page)
   const side = sideChatOf(page)
   await main.getByRole('button', { name: /^(Stop generating|停止生成)$/ }).click()
   await expect(main.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0)
@@ -317,16 +320,20 @@ for (const real of [false, true]) test(`${real ? 'official Flash' : 'native'} fi
   const sidePrompt = 'FIRST-SEND-AFTER-LONG-MAIN-GAP：请只回复最初主线任务中的完整核验码和编号为 0 的主线决策，不调用工具。'
   await side.locator('[data-composer-input]').fill(sidePrompt)
   await side.locator('[data-composer-input]').press('Enter')
+  await expect(side).not.toHaveAttribute('data-sidenote-chat-session', child)
+  child = (await side.getAttribute('data-sidenote-chat-session'))!
   await expect.poll(() => userMessagesOf(child).some(text => text.includes(sidePrompt))).toBe(true)
   await expect(side.getByRole('button', { name: /^(Stop generating|停止生成)$/ })).toHaveCount(0, { timeout: 60_000 })
   if (real) await expect(side.locator('[data-chat-flow-kind="assistant-step"]').last()).toContainText(marker, { timeout: 30_000 })
   const sent = userMessagesOf(child).find(text => text.includes('FIRST-SEND-AFTER-LONG-MAIN-GAP'))!
+  const inherited = userMessagesOf(child).join('\n')
+  expect(sent).not.toContain(marker)
   const checks = {
     parentStillHasEarly: userMessagesOf(mainId).some(text => text.includes(marker)),
-    earlyPresent: sent.includes(marker),
-    firstDecisionPresent: sent.includes('Intermediate mainline decision 0'),
-    latestDecisionPresent: sent.includes('Intermediate mainline decision 29'),
-    decisions: [...sent.matchAll(/Intermediate mainline decision (\d+)/g)].map(m => Number(m[1])),
+    earlyPresent: inherited.includes(marker),
+    firstDecisionPresent: inherited.includes('Intermediate mainline decision 0'),
+    latestDecisionPresent: inherited.includes('Intermediate mainline decision 29'),
+    decisions: [...inherited.matchAll(/Intermediate mainline decision (\d+)/g)].map(m => Number(m[1])),
   }
   expect(checks.parentStillHasEarly).toBe(true)
   expect([...new Set(checks.decisions)]).toEqual(Array.from({ length: 30 }, (_, i) => i))

@@ -155,6 +155,41 @@ export function writeSideChatMeta(record: SideChatMetaRecord, options?: { silent
   if (options?.silent !== true) notify()
 }
 
+/** A session handoff must be durable before its original draft can be cleared. */
+export function switchSideChatSession(expected: SideChatMetaRecord, childId: string, boundarySeq: number): void {
+  const current = readSideChatMeta(expected.sessionId, expected.tabId)
+  if (!current || current.childId !== expected.childId || current.nativeAddress !== expected.nativeAddress
+    || current.runId !== expected.runId || current.createdAt !== expected.createdAt) throw new Error('侧聊已关闭或改变，正文已保留')
+  const key = keyOf(current.sessionId, current.tabId)
+  const value = JSON.stringify({ ...current, childId, boundarySeq, snapshotOnly: undefined })
+  const stores = [windowStorage(), storage()].filter((store): store is Storage => store !== null)
+  const previous = stores.map(store => store.getItem(key))
+  if (!stores.length) throw new Error('无法保存侧聊切换，正文已保留')
+  try {
+    for (const store of stores) store.setItem(key, value)
+    if (stores.some(store => store.getItem(key) !== value)) throw new Error('侧聊切换未保存')
+  } catch {
+    for (const [index, store] of stores.entries()) {
+      try { if (previous[index] === null) store.removeItem(key); else store.setItem(key, previous[index]!) } catch { /* Keep the original draft even if storage cannot roll back. */ }
+    }
+    throw new Error('无法保存侧聊切换，正文已保留，请重试')
+  }
+  notify()
+}
+
+/** Read both copies independently: a partial write must also protect its child. */
+export function hasSideChatSession(childId: string): boolean {
+  try {
+    for (const store of [windowStorage(), storage()]) {
+      for (let i = 0; store && i < store.length; i++) {
+        const key = store.key(i)
+        if (key?.startsWith(KEY_PREFIX) && revive(JSON.parse(store.getItem(key) ?? 'null'))?.childId === childId) return true
+      }
+    }
+    return false
+  } catch { return true }
+}
+
 export function dropSideChatMeta(sessionId: string, tabId: string): void {
   const key = keyOf(sessionId, tabId)
   try { windowStorage()?.removeItem(key) } catch { /* ignore */ }

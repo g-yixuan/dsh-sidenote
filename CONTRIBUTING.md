@@ -42,6 +42,8 @@ pnpm test
 
 涉及页面交互、会话编排或宿主兼容的改动，需要相关 E2E 或手工验证。直连宿主示例：
 
+本地需要使用 Edge 时，在宿主验收命令前加 `DSH_E2E_BROWSER_CHANNEL=msedge`。
+
 ```bash
 pnpm exec playwright install chromium
 BS_VERSION=none DSH_EXPECTED_VERSION=0.2.2-rc.1 DSH_CMD="npx -y --package @deepseek-ai/dsh@0.2.2-rc.1 dsh" pnpm test:mount

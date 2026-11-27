@@ -71,13 +71,19 @@ Click the **Bring back to main conversation** icon on the right of a side replyâ
 |---|---|
 | Explore several questions | Keep independent side-chat tabs in the right sidebar, switch freely, and reopen closed conversations. |
 | Earlier context | Side chats inherit the full history, collapsed until you need it. |
-| Side-chat input costs | Context-cache reuse reduces input costs for the portions that hit the cache. |
+| Side-chat input costs | A plain first question inherits the latest original mainline history where possible, preserving reusable cache prefixes; later questions keep that frozen context. |
 | A familiar chat experience | The composer and messages match the native experience, with images, tool cards, and in-panel approvals. |
 | Several pieces of feedback | Send annotations together, or preview and remove them individually. |
 | A failed send | Annotations and draft text stay available for retry. |
 | Picking up after a reload | Side-chat messages and the inherited-context section persist. If the sidebar is not restored, reopen through `/side`. |
 | Keeping the session list focused | Side chats stay out of the list and search until saved as regular sessions. |
 | A conversation worth keeping | Save it as a regular session and continue later. |
+
+Before the first send, newly recorded mainline messages are inherited in their native form, with unfinished output added as a progress snapshot. Drafts with attachments, native references, annotations or handbacks, and side chats with their own commands or content, keep their original session and snapshot path to preserve content and settings. Actual cache hits depend on the model service; new questions, uncached output, model changes and compaction can still cause misses.
+
+If the mainline changes its access permissions or approval policy after a side chat opens, the side chat keeps its original session and permissions and uses the progress snapshot. Changes to the side chat's own model, permissions or content during send preparation preserve the draft and prompt a retry.
+
+If the side chat closes during first-send preparation or the session handoff cannot be saved, submission stops and the original draft is retained. Closing the panel does not retract a message already submitted. Failed candidates that were never handed over and have no independent work are archived where possible and released; history files and previously displayed side chats are kept. First-send preparation can add latency, and cache hits do not reduce context-window usage.
 
 Select excerpts from official sidebar previews of Markdown, plain text/code, selectable-text PDFs, and Word/PowerPoint files. They accumulate as **Document quotes** in the main conversation and travel with the next message, retaining file sources and PDF page numbers without markers in the document. Browser pages and scanned documents are not supported yet.
 

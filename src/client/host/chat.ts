@@ -131,10 +131,13 @@ export function chatSourceOf(ctx: Context, binding: SessionBinding | undefined):
       return {
         subscribe: fn => target.subscribe(fn),
         getLegacy: () => (target.getSnapshot() as { legacy?: ConversationSnapshot } | undefined)?.legacy ?? null,
-        getCompletedReplySeqs: () => completedReplySeqsOf(target.getSnapshot() as ChatReplySnapshot),
+        getCompletedReplySeqs: () => {
+          const state = target.getSnapshot() as ChatReplySnapshot | undefined
+          return state ? completedReplySeqsOf(state) : []
+        },
         getLastTurnEnd: () => {
           const state = target.getSnapshot() as { timeline?: { turnOrder: readonly number[]; turns: ReadonlyMap<number, { end?: { seq: number; data: { reason: { kind: string } } } }> } }
-          const timeline = state.timeline
+          const timeline = state?.timeline
           if (!timeline) return undefined
           for (let index = timeline.turnOrder.length - 1; index >= 0; index--) {
             const end = timeline.turns.get(timeline.turnOrder[index]!)?.end

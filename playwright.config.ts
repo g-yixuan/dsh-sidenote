@@ -6,6 +6,6 @@ export default defineConfig({
   timeout: 180_000,
   retries: 0,
   workers: 1,
-  use: { actionTimeout: 15_000 },
+  use: { actionTimeout: 15_000, channel: process.env.DSH_E2E_BROWSER_CHANNEL },
   reporter: [['list'], ['json', { outputFile: 'test-results/playwright-results.json' }]],
 })
