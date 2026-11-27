@@ -7,9 +7,9 @@
  * - recentClosed：topic 随条目往返、老条目（无 topic）兼容；
  * - dedupeName：@引用候选重名消歧。
  */
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { formatClosedAt, sideChatTitleOf, topicOf } from '../src/client/sidechat/identity.ts'
-import { listClosedSideChats, recordClosedSideChat } from '../src/client/sidechat/recentClosed.ts'
+import { dropClosedSideChat, listClosedSideChats, recordClosedSideChat } from '../src/client/sidechat/recentClosed.ts'
 import { dedupeName } from '../src/client/sidechat/referenceSource.ts'
 import { xmlAttr } from '../src/client/protocol.ts'
 
@@ -100,9 +100,9 @@ describe('formatClosedAt（相对关闭时间）', () => {
 })
 
 describe('recentClosed（关闭登记携带 topic）', () => {
-  beforeEach(() => localStorage.clear())
+  beforeEach(() => { localStorage.clear(); sessionStorage.clear() })
 
-  const entry = (childId: string, extra?: { topic?: string }) => ({
+  const entry = (childId: string, extra?: { topic?: string; closedAt?: number }) => ({
     childId,
     parentSessionId: 'p1',
     title: '侧边',
@@ -112,10 +112,23 @@ describe('recentClosed（关闭登记携带 topic）', () => {
 
   it('topic 随条目写入并读回；新者在前', () => {
     recordClosedSideChat('p1', entry('c1', { topic: '部署泳道排查' }))
-    recordClosedSideChat('p1', entry('c2', { topic: 'fork 边界' }))
+    recordClosedSideChat('p1', entry('c2', { topic: 'fork 边界', closedAt: 2000 }))
     const list = listClosedSideChats('p1')
     expect(list.map(e => e.childId)).toEqual(['c2', 'c1'])
     expect(list[1]?.topic).toBe('部署泳道排查')
+  })
+
+  it('retains every closed entry per parent, de-duplicates and removes only the requested child', () => {
+    for (let i = 0; i < 12; i++) recordClosedSideChat('p1', entry(`c${i}`, { closedAt: 1000 + i }))
+    recordClosedSideChat('p2', { ...entry('c0'), parentSessionId: 'p2' })
+    expect(listClosedSideChats('p1')).toHaveLength(12)
+    recordClosedSideChat('p1', entry('c0', { topic: 'recent again', closedAt: 3000 }))
+    expect(listClosedSideChats('p1')).toHaveLength(12)
+    expect(listClosedSideChats('p1')[0]).toMatchObject({ childId: 'c0', topic: 'recent again' })
+    expect(dropClosedSideChat('p1', 'c0')).toBe(true)
+    expect(listClosedSideChats('p1')).toHaveLength(11)
+    expect(listClosedSideChats('p2')).toHaveLength(1)
+    expect(listClosedSideChats('p1').map(item => item.childId)).toEqual(Array.from({ length: 11 }, (_, i) => `c${11 - i}`))
   })
 
   it('老条目无 topic 字段仍可读（revive 兼容）', () => {
@@ -126,7 +139,58 @@ describe('recentClosed（关闭登记携带 topic）', () => {
     const list = listClosedSideChats('p1')
     expect(list[0]?.topic).toBeUndefined()
     expect(list[0]?.title).toBe('侧边 2')
+    recordClosedSideChat('p1', entry('c10', { closedAt: 600 }))
+    expect(dropClosedSideChat('p1', 'c9')).toBe(true)
+    expect(listClosedSideChats('p1').map(item => item.childId)).toEqual(['c10'])
+    expect(recordClosedSideChat('p1', entry('c9', { closedAt: 700 }))).toBe(true)
+    expect(listClosedSideChats('p1').map(item => item.childId)).toEqual(['c9', 'c10'])
   })
+  it('independent records do not overwrite other children and fall back to session storage on quota failure', () => {
+    recordClosedSideChat('p1', entry('durable'))
+    const original = Storage.prototype.setItem
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
+      if (this === localStorage) throw new DOMException('full', 'QuotaExceededError')
+      original.call(this, key, value)
+    })
+    try {
+      expect(recordClosedSideChat('p1', entry('fallback', { closedAt: 2000 }))).toBe(false)
+      expect(listClosedSideChats('p1').map(item => item.childId)).toEqual(['fallback', 'durable'])
+      expect(dropClosedSideChat('p1', 'fallback')).toBe(true)
+    } finally { setItem.mockRestore() }
+    expect(listClosedSideChats('p1').map(item => item.childId)).toEqual(['durable'])
+  })
+
+  it('a durable removal invalidates an older fallback kept by a different tab', () => {
+    const key = 'dsh-sidenote:closed-side:v2:p1:c1'
+    recordClosedSideChat('p1', entry('c1'))
+    const saved = JSON.parse(localStorage.getItem(key)!) as { writtenAt: number }
+    const stale = JSON.stringify({ entry: entry('c1', { closedAt: 2000 }), writtenAt: saved.writtenAt })
+    expect(dropClosedSideChat('p1', 'c1')).toBe(true)
+    sessionStorage.setItem(key, stale)
+    expect(listClosedSideChats('p1')).toHaveLength(0)
+    expect(recordClosedSideChat('p1', entry('c1', { closedAt: 3000 }))).toBe(true)
+    expect(listClosedSideChats('p1')[0]?.closedAt).toBe(3000)
+  })
+
+  it('can clear an old array entry at full quota while preserving other children', () => {
+    const legacyKey = 'dsh-sidenote:closed-side:v1:p1'
+    const oldest = entry('oldest')
+    const another = entry('another', { closedAt: 2000 })
+    localStorage.setItem(legacyKey, JSON.stringify([another, oldest]))
+    const original = Storage.prototype.setItem
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
+      if (this === localStorage && key.startsWith('dsh-sidenote:closed-side:v2:') && JSON.parse(localStorage.getItem(legacyKey)!).length === 2) {
+        throw new DOMException('full', 'QuotaExceededError')
+      }
+      original.call(this, key, value)
+    })
+    try {
+      expect(dropClosedSideChat('p1', 'oldest')).toBe(true)
+      expect(listClosedSideChats('p1')).toEqual([another])
+    } finally { setItem.mockRestore() }
+  })
+
+
 })
 
 describe('xmlAttr（协议块属性位转义，M3）', () => {

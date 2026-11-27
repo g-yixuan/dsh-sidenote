@@ -230,7 +230,7 @@ test('header button preference survives reload and restart while side chat remai
     const main = page.locator('[data-conversation-session]').first()
     await inputOf(main).fill('/side')
     await page.getByRole('option', { name: /^side /i }).click()
-    await page.getByRole('option', { name: /^(New side chat|新建侧边聊天)/ }).first().click()
+    await page.getByRole('button', { name: /^(New side chat|新建侧边聊天)/ }).first().click()
     const side = sideChatOf(page)
     await expect(side.locator('[data-composer-input]')).toBeVisible()
     const childId = (await side.getAttribute('data-sidenote-chat-session'))!

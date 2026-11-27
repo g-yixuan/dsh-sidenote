@@ -1,17 +1,10 @@
-/**
- * 「最近关闭的侧边聊天」登记处（L1，localStorage 按主会话分键）：
- * D3 后悔药之一——× 即焚观感不变，但关掉的可重开。
- *
- * 容量：每个主会话最多记 5 条（新者在前）；会话本体仍 archived 在盘
- * （× 只关 Tab），重开 = 开 Tab + meta 预置 childId（面板绑定而非 fork）。
- */
+/** Closed side-chat recovery records, grouped by parent and ordered newest first. */
 import { parseSideChatMeta, type SideChatMeta } from './model.ts'
 
 export interface ClosedSideEntry {
   readonly childId: string
   readonly parentSessionId: string
   readonly title: string
-  /** 内容身份（Delivery_05）：首条消息摘要；老条目缺省，菜单回退 title。 */
   readonly topic?: string
   readonly closedAt: number
   /** Native tab recovery identity; manual reopen continues to use childId. */
@@ -19,80 +12,149 @@ export interface ClosedSideEntry {
   readonly savedMeta?: SideChatMeta & { number?: number }
 }
 
-const KEY_PREFIX = 'dsh-sidenote:closed-side:v1:'
-const CAP = 5
+const LEGACY_PREFIX = 'dsh-sidenote:closed-side:v1:'
+const KEY_PREFIX = 'dsh-sidenote:closed-side:v2:'
+const parentPrefix = (parent: string): string => `${KEY_PREFIX}${encodeURIComponent(parent)}:`
+const entryKey = (parent: string, child: string): string => parentPrefix(parent) + encodeURIComponent(child)
 
-function readAll(storageKey: string): ClosedSideEntry[] {
-  try {
-    const raw = localStorage.getItem(storageKey)
-    if (raw === null) return []
-    const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((e): e is ClosedSideEntry =>
-      typeof e === 'object' && e !== null
-      && typeof (e as ClosedSideEntry).childId === 'string'
-      && typeof (e as ClosedSideEntry).parentSessionId === 'string'
-      && typeof (e as ClosedSideEntry).title === 'string')
-  } catch {
-    return []
-  }
+interface StoredEntry {
+  readonly entry: ClosedSideEntry | null
+  readonly writtenAt: number
 }
 
-export function recordClosedSideChat(parentSessionId: string, entry: ClosedSideEntry): void {
+function isEntry(value: unknown): value is ClosedSideEntry {
+  if (value === null || typeof value !== 'object') return false
+  const e = value as Partial<ClosedSideEntry>
+  return typeof e.childId === 'string' && typeof e.parentSessionId === 'string' && typeof e.title === 'string'
+}
+
+function readLegacy(parent: string): ClosedSideEntry[] {
   try {
-    const key = KEY_PREFIX + parentSessionId
-    const list = [entry, ...readAll(key).filter(e => e.childId !== entry.childId)].slice(0, CAP)
-    localStorage.setItem(key, JSON.stringify(list))
+    const value: unknown = JSON.parse(localStorage.getItem(LEGACY_PREFIX + parent) ?? 'null')
+    return Array.isArray(value) ? value.filter(isEntry).filter(entry => entry.parentSessionId === parent) : []
+  } catch { return [] }
+}
+
+function storageKeys(store: Storage): string[] {
+  try { return Object.keys(store) } catch { return [] }
+}
+
+function browserStorage(kind: 'localStorage' | 'sessionStorage'): Storage | undefined {
+  try { return globalThis[kind] } catch { return undefined }
+}
+
+function readStored(store: Storage | undefined, key: string): StoredEntry | undefined {
+  try {
+    const raw = store?.getItem(key)
+    if (raw == null) return undefined
+    const value = JSON.parse(raw) as Partial<StoredEntry> | null
+    if (value && typeof value.writtenAt === 'number' && (value.entry === null || isEntry(value.entry))) return value as StoredEntry
+  } catch { /* Ignore malformed records individually. */ }
+  return undefined
+}
+
+function encodeStored(key: string, entry: ClosedSideEntry | null): string {
+  const writtenAt = Math.max(Date.now(), (readStored(browserStorage('localStorage'), key)?.writtenAt ?? 0) + 1)
+  return JSON.stringify({ entry, writtenAt })
+}
+
+/** A single key per child prevents closing/removing one chat from overwriting another
+ * window's history. Legacy arrays remain readable; a null entry masks a removed v1 record. */
+export function listClosedSideChats(parentSessionId: string): readonly ClosedSideEntry[] {
+  const entries = new Map(readLegacy(parentSessionId).map(entry => [entry.childId, entry]))
+  const changes = new Map<string, StoredEntry>()
+  const prefix = parentPrefix(parentSessionId)
+  for (const store of [browserStorage('localStorage'), browserStorage('sessionStorage')]) {
+    if (!store) continue
+    for (const key of storageKeys(store)) {
+      if (!key.startsWith(prefix)) continue
+      try {
+        const childId = decodeURIComponent(key.slice(prefix.length))
+        const value = readStored(store, key)
+        if (!value || value.writtenAt <= (changes.get(childId)?.writtenAt ?? -1)) continue
+        if (value.entry === null || (value.entry.childId === childId && value.entry.parentSessionId === parentSessionId)) changes.set(childId, value)
+      } catch { /* Ignore malformed records individually. */ }
+    }
+  }
+  for (const [childId, change] of changes) {
+    if (change.entry === null) entries.delete(childId)
+    else entries.set(childId, change.entry)
+  }
+  return [...entries.values()].sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0))
+}
+
+export function recordClosedSideChat(parentSessionId: string, entry: ClosedSideEntry): boolean {
+  const key = entryKey(parentSessionId, entry.childId)
+  const value = encodeStored(key, entry)
+  try {
+    localStorage.setItem(key, value)
+    try { sessionStorage.removeItem(key) } catch { /* The durable record remains available. */ }
+    return true
   } catch {
-    // 隐私模式/写失败：后悔药缺席不影响主流程。
+    // Preserve recovery in the current browser tab even if persistent storage is full.
+    try { sessionStorage.setItem(key, value) } catch { /* Both stores are unavailable. */ }
+    console.warn('[dsh-sidenote] Could not persist a closed side chat in local storage.')
+    return false
   }
 }
 
 /** Share the recovery payload between pagehide and true native-tab closure. */
-export function rememberSideChat(tabId: string, title: string, meta: unknown): void {
+export function rememberSideChat(tabId: string, title: string, meta: unknown): boolean {
   const current = parseSideChatMeta(meta)
-  if (!current.childId || !current.parentSessionId) return
-  recordClosedSideChat(current.parentSessionId, {
+  if (!current.childId || !current.parentSessionId) return true
+  return recordClosedSideChat(current.parentSessionId, {
     childId: current.childId, parentSessionId: current.parentSessionId, tabId, title,
     savedMeta: { ...current, number: (meta as { number?: number }).number },
     ...(current.topic ? { topic: current.topic } : {}), closedAt: Date.now(),
   })
 }
 
-/** 读某主会话的最近关闭列表（新者在前）。 */
-export function listClosedSideChats(parentSessionId: string): readonly ClosedSideEntry[] {
-  if (typeof localStorage === 'undefined') return []
-  return readAll(KEY_PREFIX + parentSessionId)
-}
-
 /** Existing recovery records can seed the durable visibility index on upgrade. */
 export function allClosedSideChats(): readonly ClosedSideEntry[] {
-  try {
-    return Object.keys(localStorage).filter(key => key.startsWith(KEY_PREFIX)).flatMap(readAll)
-  } catch { return [] }
+  const parents = new Set<string>()
+  for (const store of [browserStorage('localStorage'), browserStorage('sessionStorage')]) for (const key of store ? storageKeys(store) : []) {
+    if (key.startsWith(LEGACY_PREFIX)) parents.add(key.slice(LEGACY_PREFIX.length))
+    else if (key.startsWith(KEY_PREFIX)) {
+      try { parents.add(decodeURIComponent(key.slice(KEY_PREFIX.length).split(':')[0]!)) } catch { /* Ignore malformed keys. */ }
+    }
+  }
+  return [...parents].flatMap(listClosedSideChats)
 }
 
-/** 重开消费：从列表移除（重开后若再关会重新入列）。 */
-export function dropClosedSideChat(parentSessionId: string, childId: string): void {
+/** Reopening consumes the record; closing the same child later writes it again. */
+export function dropClosedSideChat(parentSessionId: string, childId: string): boolean {
   try {
-    const key = KEY_PREFIX + parentSessionId
-    const list = readAll(key).filter(e => e.childId !== childId)
-    if (list.length === 0) localStorage.removeItem(key)
-    else localStorage.setItem(key, JSON.stringify(list))
-  } catch { /* ignore */ }
+    const key = entryKey(parentSessionId, childId)
+    const legacy = readLegacy(parentSessionId)
+    const wasLegacy = legacy.some(entry => entry.childId === childId)
+    const durable = readStored(browserStorage('localStorage'), key)
+    const fallback = readStored(browserStorage('sessionStorage'), key)
+    if (!wasLegacy && !durable?.entry && !fallback?.entry) return true
+    const tombstone = encodeStored(key, null)
+    try { localStorage.setItem(key, tombstone) }
+    catch (error) {
+      if (!wasLegacy && !durable?.entry && fallback?.entry) {
+        sessionStorage.removeItem(key)
+        return true
+      }
+      if (!wasLegacy) throw error
+      // A full quota may reject a new key. Shrink the old array to make room
+      // for the tombstone without discarding any of its other children.
+      const remaining = legacy.filter(entry => entry.childId !== childId)
+      if (remaining.length === 0) localStorage.removeItem(LEGACY_PREFIX + parentSessionId)
+      else localStorage.setItem(LEGACY_PREFIX + parentSessionId, JSON.stringify(remaining))
+      localStorage.setItem(key, tombstone)
+    }
+    try { sessionStorage.removeItem(key) } catch { /* The durable tombstone masks older recovery data. */ }
+    return true
+  } catch { return false }
 }
 
-/** A newly opened native occurrence may reuse a tab id. Keep manual history,
- * but revoke that old occurrence's automatic restoration identity. */
+/** Revoke an old tab occurrence's automatic restoration identity while keeping manual history. */
 export function forgetClosedTabBinding(parentSessionId: string, tabId: string): void {
-  try {
-    const key = KEY_PREFIX + parentSessionId
-    const entries = readAll(key)
-    if (!entries.some(entry => entry.tabId === tabId)) return
-    localStorage.setItem(key, JSON.stringify(entries.map(entry => {
-      if (entry.tabId !== tabId) return entry
-      const { tabId: _oldTab, ...rest } = entry
-      return rest
-    })))
-  } catch { /* Manual reopen remains best-effort when storage is unavailable. */ }
+  for (const entry of listClosedSideChats(parentSessionId)) {
+    if (entry.tabId !== tabId) continue
+    const { tabId: _oldTab, ...rest } = entry
+    recordClosedSideChat(parentSessionId, rest)
+  }
 }

@@ -37,7 +37,7 @@ test('cache handoff keeps accepted context when closed before acknowledgement', 
     await expect.poll(() => userMessagesOf(child).filter(text => text.endsWith(question)).length).toBe(1)
     await main.locator('[data-composer-input]').fill('/side')
     await page.getByRole('option', { name: /^side /i }).click()
-    await page.getByRole('option', { name: /^(Reopen|重开)/ }).first().click()
+    await page.getByRole('button', { name: /^(Reopen|重开)/ }).first().click()
     await expect(side).toHaveAttribute('data-sidenote-chat-session', child)
     await expect(side.locator('[data-sidenote-main-context]')).toContainText(/As of|截至/)
     await expect.poll(() => sessionEventsOf(child).at(-1)?.type === 'turn/end').toBe(true)
@@ -79,7 +79,7 @@ for (const reopen of [false, true]) test(`cache handoff retries a rejected first
     await expect(side).toHaveCount(0)
     await main.locator('[data-composer-input]').fill('/side')
     await page.getByRole('option', { name: /^side /i }).click()
-    await page.getByRole('option', { name: /^(Reopen|重开)/ }).first().click()
+    await page.getByRole('button', { name: /^(Reopen|重开)/ }).first().click()
     await expect(side).toHaveAttribute('data-sidenote-chat-session', rejected)
     await expect(side.locator('[data-composer-input]')).toHaveText(question)
   }
@@ -180,7 +180,7 @@ for (const failure of ['storage', 'closed']) test(`cache handoff preserves the d
     if (failure === 'closed') {
       await main.locator('[data-composer-input]').fill('/side')
       await page.getByRole('option', { name: /^side /i }).click()
-      await page.getByRole('option', { name: /^(Reopen|重开)/ }).first().click()
+      await page.getByRole('button', { name: /^(Reopen|重开)/ }).first().click()
     }
     await expect(sideChatOf(page)).toHaveAttribute('data-sidenote-chat-session', original)
     await expect(sideChatOf(page).locator('[data-composer-input]')).toHaveText(question)

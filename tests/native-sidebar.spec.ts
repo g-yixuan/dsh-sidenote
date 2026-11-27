@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { betterSidebarOf, clearNativeRuntime, directNativeLeg, lastLiveSideChat, liveSideChat, liveSideChatsOf, markSideChatOpening, nativeSidebarHost, nativeTabShell, registerLiveSideChat, rootContext, setRootContext, sideChatOpening } from '../src/client/sidechat/native.ts'
 import { projectedModelSelection, readModelSelection, remoteSessionFace, writeModelSelection } from '../src/client/sidechat/lifecycle.ts'
 import { createSideChat, openOrFocusSideChat, reopenSideChat, sideChatTargetTitle } from '../src/client/sidechat/open.ts'
-import { registerSideCommand } from '../src/client/sidechat/slash.ts'
+import { sideMenuItems, selectSideMenuItem } from '../src/client/sidechat/slash.ts'
 import { SIDE_TAB_TYPE } from '../src/client/sidechat/model.ts'
 import type { Context } from '../src/client/host/contracts.ts'
 
@@ -328,32 +328,24 @@ describe('native 数据源切换（P2）', () => {
   it('/side 弹层：native 下聚焦项来自 registry 且聚焦走 sidebarRight.focus', async () => {
     const focusFn = vi.fn()
     const { ctx, calls } = fakeNativeCtx('s-slash', { focus: focusFn })
-    // canForkFrom 需要 sessions.list；commandUi 捕获注册的贡献
-    ;(ctx as { sessions: unknown }).sessions = {
-      list: { getSnapshot: () => ({ byId: { 's-slash': { blank: false } } }) },
-    }
-    // registerSideCommand 经 ctx.effect 注册——fake 直接立即执行。
-    ;(ctx as { effect: unknown }).effect = (fn: () => void) => fn()
-    let contribution: { ui: { options: (s: { sessionId: string }) => Promise<readonly { id: string; label: string }[]>; onSelect: (o: { id: string }, s: { sessionId: string }) => void } } | undefined
+    ;(ctx as { sessions: unknown }).sessions = { list: { getSnapshot: () => ({ current: 's-slash' }) } }
     ;(ctx as { get: unknown }).get = (name: string) => {
-      if (name === 'commandUi') return { register: (c: typeof contribution) => { contribution = c } }
       if (name === 'sidebarRight') return { openTab() {}, focus: focusFn, tabsIn: () => liveSideChatsOf('s-slash').map(panel => ({ id: panel.tabId, kind: SIDE_TAB_TYPE, title: panel.readTitle() })) }
       return undefined
     }
     const dispose = registerLiveSideChat('s-slash', 'tab-slash', () => {}, () => ({}), () => '侧边 2')
-    registerSideCommand(ctx)
-    const options = await contribution!.ui.options({ sessionId: 's-slash' })
-    expect(options.map(o => o.id)).toContain('focus:tab-slash')
-    expect(options.find(o => o.id === 'focus:tab-slash')?.label).toContain('侧边 2')
-    contribution!.ui.onSelect({ id: 'focus:tab-slash' }, { sessionId: 's-slash' })
+    const options = sideMenuItems(ctx, 's-slash')
+    const focus = options.find(o => o.kind === 'focus' && o.id === 'tab-slash')!
+    expect(focus.label).toContain('侧边 2')
+    expect(selectSideMenuItem(ctx, 's-slash', focus)).toBe(true)
     expect(focusFn).toHaveBeenCalledWith('tab-slash')
     expect(calls.activations).toEqual([])
     // Multiple native instances always offer explicit creation.
-    const optionsWithLive = await contribution!.ui.options({ sessionId: 's-slash' })
+    const optionsWithLive = sideMenuItems(ctx, 's-slash')
     expect(optionsWithLive.map(o => o.id)).toContain('new')
     dispose()
     // 无存活实例后「新建」回归
-    const optionsAfterClose = await contribution!.ui.options({ sessionId: 's-slash' })
+    const optionsAfterClose = sideMenuItems(ctx, 's-slash')
     expect(optionsAfterClose.map(o => o.id)).toContain('new')
   })
 

@@ -11,7 +11,7 @@ function readSaved(): string[] {
   } catch { return [] }
 }
 
-/** Browser-local identity outlives tabs and the capped recent-closed menu. */
+/** Browser-local identity outlives tabs and manually removed recovery records. */
 export function createSessionVisibility() {
   let snapshot = { hidden: new Set(readSaved()) as ReadonlySet<string>, pending: [] as readonly ReadonlySet<string>[] }
   const listeners = new Set<() => void>()

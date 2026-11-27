@@ -23,7 +23,7 @@ test('draft: refresh and closed-chat recovery retain the native draft in the sam
   const mainInput = page.locator('[data-composer-input]').first()
   await mainInput.fill('/side')
   await page.getByRole('option', { name: /^side /i }).click()
-  await page.getByRole('option', { name: /^Reopen|^重开/ }).first().click()
+  await page.getByRole('button', { name: /^Reopen|^重开/ }).first().click()
   await expect(side).toHaveAttribute('data-sidenote-chat-session', child)
   await expect(input).toHaveText('persistent side draft')
   await input.fill(Array.from({ length: 8 }, (_, i) => 'line ' + i).join('\n'))

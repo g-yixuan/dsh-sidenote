@@ -17,7 +17,7 @@ const reflow = /^(Bring back to main conversation|带回主对话)$/
 async function sideCommand(page: Page, option: RegExp) {
   await inputOf(mainOf(page)).fill('/side')
   await page.getByRole('option', { name: /^side /i }).click()
-  await page.getByRole('option', { name: option }).first().click()
+  await page.getByRole('button', { name: option }).first().click()
 }
 async function createAnother(page: Page): Promise<string> {
   const previous = await sideChatOf(page).getAttribute('data-sidenote-chat-session')

@@ -36,6 +36,7 @@ import { sideChatTitleOf } from './identity.ts'
 import { closeNativeTab, isRestoredNativeTab } from '../host/tabs.ts'
 import { parseSideChatMeta, type SideChatOpenParams } from './model.ts'
 import { forgetClosedTabBinding, listClosedSideChats, rememberSideChat } from './recentClosed.ts'
+import { showToast } from './toast.tsx'
 import {
   SIDENOTE_RUN_ID,
   dropSideChatMeta,
@@ -134,9 +135,11 @@ function useSideChatMeta(record: NativeTabRecord, sessionId: string) {
   useEffect(() => {
     const onAbort = (): void => {
       const current = readSideChatMeta(sessionId, record.id)
-      rememberSideChat(record.id, sideChatTitleOf(current), current)
+      const saved = rememberSideChat(record.id, sideChatTitleOf(current), current)
       forgetSideChatOpening(sessionId, record.id)
       dropSideChatMeta(sessionId, record.id)
+      // Removing the original tab metadata may free enough storage for the recovery record.
+      if (!saved && !rememberSideChat(record.id, sideChatTitleOf(current), current)) showToast(t('cmdHistorySaveFailed'))
     }
     if (record.signal.aborted) { onAbort(); return }
     record.signal.addEventListener('abort', onAbort, { once: true })
